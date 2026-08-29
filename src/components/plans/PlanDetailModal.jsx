@@ -1,0 +1,630 @@
+import { useState } from 'react';
+import { Modal } from '../common/Modal';
+import { PlanStatusBadge, MilestoneStatusBadge, LifecycleBadge } from '../common/Badge';
+import { PlanFeedbackSection } from './PlanFeedbackSection';
+import { useCareMesh } from '../../context/useCareMesh';
+import { 
+  Target, 
+  CheckCircle2, 
+  FileText, 
+  Plus, 
+  Link2, 
+  Sparkles, 
+  Check, 
+  MapPin, 
+  Users, 
+  Layers, 
+  History, 
+  Edit3, 
+  ArrowRight,
+  Package,
+  AlertCircle
+} from 'lucide-react';
+
+export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
+  const { 
+    togglePlanMilestone, 
+    addPlanDecision, 
+    updatePlanStage, 
+    openRevisePlanModal,
+    requests, 
+    events, 
+    observations,
+    currentUser 
+  } = useCareMesh();
+
+  const [activeTab, setActiveTab] = useState('proposal'); // 'proposal' | 'critique' | 'revisions' | 'milestones' | 'decisions'
+  const [newDecisionTitle, setNewDecisionTitle] = useState('');
+  const [newDecisionRationale, setNewDecisionRationale] = useState('');
+  const [isAddingDecision, setIsAddingDecision] = useState(false);
+
+  if (!plan) return null;
+
+  const handleAddDecision = (e) => {
+    e.preventDefault();
+    if (!newDecisionTitle.trim()) return;
+
+    addPlanDecision(plan.id, {
+      title: newDecisionTitle.trim(),
+      rationale: newDecisionRationale.trim()
+    });
+
+    setNewDecisionTitle('');
+    setNewDecisionRationale('');
+    setIsAddingDecision(false);
+  };
+
+  const isAuthorOrCoordinator = plan.proposer?.id === currentUser.id || plan.participants?.some(p => p.user?.id === currentUser.id);
+
+  const linkedRequests = requests.filter(r => plan.linkedRequestIds?.includes(r.id));
+  const linkedEvents = events.filter(e => plan.linkedEventIds?.includes(e.id));
+  const linkedObs = observations.filter(o => plan.linkedObservationIds?.includes(o.id));
+
+  const totalMilestones = plan.milestones?.length || 0;
+  const completedMilestones = plan.milestones?.filter(m => m.status === 'completed').length || 0;
+
+  const lifecycleStages = [
+    { key: 'draft', label: '1. Draft' },
+    { key: 'community_review', label: '2. Community Review' },
+    { key: 'revised', label: '3. Revised' },
+    { key: 'accepted', label: '4. Accepted' },
+    { key: 'active', label: '5. Active' },
+    { key: 'completed', label: '6. Completed' }
+  ];
+
+  const currentStageIndex = lifecycleStages.findIndex(s => s.key === plan.lifecycleStage || (s.key === 'community_review' && plan.lifecycleStage === 'coordinating') || (s.key === 'accepted' && plan.lifecycleStage === 'plan_active') || (s.key === 'active' && plan.lifecycleStage === 'actions_underway'));
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={plan.title}
+      subtitle="Proposal, Critique, Revision & Long-Term Execution Lifecycle"
+      maxWidth="900px"
+    >
+      <div className="d-flex flex-column gap-4">
+        {/* 1. Proposal Lifecycle Progression Header */}
+        <div className="card p-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+          <div className="d-flex align-center justify-between flex-wrap gap-2 mb-2">
+            <div className="d-flex align-center gap-2">
+              <span className="badge badge-primary font-bold text-xs">Version {plan.currentVersion || 'v1.0'}</span>
+              <LifecycleBadge stage={plan.lifecycleStage} />
+              <PlanStatusBadge status={plan.overallStatus || 'planning'} />
+            </div>
+
+            {/* Stage Progression CTAs for Author / Coordinators */}
+            {isAuthorOrCoordinator && (
+              <div className="d-flex align-center gap-2 flex-wrap">
+                {plan.lifecycleStage === 'draft' && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-xs d-flex align-center gap-1"
+                    onClick={() => updatePlanStage(plan.id, 'community_review')}
+                  >
+                    <span>Submit for Community Review</span>
+                    <ArrowRight size={13} />
+                  </button>
+                )}
+
+                {(plan.lifecycleStage === 'community_review' || plan.lifecycleStage === 'revised' || plan.lifecycleStage === 'coordinating') && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs d-flex align-center gap-1"
+                      onClick={() => openRevisePlanModal(plan)}
+                    >
+                      <Edit3 size={13} />
+                      <span>Revise Proposal</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs d-flex align-center gap-1"
+                      onClick={() => updatePlanStage(plan.id, 'accepted')}
+                    >
+                      <span>Accept Plan</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </>
+                )}
+
+                {(plan.lifecycleStage === 'accepted' || plan.lifecycleStage === 'plan_active') && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-xs d-flex align-center gap-1"
+                    onClick={() => updatePlanStage(plan.id, 'active')}
+                  >
+                    <span>Activate Implementation</span>
+                    <ArrowRight size={13} />
+                  </button>
+                )}
+
+                {(plan.lifecycleStage === 'active' || plan.lifecycleStage === 'actions_underway') && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-xs d-flex align-center gap-1"
+                    onClick={() => updatePlanStage(plan.id, 'completed')}
+                  >
+                    <Check size={13} />
+                    <span>Complete & Evaluate Outcome</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 6-Stage Progress Indicator (Purely Textual Stepper) */}
+          <div className="touch-scroll-x gap-1 pt-2 border-top">
+            {lifecycleStages.map((stg, idx) => {
+              const isCurrent = idx === currentStageIndex || (currentStageIndex === -1 && idx === 1);
+              const isPast = idx < currentStageIndex;
+
+              return (
+                <div
+                  key={stg.key}
+                  className="p-1 px-2 text-xs rounded text-center flex-1"
+                  style={{
+                    background: isCurrent ? 'var(--primary-600)' : isPast ? 'var(--primary-100)' : 'var(--bg-muted)',
+                    color: isCurrent ? '#ffffff' : isPast ? 'var(--primary-900)' : 'var(--text-secondary)',
+                    fontWeight: isCurrent ? 700 : 500,
+                    minWidth: '96px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {isPast && '✓ '}{stg.label}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. Top Sub-Navigation Tabs */}
+        <div className="touch-scroll-x gap-2 border-bottom pb-2">
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'proposal' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('proposal')}
+          >
+            <FileText size={15} />
+            <span>Structured Proposal</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'critique' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('critique')}
+          >
+            <Sparkles size={15} />
+            <span>Critique & Feedback ({plan.feedback?.length || 0})</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'revisions' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('revisions')}
+          >
+            <History size={14} />
+            <span>Revision History ({plan.revisionHistory?.length || 1})</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'milestones' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('milestones')}
+          >
+            <CheckCircle2 size={14} />
+            <span>Milestones ({completedMilestones}/{totalMilestones})</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'decisions' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('decisions')}
+          >
+            <Layers size={14} />
+            <span>Decisions Log ({plan.decisions?.length || 0})</span>
+          </button>
+        </div>
+
+        {/* ========================================================= */}
+        {/* TAB 1: STRUCTURED PROPOSAL SPECIFICATIONS                 */}
+        {/* ========================================================= */}
+        {activeTab === 'proposal' && (
+          <div className="d-flex flex-column gap-3">
+            {/* Problem & Desired Outcome */}
+            <div className="grid-2 gap-3">
+              <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                  <AlertCircle size={14} className="text-rose" /> What problem are we trying to solve?
+                </h5>
+                <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.55' }}>
+                  {plan.problemStatement || 'Problem statement under definition.'}
+                </p>
+              </div>
+
+              <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                  <Target size={14} className="text-brand" /> Desired Outcome & Impact
+                </h5>
+                <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.55' }}>
+                  {plan.desiredOutcome || (plan.goals && plan.goals.join('. ')) || 'Outcome metrics under definition.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Proposed Approach */}
+            <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+              <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                <Sparkles size={14} className="text-amber" /> Proposed Approach & Methodology
+              </h5>
+              <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.55' }}>
+                {plan.proposedApproach || 'Community collaborative approach formulated by working group.'}
+              </p>
+            </div>
+
+            {/* Resources, Location & Affected Parties */}
+            <div className="grid-3 gap-3">
+              <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                  <Package size={14} className="text-blue-600" /> Resources Needed
+                </h5>
+                <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.45' }}>
+                  {plan.resourcesNeeded || 'Equipment and volunteer materials under assessment.'}
+                </p>
+              </div>
+
+              <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                  <MapPin size={14} className="text-rose" /> Location & Scope
+                </h5>
+                <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.45' }}>
+                  {plan.location || 'Maplewood District'}
+                </p>
+              </div>
+
+              <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                  <Users size={14} className="text-purple" /> Who Might Be Affected?
+                </h5>
+                <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.45' }}>
+                  {plan.affectedParties || 'Local residents, downstream neighbors, and community.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Relevant Evidence & Observations */}
+            {linkedObs.length > 0 && (
+              <div className="card p-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+                <h5 className="font-bold text-xs text-primary text-uppercase mb-2 d-flex align-center gap-1">
+                  <Link2 size={14} className="text-brand" /> Relevant Field Evidence & Baseline Observations
+                </h5>
+                <div className="d-flex flex-column gap-2">
+                  {linkedObs.map(o => (
+                    <div key={o.id} className="p-2 rounded text-xs bg-white border">
+                      <strong>Observation: {o.title}</strong> — {o.description} ({o.location?.address})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Bar */}
+            <div className="d-flex justify-between align-center pt-2 border-top">
+              <span className="text-xs text-muted">
+                Proposed by {plan.proposer?.name || 'Community Member'} • Current Draft: {plan.currentVersion || 'v1.0'}
+              </span>
+
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => openRevisePlanModal(plan)}
+                >
+                  <Edit3 size={13} />
+                  <span>Propose Revision</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setActiveTab('critique')}
+                >
+                  <span>Critique & Suggest Alternatives →</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 2: COLLABORATIVE CRITIQUE & DISCUSSION               */}
+        {/* ========================================================= */}
+        {activeTab === 'critique' && (
+          <PlanFeedbackSection plan={plan} />
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 3: VISIBLE REVISION HISTORY & REASONING               */}
+        {/* ========================================================= */}
+        {activeTab === 'revisions' && (
+          <div className="d-flex flex-column gap-3">
+            <div className="d-flex align-center justify-between pb-2 border-bottom flex-wrap gap-2">
+              <div>
+                <h4 className="font-bold text-sm text-primary d-flex align-center gap-2">
+                  <History size={16} className="text-brand" />
+                  <span>Transparent Revision History & Reasoning</span>
+                </h4>
+                <p className="text-xs text-muted mb-0">
+                  Every change to the proposal and the underlying rationale remain permanently visible.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => openRevisePlanModal(plan)}
+              >
+                <Edit3 size={13} />
+                <span>+ Publish New Revision</span>
+              </button>
+            </div>
+
+            <div className="d-flex flex-column gap-3">
+              {plan.revisionHistory && plan.revisionHistory.length > 0 ? (
+                plan.revisionHistory.map((rev, idx) => (
+                  <div 
+                    key={idx} 
+                    className="card p-3" 
+                    style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}
+                  >
+                    <div className="d-flex align-center justify-between mb-2">
+                      <div className="d-flex align-center gap-2">
+                        <span className="badge badge-primary font-bold text-xs">{rev.version}</span>
+                        <span className="font-bold text-xs text-primary">{rev.summaryOfChanges}</span>
+                      </div>
+                      <span className="text-xs text-muted">{rev.date} • by {rev.revisedBy}</span>
+                    </div>
+
+                    <div className="p-2 rounded text-xs mb-2" style={{ background: 'var(--bg-subtle)' }}>
+                      <strong className="text-primary d-block mb-1">Reasoning for Changes & Community Feedback Addressed:</strong>
+                      <p className="text-secondary mb-0" style={{ lineHeight: '1.45' }}>{rev.reasoningForChanges}</p>
+                    </div>
+
+                    {rev.incorporatedFeedbackIds && rev.incorporatedFeedbackIds.length > 0 && (
+                      <div className="d-flex align-center gap-2 text-xs text-muted pt-1">
+                        <CheckCircle2 size={12} className="text-brand" />
+                        <span>Incorporated {rev.incorporatedFeedbackIds.length} community feedback items</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center text-xs text-muted">
+                  Initial version (v1.0) active. No revisions published yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 4: MILESTONES CHECKLIST                               */}
+        {/* ========================================================= */}
+        {activeTab === 'milestones' && (
+          <div className="card p-4" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+            <div className="d-flex align-center justify-between mb-3 pb-2 border-bottom">
+              <div>
+                <h4 className="font-bold text-sm text-primary d-flex align-center gap-2">
+                  <CheckCircle2 size={16} className="text-brand" />
+                  <span>Milestones & Action Steps ({completedMilestones}/{totalMilestones} Completed)</span>
+                </h4>
+                <p className="text-xs text-muted mb-0">Track real-world implementation progress without fake percentages</p>
+              </div>
+              <span className="text-xs text-muted">Click milestone to toggle status</span>
+            </div>
+
+            <div className="d-flex flex-column gap-2">
+              {plan.milestones?.map((m) => {
+                const isCompleted = m.status === 'completed';
+                return (
+                  <div 
+                    key={m.id} 
+                    className="d-flex align-start gap-3 p-2 rounded card-interactive cursor-pointer"
+                    style={{
+                      background: isCompleted ? 'var(--primary-50)' : 'var(--bg-subtle)',
+                      border: '1px solid var(--border-light)'
+                    }}
+                    onClick={() => togglePlanMilestone(plan.id, m.id)}
+                  >
+                    <div 
+                      className="d-flex align-center justify-center mt-1" 
+                      style={{
+                        width: '20px', 
+                        height: '20px', 
+                        borderRadius: '4px', 
+                        background: isCompleted ? 'var(--primary-600)' : '#ffffff',
+                        border: isCompleted ? 'none' : '2px solid var(--border-default)',
+                        color: '#ffffff',
+                        flexShrink: 0
+                      }}
+                    >
+                      {isCompleted && <Check size={14} />}
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="d-flex align-center justify-between flex-wrap gap-1">
+                        <span className={`text-xs font-semibold ${isCompleted ? 'text-primary' : 'text-secondary'}`} style={{ textDecoration: isCompleted ? 'line-through' : 'none' }}>
+                          {m.title}
+                        </span>
+                        <div className="d-flex align-center gap-2">
+                          <MilestoneStatusBadge status={m.status} />
+                          <span className="text-xs text-muted">Due: {m.dueDate}</span>
+                        </div>
+                      </div>
+                      <div className="d-flex align-center gap-3 text-xs text-muted mt-1 flex-wrap">
+                        <span>Assigned to: {m.assignedTo || 'Community'}</span>
+                        {m.completedDate && <span className="text-brand font-medium">Completed on {m.completedDate}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 5: TRANSPARENT DECISION LOG                           */}
+        {/* ========================================================= */}
+        {activeTab === 'decisions' && (
+          <div className="card p-4" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+            <div className="d-flex align-center justify-between mb-3 pb-2 border-bottom flex-wrap gap-2">
+              <div>
+                <h4 className="font-bold text-sm text-primary d-flex align-center gap-2">
+                  <FileText size={16} className="text-purple" />
+                  <span>Transparent Decision Log ({plan.decisions?.length || 0})</span>
+                </h4>
+                <p className="text-xs text-muted mb-0">
+                  Permanent record of choices made, trade-offs weighed, and rationale (automatically updated with every revision).
+                </p>
+              </div>
+              <button
+                className="btn btn-primary btn-xs font-semibold d-flex align-center gap-1"
+                onClick={() => setIsAddingDecision(!isAddingDecision)}
+              >
+                <Plus size={13} />
+                <span>+ Log Operational Decision</span>
+              </button>
+            </div>
+
+            {/* Explanatory Info Alert */}
+            <div className="card p-2 px-3 mb-3 d-flex align-center justify-between flex-wrap gap-2 text-xs" style={{ background: 'var(--purple-50)', border: '1px solid var(--purple-200)', color: 'var(--purple-900)' }}>
+              <span className="d-flex align-center gap-1">
+                <Sparkles size={14} className="text-purple-600" />
+                <span><strong>Auto-Linked Governance:</strong> Revisions automatically log their rationale here. Fieldwork choices can also be recorded manually.</span>
+              </span>
+            </div>
+
+            {/* Add decision inline form */}
+            {isAddingDecision && (
+              <form onSubmit={handleAddDecision} className="card p-3 mb-3 animate-fade-in" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-default)' }}>
+                <span className="font-bold text-xs text-primary d-block mb-2">Record Fieldwork / Strategic Decision</span>
+                <div className="d-flex flex-column gap-2">
+                  <input
+                    type="text"
+                    placeholder="Decision title (e.g. Selected biological willow fascines over concrete channelization)"
+                    value={newDecisionTitle}
+                    onChange={(e) => setNewDecisionTitle(e.target.value)}
+                    className="form-input"
+                    required
+                  />
+                  <textarea
+                    placeholder="Transparent Rationale: Why was this option chosen? What alternatives or trade-offs were weighed?"
+                    value={newDecisionRationale}
+                    onChange={(e) => setNewDecisionRationale(e.target.value)}
+                    rows={2}
+                    className="form-textarea"
+                    required
+                  />
+                  <div className="d-flex justify-end gap-2">
+                    <button type="button" className="btn btn-ghost btn-xs" onClick={() => setIsAddingDecision(false)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary btn-xs">Save to Permanent Log</button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            <div className="d-flex flex-column gap-2">
+              {plan.decisions && plan.decisions.length > 0 ? (
+                plan.decisions.map((dec) => {
+                  const isRevision = Boolean(dec.versionTag || dec.isRevisionDecision);
+                  return (
+                    <div 
+                      key={dec.id} 
+                      className="p-3 rounded text-xs" 
+                      style={{ 
+                        background: isRevision ? '#ffffff' : 'var(--bg-subtle)', 
+                        border: isRevision ? '1px solid var(--purple-200)' : '1px solid var(--border-light)' 
+                      }}
+                    >
+                      <div className="d-flex align-center justify-between mb-1 flex-wrap gap-1">
+                        <div className="d-flex align-center gap-2">
+                          {isRevision ? (
+                            <button
+                              type="button"
+                              className="badge badge-purple font-bold text-xs cursor-pointer border-0"
+                              onClick={() => setActiveTab('revisions')}
+                              title="Click to view full revision changelog"
+                            >
+                              🔗 Revision {dec.versionTag || 'Update'} Decision
+                            </button>
+                          ) : (
+                            <span className="badge badge-secondary font-bold text-xs">
+                              ⚙️ Operational Decision
+                            </span>
+                          )}
+                          <span className="font-bold text-primary">{dec.title}</span>
+                        </div>
+                        <span className="text-muted">{dec.date} • {dec.decidedBy}</span>
+                      </div>
+
+                      <p className="text-secondary mb-1" style={{ lineHeight: '1.45' }}>
+                        <strong className="text-primary">Rationale: </strong>{dec.rationale}
+                      </p>
+
+                      {dec.incorporatedFeedbackIds && dec.incorporatedFeedbackIds.length > 0 && (
+                        <div className="d-flex align-center gap-1 text-muted pt-1 border-top mt-1" style={{ fontSize: '0.7rem' }}>
+                          <CheckCircle2 size={11} className="text-brand" />
+                          <span>Directly resolved {dec.incorporatedFeedbackIds.length} community feedback item(s)</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-4 text-center text-xs text-muted">
+                  No decisions recorded yet. Decisions are automatically logged when revisions are published.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Linked CareMesh Entity Mesh */}
+        {(linkedRequests.length > 0 || linkedEvents.length > 0) && (
+          <div className="card p-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+            <h5 className="font-bold text-xs text-primary mb-2 d-flex align-center gap-1">
+              <Link2 size={14} className="text-brand" /> Connected CareMesh Network Entities
+            </h5>
+            <div className="grid-2 gap-2 text-xs">
+              {linkedRequests.length > 0 && (
+                <div>
+                  <strong className="text-muted d-block mb-1">Help Requests:</strong>
+                  {linkedRequests.map(r => <span key={r.id} className="d-block text-primary">• {r.title}</span>)}
+                </div>
+              )}
+              {linkedEvents.length > 0 && (
+                <div>
+                  <strong className="text-muted d-block mb-1">Workdays & Events:</strong>
+                  {linkedEvents.map(e => <span key={e.id} className="d-block text-primary">• {e.title} ({e.date})</span>)}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Real-world Evaluated Outcome */}
+        {plan.outcomesEvaluation && (
+          <div className="card p-3" style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-200)' }}>
+            <span className="text-xs font-bold text-brand text-uppercase d-block mb-1">
+              Real-World Evaluated Outcome:
+            </span>
+            <p className="text-xs text-secondary mb-0">
+              {plan.outcomesEvaluation}
+            </p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
