@@ -1438,6 +1438,24 @@ export const mockPlans = [
     linkedClaimIds: ['clm_01'],
     evidenceIds: ['ev_01'],
     outcomesEvaluation: 'Project successfully completed and monitored across 2 seasonal storm cycles. Zero underpass flooding recorded during the recent 2.2-inch deluge. Water quality telemetry confirms 88% reduction in total suspended solids and hydrocarbon filtration meeting EPA Class II standards. Native vegetation established with 94% survival rate.',
+    outcomeReport: {
+      evaluatedAt: 'Aug 20, 2026',
+      evaluator: 'Dr. Priya Sharma (Hydrological Designer)',
+      goal: 'Capture and naturally filter 85% of parking lot runoff, eliminate Oak St pedestrian underpass flooding, and stabilize 400ft of creek bank with native vegetation.',
+      actualResults: [
+        '250ft bio-retention swale and gravel check dams constructed and fully operational',
+        'Zero underpass flash flooding recorded across 2 severe seasonal storm cycles (> 2.2 in/hr)',
+        '400ft of creek bank stabilized with 400 native sedge plugs (94% plant survival rate)',
+        'Hydrocarbon and road sediment runoff reduced by 88%, meeting EPA Class II water standards'
+      ],
+      outcomeStatus: 'achieved',
+      evidenceTypes: ['Field observation', 'Community feedback', 'Measurements', 'Photos/documents'],
+      linkedEvidenceIds: ['ev_01'],
+      linkedObservationIds: ['obs_01'],
+      unexpectedEffects: 'Heavy gravel sediment accumulated in the first check weir faster than modeled, requiring a bi-annual debris cleanout rota rather than an annual check.',
+      lessons: 'Pre-marking buried telecom utilities via GPR before deep trenching prevented costly fiber optic line strikes and project delays.',
+      guidanceForFuture: 'All future bio-swales adjacent to commercial parking lots should include an easily accessible sediment trap forebay for rapid volunteer shoveling.'
+    },
     updates: [
       { date: 'Aug 20', note: 'Final outcome evaluation report logged and published to community archive.' }
     ]

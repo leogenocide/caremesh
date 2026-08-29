@@ -140,6 +140,21 @@ export const PlansView = () => {
                   </span>
                   <LifecycleBadge stage={plan.lifecycleStage} />
                   <PlanStatusBadge status={plan.overallStatus || 'planning'} />
+                  {plan.outcomeReport?.outcomeStatus === 'achieved' && (
+                    <span className="badge font-bold text-xs" style={{ background: '#dcfce7', color: '#166534', border: '1px solid #86efac' }}>
+                      🟢 Achieved
+                    </span>
+                  )}
+                  {plan.outcomeReport?.outcomeStatus === 'partially_achieved' && (
+                    <span className="badge font-bold text-xs" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047' }}>
+                      🟡 Partial
+                    </span>
+                  )}
+                  {plan.outcomeReport?.outcomeStatus === 'not_achieved' && (
+                    <span className="badge font-bold text-xs" style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' }}>
+                      🔴 Not Met
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-muted">
                   Proposed by {plan.proposer?.name || 'Community Member'} • Updated {plan.updates?.[0]?.date || 'Recently'}
@@ -158,6 +173,25 @@ export const PlansView = () => {
                 <p className="text-xs text-muted mb-3" style={{ lineHeight: '1.45' }}>
                   <strong>Proposed Approach:</strong> {plan.proposedApproach}
                 </p>
+              )}
+
+              {/* Evaluated Outcome Snapshot (if completed/evaluated) */}
+              {plan.outcomeReport && (
+                <div 
+                  className="d-flex align-center justify-between p-2 px-3 mb-3 rounded gap-2"
+                  style={{ 
+                    background: plan.outcomeReport.outcomeStatus === 'achieved' ? 'rgba(220, 252, 231, 0.45)' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? 'rgba(254, 249, 195, 0.45)' : 'rgba(254, 226, 226, 0.45)', 
+                    border: '1px solid var(--border-light)' 
+                  }}
+                >
+                  <div className="d-flex align-center gap-1.5 text-xs text-primary min-w-0">
+                    <span className="font-bold text-xs flex-shrink-0" style={{ color: plan.outcomeReport.outcomeStatus === 'achieved' ? '#166534' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? '#854d0e' : '#991b1b' }}>
+                      {plan.outcomeReport.outcomeStatus === 'achieved' ? '🟢 Verified Result:' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? '🟡 Partial Result:' : '🔴 Outcome:'}
+                    </span>
+                    <span className="text-secondary text-truncate font-medium">{plan.outcomeReport.actualResults?.[0] || plan.outcomesEvaluation}</span>
+                  </div>
+                  <span className="text-xs text-brand font-semibold flex-shrink-0 d-none d-sm-inline">Full Evaluation →</span>
+                </div>
               )}
 
               {/* Proposal Critique & Collaboration Signals Ribbon */}

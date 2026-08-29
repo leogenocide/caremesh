@@ -9,6 +9,7 @@ import { AddObservationRelationModal } from '../evidence/AddObservationRelationM
 import { ShareToSocialModal } from '../evidence/ShareToSocialModal';
 import { PlanDetailModal } from '../plans/PlanDetailModal';
 import { RevisePlanModal } from '../plans/RevisePlanModal';
+import { LogPlanOutcomeModal } from '../plans/LogPlanOutcomeModal';
 import { EventDetailModal } from '../events/EventDetailModal';
 import { CreateGroupModal } from '../social/CreateGroupModal';
 import { InviteMembersModal } from '../social/InviteMembersModal';
@@ -19,6 +20,8 @@ export const AppLayout = ({ children }) => {
     closeInspector,
     selectedPlanDetail, 
     closePlanDetail,
+    logOutcomeModalTarget,
+    closeLogOutcomeModal,
     selectedEventChat,
     setSelectedEventChat
   } = useCareMesh();
@@ -77,6 +80,15 @@ export const AppLayout = ({ children }) => {
           isOpen={Boolean(selectedPlanDetail)}
           onClose={closePlanDetail}
           plan={selectedPlanDetail}
+        />
+      )}
+
+      {/* Global Plan Outcome & Results Evaluation Modal */}
+      {logOutcomeModalTarget && (
+        <LogPlanOutcomeModal
+          isOpen={Boolean(logOutcomeModalTarget)}
+          onClose={closeLogOutcomeModal}
+          plan={logOutcomeModalTarget}
         />
       )}
 

@@ -18,7 +18,13 @@ import {
   Edit3, 
   ArrowRight,
   Package,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  XCircle,
+  Compass,
+  Lightbulb,
+  FileCheck,
+  Eye
 } from 'lucide-react';
 
 export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
@@ -27,13 +33,14 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
     addPlanDecision, 
     updatePlanStage, 
     openRevisePlanModal,
+    openLogOutcomeModal,
     requests, 
     events, 
     observations,
     currentUser 
   } = useCareMesh();
 
-  const [activeTab, setActiveTab] = useState('proposal'); // 'proposal' | 'critique' | 'revisions' | 'milestones' | 'decisions'
+  const [activeTab, setActiveTab] = useState('proposal'); // 'proposal' | 'critique' | 'revisions' | 'milestones' | 'decisions' | 'outcomes'
   const [newDecisionTitle, setNewDecisionTitle] = useState('');
   const [newDecisionRationale, setNewDecisionRationale] = useState('');
   const [isAddingDecision, setIsAddingDecision] = useState(false);
@@ -142,10 +149,21 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                   <button
                     type="button"
                     className="btn btn-primary btn-xs d-flex align-center gap-1"
-                    onClick={() => updatePlanStage(plan.id, 'completed')}
+                    onClick={() => openLogOutcomeModal(plan)}
                   >
                     <Check size={13} />
                     <span>Complete & Evaluate Outcome</span>
+                  </button>
+                )}
+
+                {plan.lifecycleStage === 'completed' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs d-flex align-center gap-1"
+                    onClick={() => openLogOutcomeModal(plan)}
+                  >
+                    <Edit3 size={13} />
+                    <span>Update Outcome Evaluation</span>
                   </button>
                 )}
               </div>
@@ -224,6 +242,16 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
           >
             <Layers size={14} />
             <span>Decisions Log ({plan.decisions?.length || 0})</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'outcomes' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('outcomes')}
+          >
+            <Compass size={14} />
+            <span>Outcome & Results {plan.outcomeReport ? '✓' : ''}</span>
           </button>
         </div>
 
@@ -590,6 +618,168 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
           </div>
         )}
 
+        {/* ========================================================= */}
+        {/* TAB 6: OUTCOME & REAL-WORLD RESULTS EVALUATION            */}
+        {/* ========================================================= */}
+        {activeTab === 'outcomes' && (
+          <div className="d-flex flex-column gap-3">
+            {plan.outcomeReport ? (
+              <>
+                {/* 1. Header & Outcome Status Banner */}
+                <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                  <div className="d-flex align-center justify-between flex-wrap gap-2 mb-2 pb-2 border-bottom">
+                    <div className="d-flex align-center gap-2">
+                      {plan.outcomeReport.outcomeStatus === 'achieved' && (
+                        <span className="badge font-bold text-xs d-flex align-center gap-1" style={{ background: 'rgba(220, 252, 231, 0.9)', color: '#166534', border: '1px solid #86efac' }}>
+                          <CheckCircle2 size={13} />
+                          <span>🟢 Goal Achieved</span>
+                        </span>
+                      )}
+                      {plan.outcomeReport.outcomeStatus === 'partially_achieved' && (
+                        <span className="badge font-bold text-xs d-flex align-center gap-1" style={{ background: 'rgba(254, 249, 195, 0.9)', color: '#854d0e', border: '1px solid #fde047' }}>
+                          <AlertTriangle size={13} />
+                          <span>🟡 Partially Achieved</span>
+                        </span>
+                      )}
+                      {plan.outcomeReport.outcomeStatus === 'not_achieved' && (
+                        <span className="badge font-bold text-xs d-flex align-center gap-1" style={{ background: 'rgba(254, 226, 226, 0.9)', color: '#991b1b', border: '1px solid #fca5a5' }}>
+                          <XCircle size={13} />
+                          <span>🔴 Not Achieved</span>
+                        </span>
+                      )}
+                      <span className="text-xs text-muted">
+                        Evaluated {plan.outcomeReport.evaluatedAt} by {plan.outcomeReport.evaluator || 'Coordinators'}
+                      </span>
+                    </div>
+
+                    {isAuthorOrCoordinator && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-xs d-flex align-center gap-1 font-semibold"
+                        onClick={() => openLogOutcomeModal(plan)}
+                      >
+                        <Edit3 size={13} />
+                        <span>Edit Evaluation Report</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Target Goal */}
+                  <div className="mb-3">
+                    <span className="text-xs font-bold text-muted text-uppercase d-flex align-center gap-1 mb-1">
+                      <Target size={13} className="text-brand" /> Goal Evaluated
+                    </span>
+                    <p className="text-xs font-medium text-primary mb-0" style={{ lineHeight: '1.5' }}>
+                      {plan.outcomeReport.goal}
+                    </p>
+                  </div>
+
+                  {/* Actual Results Itemized List */}
+                  <div>
+                    <span className="text-xs font-bold text-muted text-uppercase d-flex align-center gap-1 mb-2">
+                      <CheckCircle2 size={13} className="text-brand" /> Actual Results Achieved
+                    </span>
+                    <div className="d-flex flex-column gap-1.5">
+                      {plan.outcomeReport.actualResults?.map((res, i) => (
+                        <div key={i} className="d-flex align-start gap-2 p-2 rounded" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--primary-100)', color: 'var(--primary-800)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '0.65rem', fontWeight: 700, marginTop: '1px' }}>
+                            {i + 1}
+                          </div>
+                          <span className="text-xs text-primary font-medium flex-1">{res}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Supporting Evidence */}
+                <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                  <span className="text-xs font-bold text-muted text-uppercase d-flex align-center gap-1 mb-2">
+                    <FileCheck size={13} className="text-blue-600" /> Supporting Evidence & Field Verification
+                  </span>
+                  <div className="d-flex align-center gap-1.5 flex-wrap mb-2">
+                    {plan.outcomeReport.evidenceTypes?.map((et, idx) => (
+                      <span key={idx} className="badge badge-secondary text-xs" style={{ fontSize: '0.75rem', padding: '0.25rem 0.55rem' }}>
+                        ✓ {et}
+                      </span>
+                    ))}
+                  </div>
+
+                  {linkedObs.length > 0 && (
+                    <div className="pt-2 border-top">
+                      <span className="text-xs text-muted d-block mb-1 font-semibold">Attached Field Observations:</span>
+                      <div className="d-flex flex-column gap-1">
+                        {linkedObs.map(o => (
+                          <div key={o.id} className="d-flex align-center gap-1.5 text-xs text-primary">
+                            <Eye size={12} className="text-brand" />
+                            <span className="font-medium">{o.title}</span>
+                            <span className="text-muted" style={{ fontSize: '0.68rem' }}>({o.category})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Unexpected Effects */}
+                {plan.outcomeReport.unexpectedEffects && (
+                  <div className="card p-3" style={{ background: 'rgba(254, 243, 199, 0.4)', border: '1px solid #fde68a' }}>
+                    <h5 className="font-bold text-xs text-amber-900 text-uppercase mb-1 d-flex align-center gap-1.5">
+                      <AlertCircle size={14} className="text-amber" /> Unexpected Effects & Side Impacts
+                    </h5>
+                    <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.5' }}>
+                      {plan.outcomeReport.unexpectedEffects}
+                    </p>
+                  </div>
+                )}
+
+                {/* 4. Lessons & Guidance for Future Projects */}
+                <div className="grid-2 gap-3">
+                  {plan.outcomeReport.lessons && (
+                    <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                      <h5 className="font-bold text-xs text-purple text-uppercase mb-1.5 d-flex align-center gap-1.5">
+                        <Lightbulb size={14} className="text-purple-600" /> Operational Lessons Learned
+                      </h5>
+                      <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.5' }}>
+                        {plan.outcomeReport.lessons}
+                      </p>
+                    </div>
+                  )}
+
+                  {plan.outcomeReport.guidanceForFuture && (
+                    <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                      <h5 className="font-bold text-xs text-primary text-uppercase mb-1.5 d-flex align-center gap-1.5">
+                        <Compass size={14} className="text-blue-600" /> Guidance for Future Projects
+                      </h5>
+                      <p className="text-xs text-secondary mb-0" style={{ lineHeight: '1.5' }}>
+                        {plan.outcomeReport.guidanceForFuture}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="card p-4 text-center" style={{ background: 'var(--bg-subtle)', border: '1px dashed var(--border-default)' }}>
+                <Compass size={32} className="text-brand mb-2 mx-auto d-block opacity-75" />
+                <h4 className="font-bold text-sm text-primary mb-1">Outcome Evaluation Pending</h4>
+                <p className="text-xs text-muted mb-3 mx-auto" style={{ maxWidth: '460px', lineHeight: '1.5' }}>
+                  This long-term proposal is currently in <strong>{plan.lifecycleStage?.replace('_', ' ')}</strong> stage. Once implementation milestones are delivered, coordinators log real-world verified results, unexpected effects, lessons, and future guidance.
+                </p>
+                {isAuthorOrCoordinator && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm mx-auto d-inline-flex align-center gap-1.5"
+                    onClick={() => openLogOutcomeModal(plan)}
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Log Outcome & Results Evaluation</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Linked CareMesh Entity Mesh */}
         {(linkedRequests.length > 0 || linkedEvents.length > 0) && (
           <div className="card p-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
@@ -613,14 +803,42 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
           </div>
         )}
 
-        {/* Real-world Evaluated Outcome */}
-        {plan.outcomesEvaluation && (
-          <div className="card p-3" style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-200)' }}>
-            <span className="text-xs font-bold text-brand text-uppercase d-block mb-1">
-              Real-World Evaluated Outcome:
-            </span>
-            <p className="text-xs text-secondary mb-0">
-              {plan.outcomesEvaluation}
+        {/* Bottom Real-World Evaluated Outcome Banner (Visible on all tabs when report exists) */}
+        {plan.outcomeReport && activeTab !== 'outcomes' && (
+          <div 
+            className="card p-3 cursor-pointer card-interactive" 
+            style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-200)' }}
+            onClick={() => setActiveTab('outcomes')}
+            title="Click to view full outcome evaluation report"
+          >
+            <div className="d-flex align-center justify-between gap-2 mb-1">
+              <div className="d-flex align-center gap-2">
+                <span className="text-xs font-bold text-brand text-uppercase d-flex align-center gap-1">
+                  <Compass size={13} /> Real-World Evaluated Outcome
+                </span>
+                {plan.outcomeReport.outcomeStatus === 'achieved' && (
+                  <span className="badge font-bold text-xs" style={{ background: '#dcfce7', color: '#166534', fontSize: '0.65rem' }}>
+                    🟢 Achieved
+                  </span>
+                )}
+                {plan.outcomeReport.outcomeStatus === 'partially_achieved' && (
+                  <span className="badge font-bold text-xs" style={{ background: '#fef9c3', color: '#854d0e', fontSize: '0.65rem' }}>
+                    🟡 Partially Achieved
+                  </span>
+                )}
+                {plan.outcomeReport.outcomeStatus === 'not_achieved' && (
+                  <span className="badge font-bold text-xs" style={{ background: '#fee2e2', color: '#991b1b', fontSize: '0.65rem' }}>
+                    🔴 Not Achieved
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-brand font-semibold d-flex align-center gap-0.5">
+                <span>View Full Report</span>
+                <ArrowRight size={12} />
+              </span>
+            </div>
+            <p className="text-xs text-secondary mb-0 text-truncate">
+              {plan.outcomeReport.actualResults?.[0] || plan.outcomesEvaluation}
             </p>
           </div>
         )}

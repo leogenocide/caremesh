@@ -252,6 +252,10 @@ export const CareMeshProvider = ({ children }) => {
   const openRevisePlanModal = (plan) => setRevisePlanTarget(plan);
   const closeRevisePlanModal = () => setRevisePlanTarget(null);
 
+  const [logOutcomeModalTarget, setLogOutcomeModalTarget] = useState(null);
+  const openLogOutcomeModal = (plan) => setLogOutcomeModalTarget(plan);
+  const closeLogOutcomeModal = () => setLogOutcomeModalTarget(null);
+
   // Helper to ensure precise lat/lng
   const resolveCoordinates = (data) => {
     const lat = data.lat !== undefined && data.lat !== null && !isNaN(Number(data.lat))
@@ -1143,6 +1147,72 @@ export const CareMeshProvider = ({ children }) => {
     }));
   };
 
+  const logPlanOutcomeReport = (planId, reportData) => {
+    setPlans(prev => prev.map(p => {
+      if (p.id === planId) {
+        const newReport = {
+          evaluatedAt: reportData.evaluatedAt || 'Today',
+          evaluator: reportData.evaluator || currentUser.name,
+          goal: reportData.goal || p.desiredOutcome || p.problemStatement,
+          actualResults: reportData.actualResults && reportData.actualResults.length > 0 
+            ? reportData.actualResults 
+            : ['Plan implementation milestones completed and verified by working group.'],
+          outcomeStatus: reportData.outcomeStatus || 'achieved',
+          evidenceTypes: reportData.evidenceTypes || ['Field observation', 'Measurements'],
+          linkedEvidenceIds: reportData.linkedEvidenceIds || [],
+          linkedObservationIds: reportData.linkedObservationIds || [],
+          unexpectedEffects: reportData.unexpectedEffects?.trim() || '',
+          lessons: reportData.lessons?.trim() || '',
+          guidanceForFuture: reportData.guidanceForFuture?.trim() || ''
+        };
+
+        const updatedPlan = {
+          ...p,
+          outcomeReport: newReport,
+          outcomesEvaluation: newReport.actualResults.join('. ') + (newReport.lessons ? ` Lessons: ${newReport.lessons}` : ''),
+          lifecycleStage: 'completed',
+          overallStatus: 'completed',
+          updates: [
+            { date: 'Today', note: `Outcome Evaluation Report logged: Status is ${newReport.outcomeStatus.replace('_', ' ')}` },
+            ...(p.updates || [])
+          ],
+          decisions: [
+            {
+              id: `dec_eval_${Date.now()}`,
+              title: `Formal Outcome Evaluation: ${newReport.outcomeStatus === 'achieved' ? 'Goal Achieved' : newReport.outcomeStatus === 'partially_achieved' ? 'Goal Partially Achieved' : 'Goal Not Achieved'}`,
+              rationale: newReport.lessons ? `Lessons Learned: ${newReport.lessons}` : 'Evaluated post-implementation real-world results against original proposal targets.',
+              date: 'Today',
+              decidedBy: currentUser.name,
+              versionTag: null,
+              isRevisionDecision: false,
+              incorporatedFeedbackIds: []
+            },
+            ...(p.decisions || [])
+          ]
+        };
+
+        if (selectedPlanDetail?.id === planId) {
+          setSelectedPlanDetail(updatedPlan);
+        }
+
+        const notif = {
+          id: `notif_eval_${Date.now()}`,
+          type: 'plan_update',
+          title: `Outcome Report Published: ${p.title}`,
+          body: `Outcome evaluation logged as "${newReport.outcomeStatus.replace('_', ' ')}". Check results and guidance for future projects.`,
+          timestamp: 'Just now',
+          isRead: false,
+          targetView: 'plans',
+          targetEntityId: planId
+        };
+        setNotifications(prevNotifs => [notif, ...prevNotifs]);
+
+        return updatedPlan;
+      }
+      return p;
+    }));
+  };
+
   const markFeedbackStatus = (planId, feedbackId, status, resolutionNote = '') => {
     setPlans(prev => prev.map(p => {
       if (p.id === planId) {
@@ -1468,6 +1538,9 @@ export const CareMeshProvider = ({ children }) => {
       revisePlanTarget,
       openRevisePlanModal,
       closeRevisePlanModal,
+      logOutcomeModalTarget,
+      openLogOutcomeModal,
+      closeLogOutcomeModal,
 
       selectedEventChat,
       setSelectedEventChat,
@@ -1526,6 +1599,7 @@ export const CareMeshProvider = ({ children }) => {
       addPlanFeedback,
       revisePlan,
       updatePlanStage,
+      logPlanOutcomeReport,
       markFeedbackStatus,
       matchResourceToRequest,
       toggleJoinCommunity,
