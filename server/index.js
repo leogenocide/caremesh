@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { initDatabase } from './db/database.js';
 import { seedDatabase } from './db/seed.js';
@@ -28,6 +30,9 @@ import adminRouter from './routes/admin.js';
 import writeRateLimiter from './middleware/rateLimiter.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize SQLite database and seed if empty
 initDatabase();
@@ -100,6 +105,16 @@ app.use('/api/bootstrap', bootstrapRouter);
 // 404 Route handler
 app.use('/api', (req, res) => {
   res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
+});
+
+// Serve React frontend
+const frontendPath = path.join(__dirname, '../dist');
+
+app.use(express.static(frontendPath));
+
+// React Router fallback
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // Error handling middleware
