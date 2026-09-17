@@ -3,6 +3,8 @@ import { Modal } from '../common/Modal';
 import { PlanStatusBadge, MilestoneStatusBadge, LifecycleBadge } from '../common/Badge';
 import { PlanFeedbackSection } from './PlanFeedbackSection';
 import { useCareMesh } from '../../context/useCareMesh';
+import { usePagination } from '../../hooks/usePagination';
+import { Pagination } from '../common/Pagination';
 import { 
   Target, 
   CheckCircle2, 
@@ -24,18 +26,24 @@ import {
   Compass,
   Lightbulb,
   FileCheck,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react';
 
 export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
   const { 
     togglePlanMilestone, 
     addPlanDecision, 
+    deletePlanDecision,
+    deletePlanMilestone,
     updatePlanStage, 
     openRevisePlanModal,
     openLogOutcomeModal,
+    deletePlan,
+    canUserManage,
+    inspectEntity,
+    viewRequestDetail,
     requests, 
-    events, 
     observations,
     currentUser 
   } = useCareMesh();
@@ -45,11 +53,9 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
   const [newDecisionRationale, setNewDecisionRationale] = useState('');
   const [isAddingDecision, setIsAddingDecision] = useState(false);
 
-  if (!plan) return null;
-
   const handleAddDecision = (e) => {
     e.preventDefault();
-    if (!newDecisionTitle.trim()) return;
+    if (!newDecisionTitle.trim() || !plan) return;
 
     addPlanDecision(plan.id, {
       title: newDecisionTitle.trim(),
@@ -61,14 +67,19 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
     setIsAddingDecision(false);
   };
 
-  const isAuthorOrCoordinator = plan.proposer?.id === currentUser.id || plan.participants?.some(p => p.user?.id === currentUser.id);
+  const isAuthorOrCoordinator = plan?.proposer?.id === currentUser?.id || plan?.participants?.some(p => p.user?.id === currentUser?.id);
 
-  const linkedRequests = requests.filter(r => plan.linkedRequestIds?.includes(r.id));
-  const linkedEvents = events.filter(e => plan.linkedEventIds?.includes(e.id));
-  const linkedObs = observations.filter(o => plan.linkedObservationIds?.includes(o.id));
+  const linkedRequests = plan ? requests.filter(r => plan.linkedRequestIds?.includes(r.id)) : [];
+  const linkedObs = plan ? observations.filter(o => plan.linkedObservationIds?.includes(o.id)) : [];
 
-  const totalMilestones = plan.milestones?.length || 0;
-  const completedMilestones = plan.milestones?.filter(m => m.status === 'completed').length || 0;
+  const totalMilestones = plan?.milestones?.length || 0;
+  const completedMilestones = plan?.milestones?.filter(m => m.status === 'completed').length || 0;
+
+  const revisionsPagination = usePagination(plan?.revisionHistory || [], 4);
+  const milestonesPagination = usePagination(plan?.milestones || [], 4);
+  const decisionsPagination = usePagination(plan?.decisions || [], 4);
+
+  if (!plan) return null;
 
   const lifecycleStages = [
     { key: 'draft', label: '1. Draft' },
@@ -164,6 +175,24 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                   >
                     <Edit3 size={13} />
                     <span>Update Outcome Evaluation</span>
+                  </button>
+                )}
+
+                {canUserManage(plan) && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-xs d-flex align-center gap-1"
+                    style={{ color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' }}
+                    title="Delete Plan"
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete the plan "${plan.title}"? This action cannot be undone.`)) {
+                        deletePlan(plan.id);
+                        onClose();
+                      }
+                    }}
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete Plan</span>
                   </button>
                 )}
               </div>
@@ -329,8 +358,19 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                 </h5>
                 <div className="d-flex flex-column gap-2">
                   {linkedObs.map(o => (
-                    <div key={o.id} className="p-2 rounded text-xs bg-white border">
-                      <strong>Observation: {o.title}</strong> — {o.description} ({o.location?.address})
+                    <div 
+                      key={o.id} 
+                      className="p-2.5 rounded text-xs bg-white border card-interactive cursor-pointer d-flex align-center justify-between"
+                      onClick={() => inspectEntity(o, 'observation')}
+                      title={`Inspect observation: ${o.title}`}
+                    >
+                      <div className="min-w-0">
+                        <strong className="text-primary d-block">Observation: {o.title}</strong>
+                        <span className="text-muted">{o.description} {o.location?.address ? `(${o.location.address})` : ''}</span>
+                      </div>
+                      <span className="badge badge-primary text-xs d-flex align-center gap-1 flex-shrink-0 ml-2">
+                        <Eye size={11} /> View
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -399,33 +439,47 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
 
             <div className="d-flex flex-column gap-3">
               {plan.revisionHistory && plan.revisionHistory.length > 0 ? (
-                plan.revisionHistory.map((rev, idx) => (
-                  <div 
-                    key={idx} 
-                    className="card p-3" 
-                    style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}
-                  >
-                    <div className="d-flex align-center justify-between mb-2">
-                      <div className="d-flex align-center gap-2">
-                        <span className="badge badge-primary font-bold text-xs">{rev.version}</span>
-                        <span className="font-bold text-xs text-primary">{rev.summaryOfChanges}</span>
+                <>
+                  {revisionsPagination.paginatedItems.map((rev, idx) => (
+                    <div 
+                      key={idx} 
+                      className="card p-3" 
+                      style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}
+                    >
+                      <div className="d-flex align-center justify-between mb-2">
+                        <div className="d-flex align-center gap-2">
+                          <span className="badge badge-primary font-bold text-xs">{rev.version}</span>
+                          <span className="font-bold text-xs text-primary">{rev.summaryOfChanges}</span>
+                        </div>
+                        <span className="text-xs text-muted">{rev.date} • by {rev.revisedBy}</span>
                       </div>
-                      <span className="text-xs text-muted">{rev.date} • by {rev.revisedBy}</span>
-                    </div>
 
-                    <div className="p-2 rounded text-xs mb-2" style={{ background: 'var(--bg-subtle)' }}>
-                      <strong className="text-primary d-block mb-1">Reasoning for Changes & Community Feedback Addressed:</strong>
-                      <p className="text-secondary mb-0" style={{ lineHeight: '1.45' }}>{rev.reasoningForChanges}</p>
-                    </div>
-
-                    {rev.incorporatedFeedbackIds && rev.incorporatedFeedbackIds.length > 0 && (
-                      <div className="d-flex align-center gap-2 text-xs text-muted pt-1">
-                        <CheckCircle2 size={12} className="text-brand" />
-                        <span>Incorporated {rev.incorporatedFeedbackIds.length} community feedback items</span>
+                      <div className="p-2 rounded text-xs mb-2" style={{ background: 'var(--bg-subtle)' }}>
+                        <strong className="text-primary d-block mb-1">Reasoning for Changes & Community Feedback Addressed:</strong>
+                        <p className="text-secondary mb-0" style={{ lineHeight: '1.45' }}>{rev.reasoningForChanges}</p>
                       </div>
-                    )}
-                  </div>
-                ))
+
+                      {rev.incorporatedFeedbackIds && rev.incorporatedFeedbackIds.length > 0 && (
+                        <div className="d-flex align-center gap-2 text-xs text-muted pt-1">
+                          <CheckCircle2 size={12} className="text-brand" />
+                          <span>Incorporated {rev.incorporatedFeedbackIds.length} community feedback items</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <Pagination
+                    compact={true}
+                    currentPage={revisionsPagination.currentPage}
+                    totalPages={revisionsPagination.totalPages}
+                    totalItems={revisionsPagination.totalItems}
+                    startIndex={revisionsPagination.startIndex}
+                    endIndex={revisionsPagination.endIndex}
+                    onPageChange={revisionsPagination.setPage}
+                    pageSize={revisionsPagination.pageSize}
+                    onPageSizeChange={revisionsPagination.handlePageSizeChange}
+                    itemName="revisions"
+                  />
+                </>
               ) : (
                 <div className="p-4 text-center text-xs text-muted">
                   Initial version (v1.0) active. No revisions published yet.
@@ -452,7 +506,7 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
             </div>
 
             <div className="d-flex flex-column gap-2">
-              {plan.milestones?.map((m) => {
+              {milestonesPagination.paginatedItems.map((m) => {
                 const isCompleted = m.status === 'completed';
                 return (
                   <div 
@@ -487,6 +541,21 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                         <div className="d-flex align-center gap-2">
                           <MilestoneStatusBadge status={m.status} />
                           <span className="text-xs text-muted">Due: {m.dueDate}</span>
+                          {canUserManage(plan) && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs text-rose p-0 d-flex align-center"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to delete milestone "${m.title}"?`)) {
+                                  deletePlanMilestone(plan.id, m.id);
+                                }
+                              }}
+                              title="Delete milestone"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="d-flex align-center gap-3 text-xs text-muted mt-1 flex-wrap">
@@ -497,6 +566,18 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                   </div>
                 );
               })}
+              <Pagination
+                compact={true}
+                currentPage={milestonesPagination.currentPage}
+                totalPages={milestonesPagination.totalPages}
+                totalItems={milestonesPagination.totalItems}
+                startIndex={milestonesPagination.startIndex}
+                endIndex={milestonesPagination.endIndex}
+                onPageChange={milestonesPagination.setPage}
+                pageSize={milestonesPagination.pageSize}
+                onPageSizeChange={milestonesPagination.handlePageSizeChange}
+                itemName="milestones"
+              />
             </div>
           </div>
         )}
@@ -564,51 +645,81 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
 
             <div className="d-flex flex-column gap-2">
               {plan.decisions && plan.decisions.length > 0 ? (
-                plan.decisions.map((dec) => {
-                  const isRevision = Boolean(dec.versionTag || dec.isRevisionDecision);
-                  return (
-                    <div 
-                      key={dec.id} 
-                      className="p-3 rounded text-xs" 
-                      style={{ 
-                        background: isRevision ? '#ffffff' : 'var(--bg-subtle)', 
-                        border: isRevision ? '1px solid var(--purple-200)' : '1px solid var(--border-light)' 
-                      }}
-                    >
-                      <div className="d-flex align-center justify-between mb-1 flex-wrap gap-1">
-                        <div className="d-flex align-center gap-2">
-                          {isRevision ? (
-                            <button
-                              type="button"
-                              className="badge badge-purple font-bold text-xs cursor-pointer border-0"
-                              onClick={() => setActiveTab('revisions')}
-                              title="Click to view full revision changelog"
-                            >
-                              🔗 Revision {dec.versionTag || 'Update'} Decision
-                            </button>
-                          ) : (
-                            <span className="badge badge-secondary font-bold text-xs">
-                              ⚙️ Operational Decision
-                            </span>
-                          )}
-                          <span className="font-bold text-primary">{dec.title}</span>
+                <>
+                  {decisionsPagination.paginatedItems.map((dec) => {
+                    const isRevision = Boolean(dec.versionTag || dec.isRevisionDecision);
+                    return (
+                      <div 
+                        key={dec.id} 
+                        className="p-3 rounded text-xs" 
+                        style={{ 
+                          background: isRevision ? '#ffffff' : 'var(--bg-subtle)', 
+                          border: isRevision ? '1px solid var(--purple-200)' : '1px solid var(--border-light)' 
+                        }}
+                      >
+                        <div className="d-flex align-center justify-between mb-1 flex-wrap gap-1">
+                          <div className="d-flex align-center gap-2">
+                            {isRevision ? (
+                              <button
+                                type="button"
+                                className="badge badge-purple font-bold text-xs cursor-pointer border-0"
+                                onClick={() => setActiveTab('revisions')}
+                                title="Click to view full revision changelog"
+                              >
+                                🔗 Revision {dec.versionTag || 'Update'} Decision
+                              </button>
+                            ) : (
+                              <span className="badge badge-secondary font-bold text-xs">
+                                ⚙️ Operational Decision
+                              </span>
+                            )}
+                            <span className="font-bold text-primary">{dec.title}</span>
+                          </div>
+                          <div className="d-flex align-center gap-2">
+                            <span className="text-muted">{dec.date} • {dec.decidedBy}</span>
+                            {canUserManage(plan) && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-xs text-rose p-0 d-flex align-center"
+                                onClick={() => {
+                                  if (window.confirm(`Are you sure you want to delete decision "${dec.title}"?`)) {
+                                    deletePlanDecision(plan.id, dec.id);
+                                  }
+                                }}
+                                title="Delete decision"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-muted">{dec.date} • {dec.decidedBy}</span>
+
+                        <p className="text-secondary mb-1" style={{ lineHeight: '1.45' }}>
+                          <strong className="text-primary">Rationale: </strong>{dec.rationale}
+                        </p>
+
+                        {dec.incorporatedFeedbackIds && dec.incorporatedFeedbackIds.length > 0 && (
+                          <div className="d-flex align-center gap-1 text-muted pt-1 border-top mt-1" style={{ fontSize: '0.7rem' }}>
+                            <CheckCircle2 size={11} className="text-brand" />
+                            <span>Directly resolved {dec.incorporatedFeedbackIds.length} community feedback item(s)</span>
+                          </div>
+                        )}
                       </div>
-
-                      <p className="text-secondary mb-1" style={{ lineHeight: '1.45' }}>
-                        <strong className="text-primary">Rationale: </strong>{dec.rationale}
-                      </p>
-
-                      {dec.incorporatedFeedbackIds && dec.incorporatedFeedbackIds.length > 0 && (
-                        <div className="d-flex align-center gap-1 text-muted pt-1 border-top mt-1" style={{ fontSize: '0.7rem' }}>
-                          <CheckCircle2 size={11} className="text-brand" />
-                          <span>Directly resolved {dec.incorporatedFeedbackIds.length} community feedback item(s)</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                  <Pagination
+                    compact={true}
+                    currentPage={decisionsPagination.currentPage}
+                    totalPages={decisionsPagination.totalPages}
+                    totalItems={decisionsPagination.totalItems}
+                    startIndex={decisionsPagination.startIndex}
+                    endIndex={decisionsPagination.endIndex}
+                    onPageChange={decisionsPagination.setPage}
+                    pageSize={decisionsPagination.pageSize}
+                    onPageSizeChange={decisionsPagination.handlePageSizeChange}
+                    itemName="decisions"
+                  />
+                </>
               ) : (
                 <div className="p-4 text-center text-xs text-muted">
                   No decisions recorded yet. Decisions are automatically logged when revisions are published.
@@ -781,7 +892,7 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
         )}
 
         {/* Linked CareMesh Entity Mesh */}
-        {(linkedRequests.length > 0 || linkedEvents.length > 0) && (
+        {(linkedRequests.length > 0 || linkedObs.length > 0) && (
           <div className="card p-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
             <h5 className="font-bold text-xs text-primary mb-2 d-flex align-center gap-1">
               <Link2 size={14} className="text-brand" /> Connected CareMesh Network Entities
@@ -789,14 +900,36 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
             <div className="grid-2 gap-2 text-xs">
               {linkedRequests.length > 0 && (
                 <div>
-                  <strong className="text-muted d-block mb-1">Help Requests:</strong>
-                  {linkedRequests.map(r => <span key={r.id} className="d-block text-primary">• {r.title}</span>)}
+                  <strong className="text-muted d-block mb-1">Linked Help Requests & Actions:</strong>
+                  {linkedRequests.map(r => (
+                    <div 
+                      key={r.id} 
+                      className="p-1.5 mb-1 rounded bg-white border card-interactive cursor-pointer d-flex align-center justify-between"
+                      onClick={() => viewRequestDetail(r)}
+                      title={`Inspect request: ${r.title}`}
+                    >
+                      <span className="text-primary truncate">
+                        • <strong>{r.title}</strong> {r.scheduledDate ? `(${r.scheduledDate}${r.scheduledTime ? ` · ${r.scheduledTime}` : ''})` : ''}
+                      </span>
+                      <span className="badge badge-secondary text-xs flex-shrink-0 ml-1">View</span>
+                    </div>
+                  ))}
                 </div>
               )}
-              {linkedEvents.length > 0 && (
+              {linkedObs.length > 0 && (
                 <div>
-                  <strong className="text-muted d-block mb-1">Workdays & Events:</strong>
-                  {linkedEvents.map(e => <span key={e.id} className="d-block text-primary">• {e.title} ({e.date})</span>)}
+                  <strong className="text-muted d-block mb-1">Linked Field Observations:</strong>
+                  {linkedObs.map(o => (
+                    <div 
+                      key={o.id} 
+                      className="p-1.5 mb-1 rounded bg-white border card-interactive cursor-pointer d-flex align-center justify-between"
+                      onClick={() => inspectEntity(o, 'observation')}
+                      title={`Inspect observation: ${o.title}`}
+                    >
+                      <span className="text-primary truncate">• <strong>{o.title}</strong></span>
+                      <span className="badge badge-primary text-xs flex-shrink-0 ml-1">View</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

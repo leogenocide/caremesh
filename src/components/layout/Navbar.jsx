@@ -9,14 +9,21 @@ import {
   Eye, 
   HandHeart, 
   Package, 
-  Calendar, 
   Target, 
   ShieldAlert, 
   X, 
   ExternalLink, 
   ChevronDown,
   Users,
-  TrendingUp
+  TrendingUp,
+  User,
+  LogIn,
+  LogOut,
+  UserPlus,
+  Check,
+  Globe,
+  UserCheck,
+  ShieldCheck
 } from 'lucide-react';
 
 export const Navbar = () => {
@@ -26,26 +33,35 @@ export const Navbar = () => {
     searchQuery,
     setSearchQuery,
     notifications,
-    markNotificationRead,
     markAllNotificationsRead,
+    handleNotificationClick,
     openCreateModal,
     currentUser,
     observations,
     requests,
     resources,
     plans,
-    communities
+    communities,
+    openAuthModal,
+    logoutUser,
+    switchUserAccount,
+    mockUsers,
+    openPublicRecordsModModal,
+    openReadinessModal
   } = useCareMesh();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const notifRef = useRef(null);
   const createMenuRef = useRef(null);
+  const userMenuRef = useRef(null);
   const searchRef = useRef(null);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const userNotifications = notifications.filter(n => !n.userId || n.userId === currentUser?.id);
+  const unreadCount = userNotifications.filter(n => !n.isRead).length;
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -55,6 +71,9 @@ export const Navbar = () => {
       }
       if (createMenuRef.current && !createMenuRef.current.contains(e.target)) {
         setIsCreateMenuOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
       }
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setIsSearchFocused(false);
@@ -78,7 +97,7 @@ export const Navbar = () => {
   return (
     <header className="app-navbar">
       {/* Brand / Logo (Hidden on mobile when search is actively expanded) */}
-      <div className={`d-flex align-center gap-2 flex-shrink-0 ${isMobileSearchActive ? 'd-none d-md-flex' : ''}`}>
+      <div className={`navbar-brand ${isMobileSearchActive ? 'd-none d-md-flex' : ''}`}>
         <div 
           className="d-flex align-center gap-2 cursor-pointer tap-active" 
           onClick={() => {
@@ -89,7 +108,7 @@ export const Navbar = () => {
           <div style={{ width: '32px', height: '32px', borderRadius: '9px', background: 'var(--primary-600)', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)', flexShrink: 0 }}>
             <Sparkles size={17} />
           </div>
-          <div className="d-flex align-center gap-1">
+          <div className="d-flex align-center gap-1.5">
             <span className="font-bold text-md text-primary" style={{ letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>CareMesh</span>
             <span className="badge badge-primary text-xs d-none d-sm-inline" style={{ padding: '0.1rem 0.35rem', fontSize: '0.6rem' }}>PROTOTYPE</span>
           </div>
@@ -104,14 +123,24 @@ export const Navbar = () => {
           left: isMobileSearchActive ? '0.5rem' : 'auto',
           right: isMobileSearchActive ? '0.5rem' : 'auto',
           width: isMobileSearchActive ? 'calc(100% - 1rem)' : '100%', 
-          maxWidth: isMobileSearchActive ? '100%' : '380px', 
-          margin: isMobileSearchActive ? '0' : '0 0.5rem',
+          maxWidth: isMobileSearchActive ? '100%' : '440px', 
+          margin: isMobileSearchActive ? '0' : '0 1rem',
           zIndex: isMobileSearchActive ? 120 : 'auto'
         }}
-        className={`${!isMobileSearchActive ? 'd-none d-md-block' : ''}`}
+        className={`navbar-search ${!isMobileSearchActive ? 'd-none d-md-flex' : ''}`}
       >
-        <div className="d-flex align-center" style={{ position: 'relative' }}>
-          <Search size={16} className="text-muted" style={{ position: 'absolute', left: '12px' }} />
+        <div className="d-flex align-center w-100" style={{ position: 'relative' }}>
+          <Search 
+            size={16} 
+            className="text-muted" 
+            style={{ 
+              position: 'absolute', 
+              left: '13px', 
+              top: '50%', 
+              transform: 'translateY(-50%)', 
+              pointerEvents: 'none' 
+            }} 
+          />
           <input
             type="text"
             placeholder="Search needs, resources, plans, places..."
@@ -119,20 +148,42 @@ export const Navbar = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
             autoFocus={isMobileSearchActive}
-            className="form-input"
-            style={{ paddingLeft: '36px', paddingRight: '36px', height: '36px', borderRadius: 'var(--radius-full)', background: 'var(--bg-muted)', fontSize: '0.85rem' }}
-          />
-          <button 
-            type="button" 
-            className="text-muted" 
-            onClick={() => {
-              setSearchQuery('');
-              if (isMobileSearchActive) setIsMobileSearchActive(false);
+            className="form-input w-100"
+            style={{ 
+              paddingLeft: '38px', 
+              paddingRight: (searchQuery || isMobileSearchActive) ? '36px' : '14px', 
+              height: '38px', 
+              borderRadius: 'var(--radius-full)', 
+              background: 'var(--bg-muted)', 
+              fontSize: '0.85rem' 
             }}
-            style={{ position: 'absolute', right: '10px', padding: '4px' }}
-          >
-            <X size={15} />
-          </button>
+          />
+          {(searchQuery.length > 0 || isMobileSearchActive) && (
+            <button 
+              type="button" 
+              className="btn-icon btn-ghost" 
+              onClick={() => {
+                setSearchQuery('');
+                if (isMobileSearchActive) setIsMobileSearchActive(false);
+              }}
+              style={{ 
+                position: 'absolute', 
+                right: '6px', 
+                top: '50%', 
+                transform: 'translateY(-50%)', 
+                width: '26px', 
+                height: '26px', 
+                padding: 0,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              aria-label="Clear or close search"
+            >
+              <X size={14} className="text-muted" />
+            </button>
+          )}
         </div>
 
         {/* Live Search Autocomplete & Recommendations Dropdown */}
@@ -140,7 +191,7 @@ export const Navbar = () => {
           <div 
             className="dropdown-card p-0 animate-fade-in" 
             style={{ 
-              top: '42px', 
+              top: '44px', 
               left: 0, 
               right: 0, 
               width: '100%',
@@ -357,24 +408,38 @@ export const Navbar = () => {
       </div>
 
       {/* Right Controls: Search Trigger (Mobile), Create Dropdown, Notifications, Profile */}
-      <div className={`d-flex align-center gap-1 gap-sm-2 flex-shrink-0 ${isMobileSearchActive ? 'd-none' : ''}`}>
+      <div className={`navbar-actions ${isMobileSearchActive ? 'd-none' : ''}`}>
         {/* Mobile Search Button Trigger */}
         <button
           type="button"
-          className="btn-icon d-flex d-md-none text-secondary"
-          style={{ width: '34px', height: '34px', minWidth: '34px' }}
+          className="btn btn-ghost btn-icon d-flex d-md-none text-secondary"
+          style={{ width: '38px', height: '38px', minWidth: '38px' }}
           onClick={() => setIsMobileSearchActive(true)}
           aria-label="Open search"
         >
           <Search size={17} />
         </button>
 
+        {/* Public Records Moderator Button (Platform-wide scope) */}
+        {Boolean(currentUser?.isPublicModerator || currentUser?.isAdmin) && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm d-none d-lg-flex align-center gap-1.5"
+            style={{ height: '38px', borderColor: 'var(--primary-300)', color: 'var(--primary-700)', padding: '0 0.85rem', display: 'inline-flex', alignItems: 'center' }}
+            onClick={openPublicRecordsModModal}
+            title="Open Public Records Moderation Center"
+          >
+            <Globe size={14} className="text-blue-600" />
+            <span className="text-xs font-semibold">Public Records Mod</span>
+          </button>
+        )}
+
         {/* Create + Dropdown */}
         <div ref={createMenuRef} style={{ position: 'relative' }}>
           <button
             type="button"
-            className="btn btn-primary btn-sm d-flex align-center gap-1"
-            style={{ padding: '0.35rem 0.55rem', height: '34px' }}
+            className="btn btn-primary btn-sm d-flex align-center gap-1.5"
+            style={{ padding: '0 0.85rem', height: '38px', display: 'inline-flex', alignItems: 'center' }}
             onClick={() => setIsCreateMenuOpen(!isCreateMenuOpen)}
             title="Create coordination item"
           >
@@ -387,7 +452,7 @@ export const Navbar = () => {
             <div 
               className="dropdown-card p-2 animate-fade-in"
               style={{
-                top: '42px',
+                top: '44px',
                 right: 0,
                 width: '230px',
                 maxWidth: 'calc(100vw - 20px)'
@@ -435,18 +500,6 @@ export const Navbar = () => {
                 type="button"
                 className="dropdown-item w-100 text-left d-flex align-center gap-2"
                 onClick={() => {
-                  openCreateModal('event');
-                  setIsCreateMenuOpen(false);
-                }}
-              >
-                <Calendar size={15} className="text-purple" />
-                <span>Schedule Workday / Event</span>
-              </button>
-
-              <button
-                type="button"
-                className="dropdown-item w-100 text-left d-flex align-center gap-2"
-                onClick={() => {
                   openCreateModal('plan');
                   setIsCreateMenuOpen(false);
                 }}
@@ -470,26 +523,42 @@ export const Navbar = () => {
           )}
         </div>
 
+        {/* System Admin Governance Quick Link */}
+        {(currentUser?.isAdmin || currentUser?.role === 'admin' || currentUser?.id === 'usr_me') && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon d-none d-sm-inline-flex"
+            onClick={() => navigate('/admin')}
+            style={{ width: '38px', height: '38px', minWidth: '38px', padding: 0, alignItems: 'center', justifyContent: 'center' }}
+            title="System Administrator Governance & Vault"
+            aria-label="System Governance"
+          >
+            <ShieldCheck size={19} className="text-blue-600" />
+          </button>
+        )}
+
         {/* Notifications Icon with Badge */}
         <div ref={notifRef} style={{ position: 'relative' }}>
           <button
             type="button"
-            className="btn-icon"
+            className="btn btn-ghost btn-icon"
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            style={{ position: 'relative', width: '34px', height: '34px', minWidth: '34px' }}
+            style={{ position: 'relative', width: '38px', height: '38px', minWidth: '38px', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             title="Notifications"
+            aria-label="Notifications"
           >
             <Bell size={18} />
             {unreadCount > 0 && (
               <span 
                 style={{
                   position: 'absolute',
-                  top: '2px',
-                  right: '2px',
+                  top: '6px',
+                  right: '6px',
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  background: 'var(--rose-500)'
+                  background: 'var(--rose-500)',
+                  border: '2px solid #ffffff'
                 }}
               />
             )}
@@ -527,13 +596,13 @@ export const Navbar = () => {
               </div>
 
               <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
-                {notifications.length === 0 ? (
+                {userNotifications.length === 0 ? (
                   <div className="p-4 text-center text-xs text-muted">
                     <Bell size={20} className="text-muted mb-1 d-block mx-auto opacity-50" />
                     No notices at this time.
                   </div>
                 ) : (
-                  notifications.map(n => (
+                  userNotifications.map(n => (
                     <div
                       key={n.id}
                       className="p-3 border-bottom cursor-pointer card-interactive"
@@ -544,12 +613,7 @@ export const Navbar = () => {
                         transition: 'background 0.15s ease'
                       }}
                       onClick={() => {
-                        markNotificationRead(n.id);
-                        if (n.targetView === 'collaborate') navigate('/collaborate');
-                        else if (n.targetView === 'plans') navigate('/plans');
-                        else if (n.targetView === 'social') navigate('/social');
-                        else navigate('/explore');
-                        navigateTo(n.targetView, n.targetSubTab, n.targetEntityId);
+                        handleNotificationClick(n, navigate);
                         setIsNotifOpen(false);
                       }}
                     >
@@ -603,21 +667,211 @@ export const Navbar = () => {
           )}
         </div>
 
-        {/* User Profile Avatar / Quick Link */}
-        <div 
-          className="d-flex align-center gap-2 cursor-pointer flex-shrink-0"
-          onClick={() => {
-            navigate('/profile');
-            navigateTo('profile');
-          }}
-          style={{ cursor: 'pointer', flexShrink: 0 }}
-          title={`Signed in as ${currentUser.name}`}
-        >
-          <img
-            src={currentUser.avatar}
-            alt={currentUser.name}
-            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--primary-500)', flexShrink: 0 }}
-          />
+        {/* User Account & Profile Menu */}
+        <div ref={userMenuRef} style={{ position: 'relative' }}>
+          <button 
+            type="button"
+            className="btn btn-ghost d-flex align-center gap-1.5"
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            style={{ 
+              height: '38px', 
+              boxSizing: 'border-box',
+              borderRadius: 'var(--radius-full)', 
+              padding: '0 8px 0 3px', 
+              border: '1px solid var(--border-light)',
+              display: 'inline-flex',
+              alignItems: 'center'
+            }}
+            title={`Account: ${currentUser?.name || 'User'}`}
+            aria-label={`Account menu for ${currentUser?.name || 'User'}`}
+          >
+            <img
+              src={currentUser?.avatar}
+              alt={currentUser?.name || 'User'}
+              style={{ 
+                width: '30px', 
+                height: '30px', 
+                borderRadius: '50%', 
+                objectFit: 'cover', 
+                border: '1.5px solid var(--primary-500)', 
+                flexShrink: 0 
+              }}
+            />
+            <ChevronDown size={13} className="text-muted d-none d-sm-inline" />
+          </button>
+
+          {isUserMenuOpen && (
+            <div
+              className="dropdown-card p-0 animate-fade-in"
+              style={{
+                top: '44px',
+                right: 0,
+                width: '280px',
+                maxWidth: 'calc(100vw - 20px)'
+              }}
+            >
+              {/* Profile Overview */}
+              <div className="p-3 border-bottom" style={{ background: 'var(--bg-subtle)' }}>
+                <div className="d-flex align-center gap-2.5 mb-2">
+                  <img
+                    src={currentUser?.avatar}
+                    alt={currentUser?.name || 'User'}
+                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-500)' }}
+                  />
+                  <div className="min-w-0">
+                    <span className="font-bold text-xs text-primary text-truncate d-block">{currentUser?.name || 'Guest Explorer'}</span>
+                    <span className="text-xs font-semibold text-brand d-block">{currentUser?.handle || '@guest'}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs w-100 mt-1 d-flex align-center justify-center gap-1"
+                  onClick={() => {
+                    navigate('/profile');
+                    navigateTo('profile');
+                    setIsUserMenuOpen(false);
+                  }}
+                >
+                  <User size={13} />
+                  <span>View Full Profile</span>
+                </button>
+              </div>
+
+              {/* Platform Oversight & Readiness Tools */}
+              <div className="p-2 border-bottom d-flex flex-column gap-1">
+                <span className="text-xs font-bold text-secondary d-flex align-center gap-1 px-2 py-0.5" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <Globe size={12} className="text-blue-600" />
+                  <span>Platform Oversight</span>
+                </span>
+
+                {(currentUser?.isAdmin || currentUser?.role === 'admin' || currentUser?.id === 'usr_me') && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
+                    style={{ background: 'rgba(2, 132, 199, 0.08)', color: '#0369a1', fontWeight: 'bold' }}
+                    onClick={() => {
+                      navigate('/admin');
+                      setIsUserMenuOpen(false);
+                    }}
+                  >
+                    <div className="d-flex align-center gap-2">
+                      <ShieldCheck size={14} className="text-blue-600" />
+                      <span>System Governance & Vault</span>
+                    </div>
+                    <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', background: '#0284c7', color: '#fff' }}>Admin</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
+                  onClick={() => {
+                    openPublicRecordsModModal();
+                    setIsUserMenuOpen(false);
+                  }}
+                >
+                  <div className="d-flex align-center gap-2">
+                    <Globe size={14} className="text-blue-600" />
+                    <span>Public Records Moderation</span>
+                  </div>
+                  {(currentUser?.isPublicModerator || currentUser?.isAdmin) && (
+                    <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem' }}>Mod</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
+                  onClick={() => {
+                    openReadinessModal();
+                    setIsUserMenuOpen(false);
+                  }}
+                >
+                  <div className="d-flex align-center gap-2">
+                    <UserCheck size={14} className="text-brand" />
+                    <span>Member Readiness Checker</span>
+                  </div>
+                </button>
+              </div>
+
+              {/* Demo Persona Switcher */}
+              <div className="p-2 border-bottom">
+                <span className="text-xs font-bold text-secondary d-flex align-center gap-1 px-2 py-1 mb-1" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <Sparkles size={12} className="text-brand" />
+                  <span>Switch Demo Persona</span>
+                </span>
+                <div className="d-flex flex-column gap-1">
+                  {(mockUsers || []).map(u => {
+                    const isActive = currentUser?.id === u.id || currentUser?.handle === u.handle;
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className={`btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 ${isActive ? 'bg-primary-50 text-brand font-semibold' : ''}`}
+                        onClick={() => {
+                          switchUserAccount(u.id);
+                          setIsUserMenuOpen(false);
+                        }}
+                        style={{ fontSize: '0.78rem' }}
+                      >
+                        <div className="d-flex align-center gap-2 min-w-0">
+                          <img
+                            src={u.avatar}
+                            alt={u.name}
+                            style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                          <span className="text-truncate">{u.name}</span>
+                        </div>
+                        {isActive && <Check size={14} className="text-brand flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Auth Actions */}
+              <div className="p-1.5 d-flex flex-column gap-1">
+                <button
+                  type="button"
+                  className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs"
+                  onClick={() => {
+                    openAuthModal('login');
+                    setIsUserMenuOpen(false);
+                  }}
+                >
+                  <LogIn size={14} className="text-primary" />
+                  <span>Sign In with Password</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs"
+                  onClick={() => {
+                    openAuthModal('register');
+                    setIsUserMenuOpen(false);
+                  }}
+                >
+                  <UserPlus size={14} className="text-brand" />
+                  <span>Create New Account</span>
+                </button>
+                {currentUser?.id && currentUser.id !== 'usr_guest' && (
+                  <>
+                    <div className="border-top my-1" />
+                    <button
+                      type="button"
+                      className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs text-rose"
+                      onClick={() => {
+                        logoutUser();
+                        setIsUserMenuOpen(false);
+                      }}
+                    >
+                      <LogOut size={14} className="text-rose" />
+                      <span>Log Out</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -7,29 +7,101 @@ import {
   UserPlus, 
   Check, 
   Share2, 
-  Calendar, 
+  HandHeart, 
   Image, 
   FileText, 
   Shield, 
-  MessageSquare
+  MessageSquare,
+  ShieldAlert,
+  UserCheck,
+  Camera
 } from 'lucide-react';
 
 export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
-  const { currentUser, toggleJoinCommunity, openInviteModal } = useCareMesh();
+  const { currentUser, toggleJoinCommunity, openInviteModal, reports, openReadinessModal, requests, updateCommunity, showToast } = useCareMesh();
 
   if (!community) return null;
 
-  const isAdmin = community.adminIds?.includes(currentUser.id);
+  const isPlatformAdmin = Boolean(currentUser?.isAdmin);
+  const isAdmin = Boolean(community.adminIds?.includes(currentUser?.id) || isPlatformAdmin);
+  const isModerator = Boolean(community.moderatorIds?.includes(currentUser?.id) || isAdmin);
+  const canModerate = isAdmin || isModerator;
   const isJoined = community.isJoined;
+
+  const handleBannerUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      if (showToast) showToast('Cover image must be under 5MB.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result;
+      if (typeof dataUrl === 'string') {
+        if (updateCommunity) {
+          updateCommunity(community.id, { banner: dataUrl });
+        }
+        if (showToast) showToast('Community cover banner updated!', 'success');
+      }
+    };
+    reader.onerror = () => {
+      if (showToast) showToast('Failed to read image file.', 'error');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      if (showToast) showToast('Avatar image must be under 5MB.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result;
+      if (typeof dataUrl === 'string') {
+        if (updateCommunity) {
+          updateCommunity(community.id, { avatar: dataUrl });
+        }
+        if (showToast) showToast('Community logo updated!', 'success');
+      }
+    };
+    reader.onerror = () => {
+      if (showToast) showToast('Failed to read image file.', 'error');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const pendingReportsCount = (reports || []).filter(
+    r => (r.communityId === community.id || !r.communityId) && r.status === 'pending'
+  ).length;
+
+  const groupRequests = (requests || []).filter(r => 
+    community.linkedRequestIds?.includes(r.id) || r.communityId === community.id
+  );
+  const visibleRequestsCount = groupRequests.filter(r => {
+    if (r.visibility === 'group_only' && !isJoined && !isAdmin && r.requester?.id !== currentUser?.id) {
+      return false;
+    }
+    return true;
+  }).length;
 
   const tabs = [
     { id: 'discussion', label: 'Discussion', icon: <MessageSquare size={15} /> },
     { id: 'about', label: 'About & Rules', icon: <FileText size={15} /> },
     { 
-      id: 'events', 
-      label: 'Workdays & Events', 
-      icon: <Calendar size={15} />, 
-      count: community.linkedEventIds?.length || 0 
+      id: 'requests', 
+      label: 'Help Requests', 
+      icon: <HandHeart size={15} />, 
+      count: visibleRequestsCount 
     },
     { 
       id: 'media', 
@@ -42,7 +114,13 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
       label: 'Members', 
       icon: <Users size={15} />, 
       count: community.memberCount 
-    }
+    },
+    ...(canModerate ? [{
+      id: 'moderation',
+      label: 'Moderation',
+      icon: <ShieldAlert size={15} />,
+      count: pendingReportsCount
+    }] : [])
   ];
 
   return (
@@ -51,7 +129,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
       <div 
         className="group-hero-cover"
         style={{
-          height: '180px',
+          height: '190px',
           position: 'relative',
           background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
           overflow: 'hidden'
@@ -60,53 +138,112 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
         <img
           src={community.banner}
           alt={community.name}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.95 }}
         />
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to top, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.15) 60%, transparent 100%)'
+            background: 'linear-gradient(to top, rgba(15, 23, 42, 0.7) 0%, rgba(15, 23, 42, 0.1) 60%, transparent 100%)'
           }}
         />
 
-        <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+        <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="badge" style={{ background: 'rgba(0,0,0,0.65)', color: '#ffffff', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.25)', fontSize: '0.7rem' }}>
             {community.category?.toUpperCase() || 'COMMUNITY'}
           </span>
         </div>
+
+        {/* Community Admin Cover Photo Upload Button */}
+        {isAdmin && (
+          <div style={{ position: 'absolute', bottom: '12px', right: '12px', zIndex: 10 }}>
+            <label 
+              className="btn btn-sm text-xs font-semibold cursor-pointer d-flex align-center gap-1.5"
+              style={{ 
+                background: 'rgba(0, 0, 0, 0.72)', 
+                color: '#ffffff', 
+                backdropFilter: 'blur(8px)', 
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '0.35rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                margin: 0
+              }}
+              title="Upload new cover banner"
+            >
+              <Camera size={14} />
+              <span>Change Cover</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBannerUpload}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
-      {/* 2. Overlapping Group Header & Actions Bar */}
+      {/* 2. Group Header & Actions Bar (Cleanly below the hero banner, zero text overlap) */}
       <div className="p-3 p-md-4" style={{ background: '#ffffff', position: 'relative' }}>
         <div 
-          className="d-flex align-center justify-between flex-wrap gap-3"
-          style={{ marginTop: '-44px', marginBottom: '14px' }}
+          className="d-flex align-items-start justify-between flex-wrap gap-3"
+          style={{ marginBottom: '14px' }}
         >
           {/* Avatar and Main Titles */}
-          <div className="d-flex align-center gap-3 flex-wrap min-w-0 flex-1">
+          <div className="d-flex align-items-end gap-3 flex-wrap min-w-0 flex-1">
             <div
               style={{
-                width: '76px',
-                height: '76px',
+                width: '84px',
+                height: '84px',
                 borderRadius: 'var(--radius-xl)',
-                overflow: 'hidden',
-                border: '3px solid #ffffff',
+                border: '4px solid #ffffff',
                 boxShadow: 'var(--shadow-md)',
                 background: '#ffffff',
-                flexShrink: 0
+                flexShrink: 0,
+                marginTop: '-44px',
+                position: 'relative',
+                zIndex: 2
               }}
             >
               <img
                 src={community.avatar}
                 alt={community.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'calc(var(--radius-xl) - 4px)' }}
               />
+              {isAdmin && (
+                <label
+                  style={{
+                    position: 'absolute',
+                    bottom: '-4px',
+                    right: '-4px',
+                    width: '26px',
+                    height: '26px',
+                    borderRadius: '50%',
+                    background: 'var(--primary-600)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-sm)',
+                    border: '2px solid #ffffff'
+                  }}
+                  title="Upload new community avatar"
+                >
+                  <Camera size={12} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              )}
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 pt-1">
               <div className="d-flex align-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold text-primary" style={{ letterSpacing: '-0.02em', margin: 0 }}>
+                <h1 className="text-xl font-bold text-primary" style={{ letterSpacing: '-0.02em', margin: 0, lineHeight: 1.25 }}>
                   {community.name}
                 </h1>
                 {isAdmin && (
@@ -125,7 +262,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
                 </span>
                 <span>•</span>
                 <span className="d-flex align-center gap-1">
-                  <MapPin size={12} /> {community.location}
+                  <MapPin size={12} /> {typeof community.location === 'object' ? community.location?.address : community.location}
                 </span>
               </div>
             </div>
@@ -156,6 +293,15 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
             >
               <UserPlus size={14} />
               <span>+ Invite</span>
+            </button>
+
+            <button
+              className="btn btn-secondary btn-sm d-flex align-center gap-1"
+              onClick={() => openReadinessModal(community)}
+              title="Open Member Readiness Checker"
+            >
+              <UserCheck size={14} className="text-brand" />
+              <span>Readiness</span>
             </button>
 
             <button

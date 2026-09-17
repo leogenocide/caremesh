@@ -1,9 +1,16 @@
 import { SeverityBadge } from '../common/Badge';
-import { ShieldAlert, MapPin, Clock } from 'lucide-react';
+import { useCareMesh } from '../../context/useCareMesh';
+import { ShieldAlert, MapPin, Clock, Eye, Trash2 } from 'lucide-react';
 
 export const SafetyReportCard = ({ report }) => {
+  const { viewSafetyDetail, deleteSafetyReport, canUserManage } = useCareMesh();
+
   return (
-    <div className="card p-4" style={{ borderLeft: '4px solid var(--rose-600)' }}>
+    <div 
+      className="card p-4 card-interactive cursor-pointer" 
+      style={{ borderLeft: '4px solid var(--rose-600)' }}
+      onClick={() => viewSafetyDetail && viewSafetyDetail(report)}
+    >
       <div className="d-flex align-center justify-between gap-2 mb-2">
         <div className="d-flex align-center gap-2">
           <ShieldAlert size={18} className="text-rose" />
@@ -12,7 +19,7 @@ export const SafetyReportCard = ({ report }) => {
         <SeverityBadge severity={report.severity} />
       </div>
 
-      <h4 className="font-bold text-md text-primary mb-2">
+      <h4 className="font-bold text-md text-primary mb-2 hover:text-rose">
         {report.title}
       </h4>
 
@@ -31,16 +38,45 @@ export const SafetyReportCard = ({ report }) => {
         </div>
       )}
 
-      <div className="d-flex align-center justify-between text-xs text-muted pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
+      <div className="d-flex align-center justify-between text-xs text-muted pt-2 border-top">
         <span className="d-flex align-center gap-1">
           <MapPin size={13} />
-          <span>{report.location.address}</span>
+          <span>{report.location?.address || 'Maplewood Corridor'}</span>
         </span>
-        <span className="d-flex align-center gap-1">
-          <Clock size={13} />
-          <span>{report.timestamp}</span>
-        </span>
+        <div className="d-flex align-center gap-2">
+          <span className="d-flex align-center gap-1">
+            <Clock size={13} />
+            <span>{report.timestamp}</span>
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-xs d-flex align-center gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (viewSafetyDetail) viewSafetyDetail(report);
+            }}
+          >
+            <Eye size={12} />
+            <span>Details</span>
+          </button>
+          {canUserManage(report) && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-rose d-flex align-center p-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Are you sure you want to delete safety report "${report.title}"?`)) {
+                  deleteSafetyReport(report.id);
+                }
+              }}
+              title="Delete safety report"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+export default SafetyReportCard;

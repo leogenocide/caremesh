@@ -4,7 +4,7 @@ import { useCareMesh } from '../../context/useCareMesh';
 import { Share2, MessageSquare } from 'lucide-react';
 
 export const ShareToSocialModal = () => {
-  const { shareSocialTarget, closeShareSocialModal, shareObservationToSocial, createPost } = useCareMesh();
+  const { shareSocialTarget, closeShareSocialModal, shareObservationToSocial, createPost, showToast } = useCareMesh();
   const [userNote, setUserNote] = useState('');
 
   if (!shareSocialTarget) return null;
@@ -21,6 +21,7 @@ export const ShareToSocialModal = () => {
       createPost(content, { type, id: entity.id, title: entity.title });
       closeShareSocialModal();
     }
+    showToast(`Shared ${type} to community coordination feed!`, 'success');
     setUserNote('');
   };
 
@@ -31,6 +32,7 @@ export const ShareToSocialModal = () => {
       title="Share to Coordination Feed"
       subtitle="Observations and reports are distinct real-world records. Sharing communicates context to the community feed."
       maxWidth="600px"
+      zIndex={1100}
     >
       <form onSubmit={handleShare} className="d-flex flex-column gap-4">
         {/* Entity Preview */}

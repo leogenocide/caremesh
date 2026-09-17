@@ -214,3 +214,23 @@ export const FeedbackStatusBadge = ({ status }) => {
     </span>
   );
 };
+
+export const RequestStatusBadge = ({ status }) => {
+  const map = {
+    open: { label: 'Open Need', className: 'badge-primary', icon: <Clock size={11} /> },
+    partially_fulfilled: { label: 'In Progress', className: 'badge-amber', icon: <RefreshCw size={11} /> },
+    fulfilled: { label: 'Fulfilled', className: 'badge-claim-supported', icon: <CheckCircle2 size={11} /> },
+    cancelled: { label: 'Cancelled', className: 'badge-gray', icon: <XCircle size={11} /> },
+    expired: { label: 'Expired', className: 'badge-gray', icon: <Clock size={11} /> }
+  };
+
+  const item = map[status] || map.open;
+
+  return (
+    <span className={`badge ${item.className} text-xs font-semibold`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}>
+      {item.icon}
+      <span>{item.label}</span>
+    </span>
+  );
+};
+

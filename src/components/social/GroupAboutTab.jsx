@@ -14,12 +14,22 @@ export const GroupAboutTab = ({ community }) => {
 
   if (!community) return null;
 
-  const admins = [
-    ...(community.adminIds?.includes(currentUser.id) ? [currentUser] : []),
-    ...mockUsers.filter(u => community.adminIds?.includes(u.id) && u.id !== currentUser.id)
-  ];
+  const userMap = new Map();
+  (mockUsers || []).forEach(u => {
+    if (u?.id) userMap.set(u.id, u);
+  });
+  if (currentUser?.id) {
+    userMap.set(currentUser.id, currentUser);
+  }
 
-  const moderators = mockUsers.filter(u => community.moderatorIds?.includes(u.id));
+  const adminIds = new Set(community.adminIds || []);
+  const modIds = new Set(community.moderatorIds || []);
+
+  const admins = Array.from(adminIds).map(id => userMap.get(id)).filter(Boolean);
+  const moderators = Array.from(modIds)
+    .filter(id => !adminIds.has(id))
+    .map(id => userMap.get(id))
+    .filter(Boolean);
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -61,7 +71,9 @@ export const GroupAboutTab = ({ community }) => {
             <MapPin size={18} className="text-primary mt-1" />
             <div>
               <span className="font-bold text-xs text-primary d-block">Geographic Scope</span>
-              <span className="text-xs text-muted">{community.location}</span>
+              <span className="text-xs text-muted">
+                {typeof community.location === 'object' ? community.location?.address : community.location}
+              </span>
             </div>
           </div>
 

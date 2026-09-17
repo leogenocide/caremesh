@@ -64,6 +64,7 @@ const RevisePlanForm = ({ plan, onClose, onRevise }) => {
       title={`Publish Revision (${nextVersion})`}
       subtitle={`Revise proposal based on community critique. All reasoning and changes remain permanently visible in the plan history.`}
       maxWidth="780px"
+      zIndex={1100}
     >
       <form onSubmit={handleSubmit} className="d-flex flex-column gap-4">
         {/* Revision Context Ribbon */}

@@ -7,26 +7,35 @@ import {
   Pin, 
   Send, 
   X, 
-  Plus 
+  Plus, 
+  Tag,
+  Users 
 } from 'lucide-react';
 
 export const GroupPostComposer = ({ community }) => {
-  const { currentUser, createPost, requests, observations, plans } = useCareMesh();
+  const { currentUser, createPost, requests, observations, plans, toggleJoinCommunity, openAuthModal, showToast } = useCareMesh();
 
   const [content, setContent] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   
   // Attachments
-  const [activeAttachmentMode, setActiveAttachmentMode] = useState(null); // 'photo' | 'poll' | 'entity' | null
+  const [activeAttachmentMode, setActiveAttachmentMode] = useState(null); // 'photo' | 'poll' | 'entity' | 'category' | null
   const [imageUrl, setImageUrl] = useState('');
   const [selectedEntity, setSelectedEntity] = useState(null); // { type, id, title }
   const [isPinned, setIsPinned] = useState(false);
+
+  // Category state
+  const [postCategory, setPostCategory] = useState('');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
 
   // Poll state
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
 
-  const isAdmin = community?.adminIds?.includes(currentUser.id);
+  const isPlatformAdmin = Boolean(currentUser?.isAdmin);
+  const isAdmin = Boolean(community?.adminIds?.includes(currentUser?.id) || isPlatformAdmin);
+  const isJoined = Boolean(community?.isJoined || community?.memberIds?.includes(currentUser?.id) || isAdmin);
 
   const handleAddPollOption = () => {
     if (pollOptions.length < 5) {
@@ -48,6 +57,12 @@ export const GroupPostComposer = ({ community }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to post.', 'info');
+      return;
+    }
+
     if (!content.trim() && !pollQuestion.trim() && !imageUrl.trim()) {
       return;
     }
@@ -72,11 +87,19 @@ export const GroupPostComposer = ({ community }) => {
       }
     }
 
+    let finalCategory = null;
+    if (isCustomCategory) {
+      finalCategory = customCategory.trim() || 'General';
+    } else if (postCategory) {
+      finalCategory = postCategory;
+    }
+
     const extraData = {
       communityId: community?.id || null,
       mediaUrls: imageUrl.trim() ? [imageUrl.trim()] : [],
       poll: pollPayload,
-      isPinned: isPinned && isAdmin
+      isPinned: isPinned && isAdmin,
+      category: finalCategory
     };
 
     createPost(content.trim() || (pollPayload ? `📊 Poll: ${pollPayload.question}` : 'Photo update'), selectedEntity, community?.id, extraData);
@@ -89,8 +112,41 @@ export const GroupPostComposer = ({ community }) => {
     setPollQuestion('');
     setPollOptions(['', '']);
     setIsPinned(false);
+    setPostCategory('');
+    setIsCustomCategory(false);
+    setCustomCategory('');
     setIsExpanded(false);
   };
+
+  if (!isJoined) {
+    return (
+      <div 
+        className="card p-3 mb-4 d-flex align-center justify-between gap-3 flex-wrap" 
+        style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)' }}
+      >
+        <div className="d-flex align-center gap-2.5">
+          <Users size={18} className="text-brand" />
+          <span className="text-xs text-secondary">
+            Join <strong>{community?.name || 'this community circle'}</strong> to post updates and participate in discussions.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-xs"
+          onClick={() => {
+            if (currentUser?.id === 'usr_guest') {
+              openAuthModal('login');
+              showToast('Please sign in or create an account to join.', 'info');
+              return;
+            }
+            if (community?.id) toggleJoinCommunity(community.id);
+          }}
+        >
+          + Join Group to Post
+        </button>
+      </div>
+    );
+  }
 
   return (
     <form 
@@ -101,8 +157,8 @@ export const GroupPostComposer = ({ community }) => {
       {/* Top Input Bar with Avatar */}
       <div className="d-flex align-start gap-3">
         <img
-          src={currentUser.avatar}
-          alt={currentUser.name}
+          src={currentUser?.avatar}
+          alt={currentUser?.name || 'User'}
           style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
         />
         <div className="flex-1 min-w-0" style={{ width: '100%', maxWidth: '100%' }}>
@@ -263,6 +319,70 @@ export const GroupPostComposer = ({ community }) => {
             </div>
           )}
 
+          {/* Category Tag Drawer */}
+          {activeAttachmentMode === 'category' && (
+            <div className="card p-3 animate-fade-in" style={{ background: 'var(--bg-subtle)' }}>
+              <div className="d-flex align-center justify-between mb-2">
+                <span className="font-bold text-xs text-primary d-flex align-center gap-1">
+                  <Tag size={14} className="text-brand" /> Post Category
+                </span>
+                <button type="button" className="btn-icon btn-xs text-muted" onClick={() => setActiveAttachmentMode(null)}>
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="d-flex flex-column gap-2">
+                <div className="d-flex gap-2 align-center">
+                  <select
+                    className="form-select text-xs flex-1"
+                    value={isCustomCategory ? '__custom__' : postCategory}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setIsCustomCategory(true);
+                      } else {
+                        setIsCustomCategory(false);
+                        setPostCategory(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="">Select category (optional)...</option>
+                    <option value="General">General</option>
+                    <option value="Update">Update</option>
+                    <option value="Event">Event</option>
+                    <option value="Mutual Aid">Mutual Aid</option>
+                    <option value="Discussion">Discussion</option>
+                    <option value="Urgent Alert">Urgent Alert</option>
+                    <option value="__custom__">✨ + Custom Category...</option>
+                  </select>
+                  {(postCategory || isCustomCategory) && (
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-ghost text-muted"
+                      onClick={() => {
+                        setPostCategory('');
+                        setIsCustomCategory(false);
+                        setCustomCategory('');
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {isCustomCategory && (
+                  <div className="d-flex gap-2 align-center mt-1 animate-fade-in">
+                    <input
+                      type="text"
+                      placeholder="Enter custom category name (e.g. Flood Watch, Kitchen Crew)..."
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      className="form-input text-xs flex-1"
+                      autoFocus
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Admin Pinned Announcement Toggle */}
           {isAdmin && (
             <div className="d-flex align-center justify-between p-2 rounded" style={{ background: isPinned ? 'var(--amber-50)' : 'transparent', border: isPinned ? '1px solid var(--amber-300)' : 'none' }}>
@@ -324,6 +444,23 @@ export const GroupPostComposer = ({ community }) => {
           >
             <HandHeart size={14} className="text-amber" />
             <span className="d-none d-md-inline">Link Need</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-xs ${activeAttachmentMode === 'category' || postCategory || isCustomCategory ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => {
+              setIsExpanded(true);
+              setActiveAttachmentMode(activeAttachmentMode === 'category' ? null : 'category');
+            }}
+            title="Add Category"
+          >
+            <Tag size={14} className={postCategory || isCustomCategory ? 'text-white' : 'text-brand'} />
+            <span className="d-none d-md-inline">
+              {isCustomCategory && customCategory.trim() 
+                ? customCategory.trim() 
+                : postCategory || 'Category'}
+            </span>
           </button>
         </div>
 
