@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useCareMesh } from '../../context/useCareMesh';
+import { usePagination } from '../../hooks/usePagination';
+import { Pagination } from '../common/Pagination';
 import { 
   ShieldCheck, 
   MessageSquare, 
@@ -9,8 +11,18 @@ import {
   Send, 
   Check, 
   BarChart2, 
-  Users
+  Users,
+  Pencil,
+  Trash2,
+  X,
+  ShieldAlert,
+  Flag,
+  UserX,
+  AlertTriangle,
+  Tag
 } from 'lucide-react';
+
+const PRESET_POST_CATEGORIES = ['General', 'Update', 'Event', 'Mutual Aid', 'Discussion', 'Urgent Alert'];
 
 export const GroupPostCard = ({ post, community }) => {
   const { 
@@ -18,25 +30,60 @@ export const GroupPostCard = ({ post, community }) => {
     endorsePost, 
     voteOnPoll, 
     addCommentToPost, 
+    editPost,
+    deletePost,
+    editPostComment,
+    deletePostComment,
     togglePinPost,
     viewPlanDetail,
     navigateTo,
     inspectEntity,
     observations,
     requests,
-    plans
+    resources = [],
+    evidence = [],
+    plans,
+    openReportModal,
+    kickPostMember,
+    viewUserProfile
   } = useCareMesh();
 
   const [isCommentOpen, setIsCommentOpen] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [isCorroborated, setIsCorroborated] = useState(false);
+  const [isEditingPost, setIsEditingPost] = useState(false);
+  const [editedContent, setEditedContent] = useState(post.content || '');
+  const [editedCategory, setEditedCategory] = useState(post.category || '');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editedCommentText, setEditedCommentText] = useState('');
 
-  const isAdmin = community?.adminIds?.includes(currentUser.id);
+  const commentsPagination = usePagination(post.comments || [], 5);
+
+  const isPlatformAdmin = Boolean(
+    currentUser?.role === 'admin' || 
+    currentUser?.role === 'Admin' || 
+    currentUser?.role === 'coordinator' || 
+    currentUser?.role === 'Emergency Coordinator' || 
+    currentUser?.role === 'System Administrator' || 
+    currentUser?.isPublicRecordsModerator ||
+    currentUser?.isAdmin
+  );
+  const isAdmin = community?.adminIds?.includes(currentUser?.id) || community?.moderatorIds?.includes(currentUser?.id) || isPlatformAdmin;
+  const isPostOwner = post.author?.id === currentUser?.id || post.author_id === currentUser?.id;
+  const canEditPost = isPostOwner || isAdmin;
+  const canDeletePost = isPostOwner || isAdmin;
+
   const totalPollVotes = post.poll
     ? post.poll.options.reduce((acc, opt) => acc + (opt.votes || 0), 0)
     : 0;
 
   const handleCorroborate = () => {
+    if (isPostOwner) {
+      alert('Authors cannot corroborate their own posts.');
+      return;
+    }
     if (!isCorroborated) {
       endorsePost(post.id);
       setIsCorroborated(true);
@@ -50,6 +97,84 @@ export const GroupPostCard = ({ post, community }) => {
     setCommentText('');
   };
 
+  const handleSavePostEdit = (e) => {
+    e.preventDefault();
+    if (!editedContent.trim()) return;
+    let finalCategory = null;
+    if (isCustomCategory) {
+      finalCategory = customCategory.trim() || 'General';
+    } else if (editedCategory && editedCategory !== '__custom__') {
+      finalCategory = editedCategory;
+    }
+    editPost(post.id, { content: editedContent.trim(), category: finalCategory });
+    setIsEditingPost(false);
+  };
+
+  const handleDeletePost = () => {
+    if (window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+      deletePost(post.id);
+    }
+  };
+
+  const handleStartEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditedCommentText(comment.text);
+  };
+
+  const handleSaveCommentEdit = (e, commentId) => {
+    e.preventDefault();
+    if (!editedCommentText.trim()) return;
+    editPostComment(post.id, commentId, editedCommentText.trim());
+    setEditingCommentId(null);
+  };
+
+  const handleDeleteComment = (commentId) => {
+    if (window.confirm('Are you sure you want to delete this comment?')) {
+      deletePostComment(post.id, commentId);
+    }
+  };
+
+  const handleKickFromPost = (targetUserId, targetUserName) => {
+    if (window.confirm(`Kick and restrict ${targetUserName || 'this member'} from this post? All their comments on this post will be removed and they will not be allowed to post comments on this thread again.`)) {
+      kickPostMember(community?.id, post.id, targetUserId);
+    }
+  };
+
+  const handleReportPost = () => {
+    openReportModal({
+      targetType: 'post',
+      targetId: post.id,
+      title: post.content?.slice(0, 50) || 'Community Post',
+      reportedUser: post.author,
+      communityId: community?.id,
+      scope: 'community'
+    });
+  };
+
+  const handleReportAuthorAvatar = () => {
+    openReportModal({
+      targetType: 'profile_picture',
+      targetId: post.author?.id || post.author_id,
+      title: `${post.author?.name || 'Author'}'s Profile Picture`,
+      reportedUser: post.author,
+      communityId: community?.id,
+      scope: 'community'
+    });
+  };
+
+  const handleReportCommentAvatar = (c) => {
+    openReportModal({
+      targetType: 'profile_picture',
+      targetId: c.author?.id || c.author_id,
+      title: `${c.author?.name || 'Commenter'}'s Profile Picture`,
+      reportedUser: c.author,
+      communityId: community?.id,
+      scope: 'community'
+    });
+  };
+
+  const isRestrictedFromPost = post.restrictedUserIds?.includes(currentUser?.id);
+
   const handleLinkedEntityClick = () => {
     if (!post.linkedEntityType) return;
     if (post.linkedEntityType === 'plan') {
@@ -60,6 +185,13 @@ export const GroupPostCard = ({ post, community }) => {
       const r = requests.find(req => req.id === post.linkedEntityId);
       if (r) inspectEntity(r, 'request');
       else navigateTo('collaborate', 'requests', post.linkedEntityId);
+    } else if (post.linkedEntityType === 'resource') {
+      const res = resources.find(item => item.id === post.linkedEntityId);
+      if (res) inspectEntity(res, 'resource');
+      else navigateTo('collaborate', 'resources', post.linkedEntityId);
+    } else if (post.linkedEntityType === 'evidence') {
+      const ev = evidence.find(item => item.id === post.linkedEntityId);
+      if (ev) inspectEntity(ev, 'evidence');
     } else if (post.linkedEntityType === 'observation') {
       const o = observations.find(obs => obs.id === post.linkedEntityId);
       if (o) inspectEntity(o, 'observation');
@@ -113,7 +245,19 @@ export const GroupPostCard = ({ post, community }) => {
 
       {/* 2. Post Author Header */}
       <div className="d-flex align-center justify-between mb-3">
-        <div className="d-flex align-center gap-3">
+        <div 
+          className="d-flex align-center gap-3 user-profile-trigger"
+          onClick={() => viewUserProfile && viewUserProfile(post.author)}
+          title={`View ${post.author?.name || 'Author'}'s profile & contributions`}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              viewUserProfile && viewUserProfile(post.author);
+            }
+          }}
+        >
           <img
             src={post.author?.avatar}
             alt={post.author?.name}
@@ -121,36 +265,166 @@ export const GroupPostCard = ({ post, community }) => {
           />
           <div>
             <div className="d-flex align-center gap-2 flex-wrap">
-              <span className="font-bold text-sm text-primary">{post.author?.name}</span>
+              <span className="font-bold text-sm text-primary user-profile-name">{post.author?.name}</span>
               {post.author?.role && (
                 <span className="badge badge-gray text-xs font-medium" style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem' }}>
                   {post.author.role}
                 </span>
               )}
             </div>
-            <span className="text-xs text-muted">
-              {post.timestamp} · {community?.name || 'Community'}
-            </span>
+            <div className="d-flex align-center gap-2 flex-wrap">
+              <span className="text-xs text-muted">
+                {post.timestamp} · {community?.name || 'Community'}
+              </span>
+              {post.category && (
+                <span className="badge badge-gray text-xs font-semibold d-inline-flex align-center gap-1" style={{ fontSize: '0.68rem', padding: '0.1rem 0.45rem' }}>
+                  <Tag size={10} className="text-brand" />
+                  {post.category.replace('_', ' ')}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {isAdmin && !post.isPinned && (
+        <div className="d-flex align-center gap-1">
+          {isAdmin && !post.isPinned && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-muted d-flex align-center gap-1"
+              onClick={() => togglePinPost(community?.id, post.id)}
+              title="Pin to top of group"
+            >
+              <Pin size={13} />
+              <span className="d-none d-sm-inline">Pin</span>
+            </button>
+          )}
+
+          {canEditPost && !isEditingPost && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-muted d-flex align-center gap-1"
+              onClick={() => {
+                setEditedContent(post.content);
+                const isCustom = post.category && !PRESET_POST_CATEGORIES.includes(post.category);
+                setEditedCategory(isCustom ? '__custom__' : (post.category || ''));
+                setIsCustomCategory(Boolean(isCustom));
+                setCustomCategory(isCustom ? post.category : '');
+                setIsEditingPost(true);
+              }}
+              title="Edit post"
+            >
+              <Pencil size={13} />
+              <span className="d-none d-sm-inline">Edit</span>
+            </button>
+          )}
+
+          {canDeletePost && !isEditingPost && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-rose d-flex align-center gap-1"
+              onClick={handleDeletePost}
+              title="Delete post"
+            >
+              <Trash2 size={13} />
+              <span className="d-none d-sm-inline">Delete</span>
+            </button>
+          )}
+
+          {/* Report Post Action */}
           <button
             type="button"
             className="btn btn-ghost btn-xs text-muted d-flex align-center gap-1"
-            onClick={() => togglePinPost(community?.id, post.id)}
-            title="Pin to top of group"
+            onClick={handleReportPost}
+            title="Report this post"
           >
-            <Pin size={13} />
-            <span className="d-none d-sm-inline">Pin</span>
+            <Flag size={13} />
+            <span className="d-none d-md-inline">Report</span>
           </button>
-        )}
+
+          {/* Report Author Profile Picture */}
+          {post.author?.id !== currentUser?.id && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-muted d-flex align-center gap-1"
+              onClick={handleReportAuthorAvatar}
+              title="Report author's profile picture"
+            >
+              <ShieldAlert size={13} />
+              <span className="d-none d-md-inline">Report Avatar</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 3. Post Content */}
-      <p className="text-sm text-primary mb-3" style={{ lineHeight: '1.5', whiteSpace: 'pre-line', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-        {post.content}
-      </p>
+      {/* 3. Post Content (or Edit Form) */}
+      {isEditingPost ? (
+        <form onSubmit={handleSavePostEdit} className="mb-3 d-flex flex-column gap-2 p-2.5 rounded border" style={{ background: 'var(--bg-subtle)' }}>
+          <span className="text-xs font-bold text-secondary">Edit Post</span>
+          <textarea
+            className="form-input text-sm"
+            rows={3}
+            value={editedContent}
+            onChange={(e) => setEditedContent(e.target.value)}
+            style={{ width: '100%', resize: 'vertical' }}
+            required
+          />
+
+          <div className="d-flex flex-column gap-1">
+            <label className="text-xs text-secondary font-medium">Category</label>
+            <select
+              className="form-select text-xs"
+              value={isCustomCategory ? '__custom__' : editedCategory}
+              onChange={(e) => {
+                if (e.target.value === '__custom__') {
+                  setIsCustomCategory(true);
+                } else {
+                  setIsCustomCategory(false);
+                  setEditedCategory(e.target.value);
+                }
+              }}
+            >
+              <option value="">No Category</option>
+              {PRESET_POST_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+              <option value="__custom__">✨ + Custom Category...</option>
+            </select>
+            {isCustomCategory && (
+              <input
+                type="text"
+                placeholder="Enter custom category..."
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                className="form-input text-xs mt-1"
+                autoFocus
+              />
+            )}
+          </div>
+
+          <div className="d-flex justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-xs d-flex align-center gap-1"
+              onClick={() => setIsEditingPost(false)}
+            >
+              <X size={12} />
+              <span>Cancel</span>
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-xs d-flex align-center gap-1"
+              disabled={!editedContent.trim()}
+            >
+              <Check size={12} />
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="text-sm text-primary mb-3" style={{ lineHeight: '1.5', whiteSpace: 'pre-line', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+          {post.content}
+        </p>
+      )}
 
       {/* 4. Media Photos Gallery */}
       {post.mediaUrls && post.mediaUrls.length > 0 && (
@@ -188,7 +462,7 @@ export const GroupPostCard = ({ post, community }) => {
 
           <div className="d-flex flex-column gap-2">
             {post.poll.options.map((opt) => {
-              const hasVoted = opt.voterIds?.includes(currentUser.id);
+              const hasVoted = opt.voterIds?.includes(currentUser?.id);
               const percentage = totalPollVotes > 0 ? Math.round((opt.votes / totalPollVotes) * 100) : 0;
 
               return (
@@ -280,6 +554,9 @@ export const GroupPostCard = ({ post, community }) => {
             type="button"
             className={`btn btn-xs ${isCorroborated ? 'btn-primary' : 'btn-ghost'} d-flex align-center gap-1`}
             onClick={handleCorroborate}
+            disabled={isPostOwner}
+            title={isPostOwner ? 'Authors cannot corroborate their own posts' : 'Corroborate this community report'}
+            style={isPostOwner ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
           >
             <ShieldCheck size={14} />
             <span>{post.endorsedCount || 0} Corroborations</span>
@@ -314,47 +591,164 @@ export const GroupPostCard = ({ post, community }) => {
           {/* Comments List */}
           {post.comments && post.comments.length > 0 && (
             <div className="d-flex flex-column gap-2 mb-2">
-              {post.comments.map(c => (
-                <div key={c.id} className="d-flex align-start gap-2 text-xs">
-                  <img
-                    src={c.author?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                    alt=""
-                    style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                  />
-                  <div 
-                    className="p-2 rounded flex-1"
-                    style={{ background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}
-                  >
-                    <div className="d-flex align-center justify-between mb-1">
-                      <span className="font-bold text-primary">{c.author?.name}</span>
-                      <span className="text-muted" style={{ fontSize: '0.68rem' }}>{c.time}</span>
+              {commentsPagination.paginatedItems.map(c => {
+                const isCommentOwner = c.author?.id === currentUser?.id || c.author_id === currentUser?.id;
+                const canDeleteThisComment = isCommentOwner || isAdmin;
+                const isThisCommentEditing = editingCommentId === c.id;
+
+                return (
+                  <div key={c.id} className="d-flex align-start gap-2 text-xs">
+                    <img
+                      src={c.author?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                      alt=""
+                      style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                      onClick={() => viewUserProfile && viewUserProfile(c.author)}
+                      title={`View ${c.author?.name || 'Commenter'}'s profile`}
+                    />
+                    <div 
+                      className="p-2 rounded flex-1"
+                      style={{ background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}
+                    >
+                      <div className="d-flex align-center justify-between mb-1">
+                        <span 
+                          className="font-bold text-primary user-profile-name"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => viewUserProfile && viewUserProfile(c.author)}
+                          title={`View ${c.author?.name || 'Commenter'}'s profile`}
+                        >
+                          {c.author?.name}
+                        </span>
+                        <div className="d-flex align-center gap-1.5">
+                          <span className="text-muted" style={{ fontSize: '0.68rem' }}>{c.time}</span>
+                          {/* Post Creator Kick: post author can kick/restrict disruptive commenter */}
+                          {isPostOwner && c.author?.id !== currentUser?.id && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs p-0 text-rose"
+                              onClick={() => handleKickFromPost(c.author?.id, c.author?.name)}
+                              title="Kick commenter from this post discussion"
+                            >
+                              <UserX size={11} />
+                            </button>
+                          )}
+                          {/* Report commenter avatar */}
+                          {c.author?.id !== currentUser?.id && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs p-0 text-muted"
+                              onClick={() => handleReportCommentAvatar(c)}
+                              title="Report commenter profile picture"
+                            >
+                              <Flag size={11} />
+                            </button>
+                          )}
+                          {isCommentOwner && !isThisCommentEditing && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs p-0 text-muted"
+                              onClick={() => handleStartEditComment(c)}
+                              title="Edit comment"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                          )}
+                          {canDeleteThisComment && !isThisCommentEditing && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs p-0 text-rose"
+                              onClick={() => handleDeleteComment(c.id)}
+                              title="Delete comment"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {isThisCommentEditing ? (
+                        <form onSubmit={(e) => handleSaveCommentEdit(e, c.id)} className="d-flex flex-column gap-1.5 mt-1">
+                          <input
+                            type="text"
+                            className="form-input text-xs"
+                            value={editedCommentText}
+                            onChange={(e) => setEditedCommentText(e.target.value)}
+                            required
+                            autoFocus
+                          />
+                          <div className="d-flex justify-end gap-1">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs p-1"
+                              style={{ fontSize: '0.7rem' }}
+                              onClick={() => setEditingCommentId(null)}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="btn btn-primary btn-xs p-1"
+                              style={{ fontSize: '0.7rem' }}
+                              disabled={!editedCommentText.trim()}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <p className="text-secondary mb-0" style={{ lineHeight: '1.4' }}>{c.text}</p>
+                      )}
                     </div>
-                    <p className="text-secondary mb-0" style={{ lineHeight: '1.4' }}>{c.text}</p>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {/* Quick Comment Input */}
-          <form onSubmit={handleAddComment} className="d-flex align-center gap-2 w-100 min-w-0">
-            <img
-              src={currentUser.avatar}
-              alt=""
-              style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+          {/* Comments Pagination */}
+          {post.comments && post.comments.length > 0 && (
+            <Pagination
+              compact={true}
+              currentPage={commentsPagination.currentPage}
+              totalPages={commentsPagination.totalPages}
+              totalItems={commentsPagination.totalItems}
+              startIndex={commentsPagination.startIndex}
+              endIndex={commentsPagination.endIndex}
+              onPageChange={commentsPagination.setPage}
+              pageSize={commentsPagination.pageSize}
+              onPageSizeChange={commentsPagination.handlePageSizeChange}
+              itemName="comments"
             />
-            <input
-              type="text"
-              placeholder="Write a comment or coordination reply..."
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              className="form-input flex-1 min-w-0"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: 'var(--radius-full)', minWidth: 0 }}
-            />
-            <button type="submit" className="btn btn-primary btn-xs btn-icon flex-shrink-0" disabled={!commentText.trim()}>
-              <Send size={13} />
-            </button>
-          </form>
+          )}
+
+          {/* Quick Comment Input or Restriction Warning */}
+          {isRestrictedFromPost ? (
+            <div 
+              className="p-2.5 rounded d-flex align-center gap-2 text-xs" 
+              style={{ background: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', borderRadius: 'var(--radius-md)' }}
+            >
+              <AlertTriangle size={15} className="text-rose flex-shrink-0" />
+              <span>You have been restricted from commenting on this post by the author.</span>
+            </div>
+          ) : (
+            <form onSubmit={handleAddComment} className="d-flex align-center gap-2 w-100 min-w-0">
+              <img
+                src={currentUser?.avatar}
+                alt=""
+                style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+              />
+              <input
+                type="text"
+                placeholder="Write a comment or coordination reply..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                className="form-input flex-1 min-w-0"
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: 'var(--radius-full)', minWidth: 0 }}
+              />
+              <button type="submit" className="btn btn-primary btn-xs btn-icon flex-shrink-0" disabled={!commentText.trim()}>
+                <Send size={13} />
+              </button>
+            </form>
+          )}
         </div>
       )}
     </div>

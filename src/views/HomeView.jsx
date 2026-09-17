@@ -1,20 +1,24 @@
+import { useState, useMemo, useEffect } from 'react';
 import { useCareMesh } from '../context/useCareMesh';
-import { UrgencyBadge, SeverityBadge, LifecycleBadge, PlanStatusBadge } from '../components/common/Badge';
+import { UrgencyBadge, SeverityBadge, LifecycleBadge, RequestStatusBadge } from '../components/common/Badge';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 import { 
   HandHeart, 
   Package, 
-  Calendar, 
   Target, 
   ShieldAlert, 
   ArrowRight, 
   MapPin, 
-  Clock, 
-  CheckCircle2,
-  ChevronRight,
-  Eye,
-  Share2,
-  Sparkles,
-  Check
+  Eye, 
+  Share2, 
+  Sparkles, 
+  Check,
+  Globe,
+  Users,
+  ShieldCheck,
+  Plus,
+  Lock
 } from 'lucide-react';
 
 export const HomeView = () => {
@@ -23,122 +27,226 @@ export const HomeView = () => {
     observations,
     safetyReports,
     requests,
-    events,
     plans,
+    communities,
     navigateTo,
     openCreateModal,
     openShareSocialModal,
     inspectEntity,
     viewPlanDetail,
+    viewRequestDetail,
+    viewSafetyDetail,
     respondToRequest,
-    setSelectedEventChat
+    viewUserProfile,
+    showToast
   } = useCareMesh();
 
-  // Highlight urgent / active items
+  const userJoinedCommunityIds = useMemo(() => {
+    return (communities || [])
+      .filter(c => c.isJoined || c.memberIds?.includes(currentUser?.id) || c.adminIds?.includes(currentUser?.id))
+      .map(c => c.id);
+  }, [communities, currentUser]);
+
+  // Highlight urgent / active items (filter out group_only requests for non-members)
   const activeSafetyAlerts = safetyReports.filter(s => s.status === 'active');
-  const openRequests = requests.filter(r => r.status !== 'fulfilled').slice(0, 4);
-  const activePlans = plans.slice(0, 2);
-  const upcomingEvents = events.slice(0, 2);
-  const recentObservations = observations.filter(o => !o.isContradiction && !o.isSupporting).slice(0, 3);
+  const openRequests = useMemo(() => {
+    return requests.filter(r => {
+      if (r.status === 'fulfilled') return false;
+      if (r.visibility === 'group_only') {
+        const isOwner = r.requester?.id === currentUser?.id || r.requester_id === currentUser?.id;
+        const isMember = r.communityId && userJoinedCommunityIds.includes(r.communityId);
+        if (!isOwner && !isMember) return false;
+      }
+      return true;
+    });
+  }, [requests, currentUser, userJoinedCommunityIds]);
+
+  const activePlans = plans.filter(p => p.lifecycleStage !== 'outcome_evaluated');
+  const recentObservations = observations.filter(o => !o.isContradiction && !o.isSupporting).slice(0, 4);
+
+  // Filter state for community needs
+  const [needsFilter, setNeedsFilter] = useState('all'); // 'all' | 'labor' | 'supplies' | 'equipment' | 'transport'
+
+  // User skills for relevance calculation
+  const userSkills = useMemo(() => (currentUser.skills || []).map(s => s.toLowerCase()), [currentUser.skills]);
+
+  // Relevance scoring: skill matches (+30/match), neighborhood proximity (+20), urgency (+15/10/5)
+  const calculateRelevanceScore = (req) => {
+    let score = 0;
+    const reqSkills = (req.requiredSkills || []).map(s => s.toLowerCase());
+    const matchingSkills = userSkills.filter(usk => 
+      reqSkills.some(rsk => rsk.includes(usk) || usk.includes(rsk))
+    );
+    score += matchingSkills.length * 30;
+
+    const userNeighborhood = (currentUser.location?.neighborhood || 'Maplewood').toLowerCase();
+    const address = ((req.location?.address || '') + ' ' + (req.location?.neighborhood || '')).toLowerCase();
+    if (address.includes(userNeighborhood)) {
+      score += 20;
+    } else if (address.includes('maplewood')) {
+      score += 10;
+    }
+
+    if (req.urgency === 'critical') score += 15;
+    else if (req.urgency === 'high') score += 10;
+    else if (req.urgency === 'medium') score += 5;
+
+    return score;
+  };
+
+  const sortedNeeds = useMemo(() => {
+    const list = openRequests.filter(req => {
+      if (needsFilter !== 'all') return req.category === needsFilter;
+      return true;
+    });
+
+    return [...list].sort((a, b) => {
+      const scoreA = calculateRelevanceScore(a);
+      const scoreB = calculateRelevanceScore(b);
+      return scoreB - scoreA;
+    });
+  }, [openRequests, needsFilter, currentUser, userSkills]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const needsPagination = usePagination(sortedNeeds, 4);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    needsPagination.resetPage();
+  }, [needsFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Matched requests based on current resident's skills
+  const matchedRequests = openRequests.filter(req => 
+    (req.requiredSkills || []).some(sk => userSkills.some(usk => usk.includes(sk.toLowerCase()) || sk.toLowerCase().includes(usk)))
+  ).slice(0, 2);
 
   return (
     <div className="d-flex flex-column gap-5">
-      {/* Welcome & Context Banner */}
+      {/* 1. Hero & Community Readiness Pulse */}
       <div 
-        className="card p-4"
+        className="card p-4 p-md-5"
         style={{
-          background: 'linear-gradient(135deg, #065f46 0%, #047857 50%, #064e3b 100%)',
+          background: 'linear-gradient(135deg, #064e3b 0%, #065f46 45%, #047857 100%)',
           color: '#ffffff',
           borderRadius: 'var(--radius-xl)',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-md)'
         }}
       >
         <div style={{ position: 'relative', zIndex: 2 }}>
-          <div className="d-flex align-center gap-2 mb-2">
-            <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff' }}>
-              <MapPin size={12} />
-              <span>{currentUser.location.neighborhood} Area Coordination</span>
-            </span>
+          {/* Top Status & Location Badges */}
+          <div className="d-flex align-center justify-between gap-2 flex-wrap mb-3">
+            <div className="d-flex align-center gap-2 flex-wrap">
+              <span className="badge d-inline-flex align-center gap-1.5" style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4ade80', display: 'inline-block', boxShadow: '0 0 8px #4ade80' }} />
+                <span>Active Coordination District</span>
+              </span>
+              <span className="badge d-inline-flex align-center gap-1" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}>
+                <MapPin size={12} />
+                <span>{currentUser.location?.neighborhood || 'Maplewood North'} Hub</span>
+              </span>
+            </div>
+
+            {currentUser.badges && currentUser.badges.length > 0 && (
+              <span className="badge d-none d-sm-inline-flex align-center gap-1" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', fontSize: '0.75rem' }}>
+                <ShieldCheck size={12} />
+                <span>{currentUser.badges[0]}</span>
+              </span>
+            )}
           </div>
 
-          <h2 className="text-2xl font-bold mb-2">Welcome back, {currentUser.name}</h2>
-          <p className="text-sm opacity-90 mb-4" style={{ maxWidth: '650px', lineHeight: '1.5' }}>
-            CareMesh coordinates real-world observations, challengeable evidence, and mutual resources to turn problems into transparent, verifiable collective action.
+          {/* Greeting & Mission */}
+          <h1 className="text-2xl font-bold mb-2 text-white" style={{ letterSpacing: '-0.02em' }}>
+            Welcome back, {currentUser.name}
+          </h1>
+          <p className="text-sm opacity-90 mb-4" style={{ maxWidth: '680px', lineHeight: '1.6' }}>
+            CareMesh connects real-world observations, challengeable field evidence, and transparent mutual resources to turn community challenges into verified collective action.
           </p>
 
+
+          {/* Quick Action Button Ribbon */}
           <div className="d-flex gap-2 flex-wrap">
             <button 
-              className="btn btn-sm" 
-              style={{ background: '#ffffff', color: '#065f46' }}
+              type="button"
+              className="btn btn-sm shadow-sm" 
+              style={{ background: '#ffffff', color: '#065f46', fontWeight: 600 }}
               onClick={() => openCreateModal('observation')}
             >
               <Eye size={14} />
-              <span>Log Observation</span>
+              <span>Log Field Observation</span>
             </button>
             <button 
+              type="button"
               className="btn btn-sm" 
-              style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)' }}
+              style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)', fontWeight: 500 }}
               onClick={() => openCreateModal('request')}
             >
               <HandHeart size={14} />
               <span>Request Help</span>
             </button>
             <button 
+              type="button"
               className="btn btn-sm" 
-              style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)' }}
+              style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)', fontWeight: 500 }}
               onClick={() => openCreateModal('resource')}
             >
               <Package size={14} />
               <span>Offer Resource</span>
             </button>
             <button 
+              type="button"
               className="btn btn-sm" 
-              style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)' }}
-              onClick={() => navigateTo('explore')}
+              style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)', fontWeight: 500 }}
+              onClick={() => navigateTo('explore', null, null, { initialWorldView: true })}
+              title="Launch full-screen World Situation Map with Supercluster"
             >
-              <MapPin size={14} />
-              <span>Explore World Map</span>
+              <Globe size={14} />
+              <span>Explore World Map →</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 1. Active Safety Alerts Banner (If Any) */}
+      {/* 2. Active Safety Alerts Banner (Only when active notices exist) */}
       {activeSafetyAlerts.length > 0 && (
-        <div className="d-flex flex-column gap-3">
-          <div className="d-flex align-center justify-between">
-            <h3 className="text-md font-bold text-rose d-flex align-center gap-2">
-              <ShieldAlert size={18} />
-              <span>Active Safety Notices ({activeSafetyAlerts.length})</span>
-            </h3>
+        <div className="card p-3 p-md-4" style={{ borderLeft: '4px solid var(--rose-600)', background: 'linear-gradient(to right, #fff1f2, #ffffff)' }}>
+          <div className="d-flex align-center justify-between mb-3 flex-wrap gap-2">
+            <div className="d-flex align-center gap-2">
+              <span className="badge badge-danger text-xs font-bold d-flex align-center gap-1">
+                <ShieldAlert size={13} />
+                <span>URGENT SAFETY NOTICES ({activeSafetyAlerts.length})</span>
+              </span>
+              <span className="text-xs text-muted">Field conditions requiring active precautions and welfare checks</span>
+            </div>
             <button 
-              className="btn btn-ghost btn-sm text-xs text-rose font-medium"
+              type="button"
+              className="btn btn-ghost btn-xs text-rose font-bold d-flex align-center gap-1"
               onClick={() => navigateTo('explore')}
             >
-              View on Map <ArrowRight size={13} />
+              <span>View All on Map</span>
+              <ArrowRight size={13} />
             </button>
           </div>
 
-          <div className="grid-2">
+          <div className="grid-2 gap-3">
             {activeSafetyAlerts.map(alert => (
               <div 
                 key={alert.id} 
-                className="card p-4 card-interactive" 
-                style={{ borderLeft: '4px solid var(--rose-600)', cursor: 'pointer' }}
-                onClick={() => inspectEntity(alert, 'safety')}
+                className="card p-3 card-interactive cursor-pointer bg-white"
+                onClick={() => viewSafetyDetail(alert)}
+                style={{ border: '1px solid var(--rose-200)', boxShadow: 'var(--shadow-xs)' }}
               >
-                <div className="d-flex align-center justify-between mb-2">
+                <div className="d-flex align-center justify-between mb-1.5">
                   <SeverityBadge severity={alert.severity} />
                   <span className="text-xs text-muted">{alert.timestamp}</span>
                 </div>
                 <h4 className="font-bold text-sm text-primary mb-1">{alert.title}</h4>
-                <p className="text-xs text-secondary mb-2">{alert.description}</p>
+                <p className="text-xs text-secondary mb-2" style={{ lineHeight: '1.4' }}>{alert.description}</p>
                 <div className="d-flex align-center justify-between text-xs text-muted pt-2 border-top">
-                  <span className="d-flex align-center gap-1">
-                    <MapPin size={12} /> {alert.location.address}
+                  <span className="d-flex align-center gap-1 truncate" style={{ maxWidth: '70%' }}>
+                    <MapPin size={11} /> {alert.location?.address}
                   </span>
-                  <span className="text-brand font-semibold">Inspect Precautions →</span>
+                  <span className="text-rose font-semibold">Inspect Precautions →</span>
                 </div>
               </div>
             ))}
@@ -146,294 +254,422 @@ export const HomeView = () => {
         </div>
       )}
 
-      {/* 2. Priority Help Requests & Volunteer Needs (With Inline Quick Contribution Options) */}
-      <div className="d-flex flex-column gap-3">
-        <div className="d-flex align-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-primary d-flex align-center gap-2">
-              <HandHeart size={18} className="text-brand" />
-              <span>Community Help Requests</span>
-            </h3>
-            <p className="text-xs text-muted">Open mutual aid needs with volunteer tasks and immediate contribution pathways</p>
-          </div>
-          <button 
-            className="btn btn-ghost btn-sm text-brand"
-            onClick={() => navigateTo('collaborate', 'requests')}
-          >
-            <span>Browse All Requests</span>
-            <ArrowRight size={14} />
-          </button>
-        </div>
-
-        <div className="grid-2 gap-3">
-          {openRequests.map(req => {
-            const isUserJoined = req.responses?.some(resp => resp.user?.id === currentUser.id);
-            const firstQuickAction = req.quickActions && req.quickActions.length > 0 ? req.quickActions[0] : null;
-
-            return (
-              <div 
-                key={req.id} 
-                className="card p-4 d-flex flex-column justify-between card-interactive"
-              >
-                <div>
-                  <div className="d-flex align-center justify-between mb-2">
-                    <div className="d-flex align-center gap-2">
-                      <UrgencyBadge urgency={req.urgency} />
-                      <span className="badge badge-gray text-xs text-uppercase font-semibold">{req.category}</span>
-                    </div>
-                    <span className="text-xs text-muted">{req.createdAt}</span>
-                  </div>
-
-                  <h4 className="font-bold text-sm text-primary mb-1">{req.title}</h4>
-                  <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.4' }}>{req.description}</p>
-                  
-                  {/* Volunteer progress */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-between text-xs text-muted mb-1">
-                      <span>Volunteers: <strong>{req.peopleJoined}</strong> / {req.peopleNeeded} needed</span>
-                      <span>{req.progressPercentage}%</span>
-                    </div>
-                    <div className="progress-bar-bg">
-                      <div className="progress-bar-fill" style={{ width: `${req.progressPercentage}%` }} />
-                    </div>
-                  </div>
-
-                  {/* Inline Quick Action Badge/Task if available */}
-                  {firstQuickAction && (
-                    <div className="card p-2 mb-3 text-xs" style={{ background: 'var(--amber-50)', border: '1px dashed var(--amber-300)' }}>
-                      <div className="d-flex align-center justify-between mb-1">
-                        <span className="font-bold text-amber d-flex align-center gap-1">
-                          <Sparkles size={12} /> Quick Way to Help:
-                        </span>
-                        <span className="badge badge-amber text-xs font-semibold" style={{ fontSize: '0.65rem' }}>
-                          <Clock size={10} /> {firstQuickAction.timeEstimate}
-                        </span>
-                      </div>
-                      <p className="text-primary font-medium mb-0" style={{ fontSize: '0.78rem' }}>
-                        {firstQuickAction.title}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="d-flex align-center gap-3 text-xs text-muted mb-2 flex-wrap">
-                    <span className="d-flex align-center gap-1"><MapPin size={11} /> {req.location?.address}</span>
-                    <span>By {req.requester?.name}</span>
-                  </div>
-                </div>
-
-                <div className="d-flex align-center justify-between pt-2 border-top gap-2">
-                  <button
-                    className={`btn btn-xs ${isUserJoined ? 'btn-secondary' : 'btn-primary'} flex-1`}
-                    onClick={() => {
-                      if (!isUserJoined) {
-                        respondToRequest(req.id, firstQuickAction ? `Quick Action: ${firstQuickAction.title}` : 'Volunteer');
-                        alert(`Thank you! You signed up for: "${req.title}".`);
-                      } else {
-                        alert('You are already participating in this request.');
-                      }
-                    }}
-                  >
-                    {isUserJoined ? (
-                      <>
-                        <Check size={13} className="text-brand" />
-                        <span>Participating</span>
-                      </>
-                    ) : firstQuickAction ? (
-                      <>
-                        <CheckCircle2 size={13} />
-                        <span>Quick Respond ({firstQuickAction.timeEstimate})</span>
-                      </>
-                    ) : (
-                      <>
-                        <HandHeart size={13} />
-                        <span>Volunteer / Respond</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    className="btn btn-ghost btn-xs text-brand font-semibold"
-                    onClick={() => navigateTo('collaborate', 'requests', req.id)}
-                  >
-                    Details →
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. Active Long-Term Plans */}
-      <div className="d-flex flex-column gap-3">
-        <div className="d-flex align-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-primary d-flex align-center gap-2">
-              <Target size={18} className="text-purple" />
-              <span>Sustained Action Plans</span>
-            </h3>
-            <p className="text-xs text-muted">Long-term projects tracing problems through evidence, milestones, and measured outcomes</p>
-          </div>
-          <button 
-            className="btn btn-ghost btn-sm text-brand"
-            onClick={() => navigateTo('plans')}
-          >
-            <span>View All Plans</span>
-            <ArrowRight size={14} />
-          </button>
-        </div>
-
-        <div className="grid-2 gap-3">
-          {activePlans.map(plan => {
-            const completedCount = plan.milestones?.filter(m => m.status === 'completed').length || 0;
-            const totalCount = plan.milestones?.length || 0;
-
-            return (
-              <div 
-                key={plan.id}
-                className="card p-4 card-interactive cursor-pointer"
-                onClick={() => viewPlanDetail(plan)}
-              >
-                <div className="d-flex align-center justify-between mb-2">
-                  <PlanStatusBadge status={plan.overallStatus || 'in_progress'} />
-                  <LifecycleBadge stage={plan.lifecycleStage} />
-                </div>
-                <h4 className="font-bold text-md text-primary mb-1">{plan.title}</h4>
-                <p className="text-xs text-secondary mb-3">{plan.problemStatement}</p>
-
-                <div className="text-xs text-muted mb-3">
-                  <strong>Milestones:</strong> {completedCount} of {totalCount} Completed
-                </div>
-
-                <div className="d-flex align-center justify-between pt-2 border-top text-xs text-muted">
-                  <span>{plan.participants?.length || 0} Collaborators • {plan.decisions?.length || 0} Decisions</span>
-                  <span className="text-brand font-semibold">Inspect Plan Details →</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. Today's Events & Activities */}
-      <div className="d-flex flex-column gap-3">
-        <div className="d-flex align-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-primary d-flex align-center gap-2">
-              <Calendar size={18} className="text-blue-600" />
-              <span>Today's Coordination Workdays & Events</span>
-            </h3>
-          </div>
-        </div>
-
-        <div className="grid-2 gap-3">
-          {upcomingEvents.map(evt => (
-            <div 
-              key={evt.id} 
-              className="card p-4 d-flex flex-column justify-between card-interactive"
-            >
+      {/* 3. Main Operations Grid (65% Primary Workflows / 35% Community Digest) */}
+      <div className="home-operations-grid">
+        {/* Left Column: Operations & Active Response */}
+        <div className="d-flex flex-column gap-5">
+          {/* Section A: Priority Needs & Immediate Ways to Help */}
+          <div className="d-flex flex-column gap-3">
+            <div className="d-flex align-center justify-between flex-wrap gap-2">
               <div>
-                <div className="d-flex align-center justify-between mb-2">
-                  <span className="badge badge-primary text-xs font-semibold text-uppercase">{evt.eventType.replace('_', ' ')}</span>
-                  <span className="text-xs font-bold text-primary">{evt.date} • {evt.time}</span>
-                </div>
-                <h4 className="font-bold text-md text-primary mb-1">{evt.title}</h4>
-                <p className="text-xs text-secondary mb-3">{evt.description}</p>
-                <div className="d-flex align-center gap-2 text-xs text-muted mb-2">
-                  <MapPin size={12} /> {evt.location?.address}
-                </div>
+                <h3 className="text-md font-bold text-primary d-flex align-center gap-2 mb-0.5">
+                  <HandHeart size={18} className="text-brand" />
+                  <span>Priority Community Needs</span>
+                </h3>
+                <p className="text-xs text-muted mb-0">Relevant mutual aid tasks prioritized for you with direct volunteer actions</p>
               </div>
 
-              <div className="d-flex align-center justify-between pt-3 border-top">
-                <span className="text-xs text-muted">{evt.participants?.length || 0} Attendees</span>
-                <button 
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setSelectedEventChat(evt)}
-                >
-                  <span>Open Coordination Chat</span>
-                  <ChevronRight size={14} />
-                </button>
+              {/* Filter Pills and Relevance Indicator */}
+              <div className="d-flex align-center gap-2 flex-wrap">
+                <span className="text-xs text-muted d-none d-sm-inline-flex align-center gap-1 font-medium" style={{ fontSize: '0.72rem' }}>
+                  <Sparkles size={12} className="text-brand" /> Relevant First
+                </span>
+                <div className="d-flex align-center gap-1 flex-wrap">
+                  {[
+                    { id: 'all', label: 'All Needs' },
+                    { id: 'labor', label: 'Labor' },
+                    { id: 'supplies', label: 'Supplies' },
+                    { id: 'equipment', label: 'Equipment' },
+                    { id: 'transport', label: 'Transport' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={`btn btn-xs ${needsFilter === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ fontSize: '0.72rem', borderRadius: 'var(--radius-full)' }}
+                      onClick={() => setNeedsFilter(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* 5. Recent Real-World Observations */}
-      <div className="d-flex flex-column gap-3">
-        <div className="d-flex align-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-primary d-flex align-center gap-2">
-              <Eye size={18} className="text-brand" />
-              <span>Recent Observations & Field Reports</span>
-            </h3>
-            <p className="text-xs text-muted">Observations logged by community members. Challengeable with evidence or corroborating reports.</p>
-          </div>
-          <button 
-            className="btn btn-ghost btn-sm text-brand"
-            onClick={() => navigateTo('explore')}
-          >
-            <span>Explore Map</span>
-            <ArrowRight size={14} />
-          </button>
-        </div>
+            <div className="d-flex flex-column gap-3">
+              {needsPagination.paginatedItems.map(req => {
+                const isOwner = req.requester?.id === currentUser?.id || req.requester_id === currentUser?.id;
+                const isUserJoined = req.responses?.some(resp => resp.user?.id === currentUser?.id);
+                const hasSkillMatch = (req.requiredSkills || []).some(sk => userSkills.some(usk => usk.includes(sk.toLowerCase()) || sk.toLowerCase().includes(usk)));
+                const affiliatedCommunity = communities?.find(c => c.id === req.communityId);
 
-        <div className="grid-3 gap-3">
-          {recentObservations.map(obs => {
-            const hasDisputes = obs.claimIds?.length > 0;
-            const contraCount = obs.contradictoryObservationIds?.length || 0;
+                return (
+                  <div key={req.id} className="card p-4 card-interactive d-flex flex-column justify-between">
+                    <div>
+                      <div className="d-flex align-center justify-between mb-2">
+                        <div className="d-flex align-center gap-2 flex-wrap">
+                          <UrgencyBadge urgency={req.urgency} />
+                          <RequestStatusBadge status={req.status} />
+                          {hasSkillMatch && (
+                            <span className="badge badge-primary text-xs font-semibold d-inline-flex align-center gap-1" style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}>
+                              <Sparkles size={10} /> Matched Skills
+                            </span>
+                          )}
+                          <span className="badge badge-gray text-xs text-uppercase font-semibold">{req.category}</span>
+                          {affiliatedCommunity && (
+                            req.visibility === 'group_only' ? (
+                              <span 
+                                className="badge text-xs font-bold d-inline-flex align-center gap-1" 
+                                style={{ background: '#f3e8ff', color: '#7e22ce', border: '1px solid #d8b4fe', fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}
+                                title="Visible only to group members"
+                              >
+                                <Lock size={10} /> {affiliatedCommunity.name}
+                              </span>
+                            ) : (
+                              <span 
+                                className="badge badge-secondary text-xs d-inline-flex align-center gap-1" 
+                                style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem' }}
+                              >
+                                <Globe size={10} /> {affiliatedCommunity.name}
+                              </span>
+                            )
+                          )}
+                        </div>
+                        <span className="text-xs text-muted">{req.createdAt}</span>
+                      </div>
 
-            return (
-              <div 
-                key={obs.id} 
-                className="card p-4 d-flex flex-column justify-between card-interactive"
-              >
-                <div>
-                  <div className="d-flex align-center justify-between mb-2">
-                    <span className="badge badge-gray text-xs text-uppercase font-semibold">
-                      {obs.category.replace('_', ' ')}
-                    </span>
-                    <span className="text-xs text-muted">{obs.timestamp}</span>
-                  </div>
+                      <h4 
+                        className="font-bold text-sm text-primary mb-1 cursor-pointer hover:text-brand"
+                        onClick={() => viewRequestDetail(req)}
+                      >
+                        {req.title}
+                      </h4>
+                      <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.45' }}>{req.description}</p>
 
-                  <h4 className="font-bold text-sm text-primary mb-1">{obs.title}</h4>
-                  <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.4' }}>{obs.description}</p>
-                  
-                  {contraCount > 0 && (
-                    <div className="mb-2">
-                      <span className="badge badge-rose text-xs font-bold">
-                        {contraCount} Contradictory {contraCount === 1 ? 'Report' : 'Reports'} on Record
-                      </span>
+                      {/* Volunteer Progress Bar */}
+                      <div className="mb-3">
+                        <div className="d-flex justify-between text-xs text-muted mb-1">
+                          <span>Volunteers: <strong>{req.peopleJoined}</strong> / {req.peopleNeeded} needed</span>
+                          <span className="font-semibold text-primary">{req.progressPercentage}%</span>
+                        </div>
+                        <div className="progress-bar-bg">
+                          <div className="progress-bar-fill" style={{ width: `${req.progressPercentage}%` }} />
+                        </div>
+                      </div>
+
+                      {/* Required Skills Tags */}
+                      {req.requiredSkills && req.requiredSkills.length > 0 && (
+                        <div className="d-flex align-center gap-1.5 flex-wrap mb-3">
+                          <span className="text-xs text-muted" style={{ fontSize: '0.7rem' }}>Skills needed:</span>
+                          {req.requiredSkills.map(sk => {
+                            const isMatched = userSkills.some(usk => usk.includes(sk.toLowerCase()) || sk.toLowerCase().includes(usk));
+                            return (
+                              <span 
+                                key={sk} 
+                                className={`badge ${isMatched ? 'badge-primary font-semibold' : 'badge-gray'} text-xs d-inline-flex align-center gap-1`}
+                                style={{ fontSize: '0.68rem', padding: '0.12rem 0.45rem' }}
+                              >
+                                {isMatched && <Sparkles size={9} />}
+                                <span>{sk}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div className="d-flex align-center gap-3 text-xs text-muted mb-2 flex-wrap">
+                        <span className="d-flex align-center gap-1"><MapPin size={11} /> {req.location?.address}</span>
+                        {req.requester && (
+                          <div 
+                            className="d-inline-flex align-center gap-1.5 cursor-pointer text-primary hover:text-brand"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewUserProfile(req.requester);
+                            }}
+                            title={`View ${req.requester.name}'s Profile`}
+                          >
+                            {req.requester.avatar && (
+                              <img 
+                                src={req.requester.avatar} 
+                                alt={req.requester.name} 
+                                style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} 
+                              />
+                            )}
+                            <span>Requester: <strong style={{ textDecoration: 'underline', textDecorationColor: 'var(--border-medium)' }}>{req.requester.name}</strong></span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
 
-                  <div className="d-flex align-center gap-2 text-xs text-muted mb-2">
-                    <MapPin size={11} /> {obs.location?.address}
+                    <div className="d-flex align-center justify-between pt-2.5 border-top gap-2">
+                      {isOwner ? (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-secondary flex-1 d-flex align-center justify-center gap-1.5"
+                          onClick={() => viewRequestDetail(req)}
+                          title="Manage your help request"
+                        >
+                          <Users size={13} className="text-brand" />
+                          <span>Your Request (Manage)</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${isUserJoined ? 'btn-secondary' : 'btn-primary'} flex-1 d-flex align-center justify-center gap-1.5`}
+                          onClick={() => {
+                            if (!isUserJoined) {
+                              respondToRequest(req.id, 'Volunteer');
+                              showToast(`Thank you! You signed up for: "${req.title}".`, 'success');
+                            } else {
+                              showToast('You are already participating in this request.', 'info');
+                            }
+                          }}
+                        >
+                          {isUserJoined ? (
+                            <>
+                              <Check size={13} className="text-brand" />
+                              <span>Joined (Participating)</span>
+                            </>
+                          ) : (
+                            <>
+                              <HandHeart size={13} />
+                              <span>Volunteer / Respond</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-brand font-semibold"
+                        onClick={() => viewRequestDetail(req)}
+                      >
+                        Details →
+                      </button>
+                    </div>
                   </div>
-                </div>
+                );
+              })}
+            </div>
 
-                <div className="d-flex align-center justify-between pt-2 border-top gap-2">
-                  <button
-                    className="btn btn-ghost btn-xs text-muted"
-                    onClick={() => openShareSocialModal(obs, 'observation')}
-                    title="Share Observation to Feed"
-                  >
-                    <Share2 size={13} />
-                    <span>Share</span>
-                  </button>
+            {/* Pagination Controls */}
+            {needsPagination.totalPages > 1 && (
+              <Pagination
+                currentPage={needsPagination.currentPage}
+                totalPages={needsPagination.totalPages}
+                totalItems={needsPagination.totalItems}
+                startIndex={needsPagination.startIndex}
+                endIndex={needsPagination.endIndex}
+                onPageChange={needsPagination.setPage}
+                pageSize={needsPagination.pageSize}
+                onPageSizeChange={needsPagination.setPageSize}
+                pageSizeOptions={[2, 4, 6]}
+              />
+            )}
 
-                  <button
-                    className="btn btn-ghost btn-xs text-brand font-semibold p-0"
-                    onClick={() => inspectEntity(obs, 'observation')}
-                  >
-                    <span>{hasDisputes ? 'Inspect / Dispute →' : 'Inspect Evidence →'}</span>
-                  </button>
-                </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm text-brand font-semibold align-self-start"
+              onClick={() => navigateTo('collaborate', 'requests')}
+            >
+              <span>Browse All {openRequests.length} Community Needs</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* Section B: Field Observations & Challengeable Evidence */}
+          <div className="d-flex flex-column gap-3">
+            <div className="d-flex align-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="text-md font-bold text-primary d-flex align-center gap-2 mb-0.5">
+                  <Eye size={18} className="text-brand" />
+                  <span>Recent Observations & Field Reports</span>
+                </h3>
+                <p className="text-xs text-muted mb-0">Empirical community field reports with challengeable evidence trails</p>
               </div>
-            );
-          })}
+
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs d-flex align-center gap-1"
+                onClick={() => openCreateModal('observation')}
+              >
+                <Plus size={12} />
+                <span>Log Observation</span>
+              </button>
+            </div>
+
+            <div className="grid-2 gap-3">
+              {recentObservations.map(obs => {
+                const hasDisputes = obs.claimIds?.length > 0;
+                const contraCount = obs.contradictoryObservationIds?.length || 0;
+
+                return (
+                  <div key={obs.id} className="card p-3.5 d-flex flex-column justify-between card-interactive">
+                    <div>
+                      <div className="d-flex align-center justify-between mb-2">
+                        <span className="badge badge-gray text-xs text-uppercase font-semibold" style={{ fontSize: '0.68rem' }}>
+                          {obs.category.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs text-muted">{obs.timestamp}</span>
+                      </div>
+
+                      <h4 className="font-bold text-sm text-primary mb-1">{obs.title}</h4>
+                      <p className="text-xs text-secondary mb-2.5 line-clamp-2" style={{ lineHeight: '1.4' }}>{obs.description}</p>
+
+                      {contraCount > 0 && (
+                        <div className="mb-2">
+                          <span className="badge badge-rose text-xs font-bold" style={{ fontSize: '0.68rem' }}>
+                            {contraCount} Contradictory {contraCount === 1 ? 'Report' : 'Reports'} on Record
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="d-flex align-center gap-1.5 text-xs text-muted mb-2 truncate">
+                        <MapPin size={11} className="flex-shrink-0" />
+                        <span className="truncate">{obs.location?.address}</span>
+                      </div>
+                    </div>
+
+                    <div className="d-flex align-center justify-between pt-2 border-top gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-muted"
+                        onClick={() => openShareSocialModal(obs, 'observation')}
+                        title="Share Observation to Feed"
+                      >
+                        <Share2 size={13} />
+                        <span>Share</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-brand font-semibold p-0"
+                        onClick={() => inspectEntity(obs, 'observation')}
+                      >
+                        <span>{hasDisputes ? 'Inspect / Dispute →' : 'Inspect Evidence →'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm text-brand font-semibold align-self-start"
+              onClick={() => navigateTo('explore')}
+            >
+              <span>Explore All Field Reports on Map</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Right Column: Community Digest & Personal Radar */}
+        <div className="d-flex flex-column gap-4">
+          {/* Card 1: Matched For You (Based on Verified Skills) */}
+          {matchedRequests.length > 0 && (
+            <div className="card p-3.5 matched-need-highlight" style={{ borderRadius: 'var(--radius-lg)' }}>
+              <div className="d-flex align-center justify-between mb-2">
+                <span className="badge badge-primary text-xs font-bold d-flex align-center gap-1" style={{ fontSize: '0.7rem' }}>
+                  <Sparkles size={11} />
+                  <span>MATCHED FOR YOU</span>
+                </span>
+                <span className="text-xs text-muted">Skills match</span>
+              </div>
+              <h4 className="font-bold text-sm text-primary mb-1">Needs Fitting Your Skills</h4>
+              <p className="text-xs text-secondary mb-3" style={{ fontSize: '0.78rem', lineHeight: '1.4' }}>
+                Based on your profile skills ({currentUser.skills?.slice(0, 3).join(', ')}):
+              </p>
+
+              <div className="d-flex flex-column gap-2">
+                {matchedRequests.map(match => (
+                  <div 
+                    key={match.id} 
+                    className="card p-2.5 bg-white card-interactive cursor-pointer"
+                    onClick={() => viewRequestDetail(match)}
+                    style={{ border: '1px solid var(--border-light)' }}
+                  >
+                    <div className="d-flex align-center justify-between mb-1">
+                      <UrgencyBadge urgency={match.urgency} />
+                      <span className="text-xs text-muted">{match.location?.neighborhood || 'Maplewood'}</span>
+                    </div>
+                    <h5 className="font-semibold text-xs text-primary mb-1">{match.title}</h5>
+                    <span className="text-brand font-semibold text-xs">Help Now →</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Card 2: Sustained Action Plans in Progress */}
+          <div className="card p-4">
+            <div className="d-flex align-center justify-between mb-3">
+              <h4 className="text-sm font-bold text-primary d-flex align-center gap-1.5 mb-0">
+                <Target size={16} className="text-purple" />
+                <span>Sustained Action Plans</span>
+              </h4>
+              <button 
+                type="button"
+                className="btn btn-ghost btn-xs text-brand font-semibold p-0"
+                onClick={() => navigateTo('plans')}
+              >
+                All Plans →
+              </button>
+            </div>
+
+            <div className="d-flex flex-column gap-3">
+              {activePlans.slice(0, 2).map(plan => {
+                const completedCount = plan.milestones?.filter(m => m.status === 'completed').length || 0;
+                const totalCount = plan.milestones?.length || 0;
+
+                return (
+                  <div 
+                    key={plan.id}
+                    className="p-2.5 rounded border border-light bg-subtle card-interactive cursor-pointer"
+                    onClick={() => viewPlanDetail(plan)}
+                  >
+                    <div className="d-flex align-center justify-between mb-1.5">
+                      <LifecycleBadge stage={plan.lifecycleStage} />
+                      <span className="text-xs text-muted">{completedCount}/{totalCount} Milestones</span>
+                    </div>
+                    <h5 className="font-bold text-xs text-primary mb-1">{plan.title}</h5>
+                    <p className="text-xs text-secondary mb-2 line-clamp-2" style={{ fontSize: '0.75rem', lineHeight: '1.35' }}>
+                      {plan.problemStatement}
+                    </p>
+                    <div className="d-flex align-center justify-between pt-1 border-top text-xs text-muted">
+                      <span>{plan.participants?.length || 0} Collaborators</span>
+                      <span className="text-brand font-semibold">Inspect →</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card 4: Community Circles & Readiness */}
+          <div className="card p-3.5 bg-subtle" style={{ border: '1px dashed var(--border-default)' }}>
+            <div className="d-flex align-center gap-2 mb-2">
+              <Users size={16} className="text-purple-600" />
+              <h4 className="text-xs font-bold text-primary text-uppercase mb-0" style={{ letterSpacing: '0.04em' }}>
+                Community Circles & Governance
+              </h4>
+            </div>
+            <p className="text-xs text-secondary mb-2.5" style={{ lineHeight: '1.4' }}>
+              Participate in democratic neighborhood polls, member readiness checks, and moderator elections.
+            </p>
+            <button 
+              type="button"
+              className="btn btn-secondary btn-xs w-100 d-flex align-center justify-center gap-1"
+              onClick={() => navigateTo('social', 'communities')}
+            >
+              <span>Explore Circles & Governance</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+export default HomeView;

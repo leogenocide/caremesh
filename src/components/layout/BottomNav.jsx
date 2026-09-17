@@ -13,10 +13,17 @@ export const BottomNav = () => {
   const getActiveTab = () => {
     const p = location.pathname;
     if (p === '/') return 'home';
-    if (p.startsWith('/explore') || p.startsWith('/observations') || p.startsWith('/claims')) return 'explore';
+    if (
+      p.startsWith('/explore') || 
+      p.startsWith('/observations') || 
+      p.startsWith('/claims') || 
+      p.startsWith('/evidence') || 
+      p.startsWith('/safety') || 
+      p.startsWith('/hazards')
+    ) return 'explore';
     if (p.startsWith('/collaborate') || p.startsWith('/requests') || p.startsWith('/resources')) return 'collaborate';
     if (p.startsWith('/plans')) return 'plans';
-    if (p.startsWith('/social')) return 'social';
+    if (p.startsWith('/social') || p.startsWith('/events')) return 'social';
     if (p.startsWith('/profile')) return 'profile';
     return 'home';
   };

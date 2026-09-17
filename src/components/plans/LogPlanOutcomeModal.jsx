@@ -387,6 +387,7 @@ export const LogPlanOutcomeModal = ({ isOpen, onClose, plan }) => {
       title="Log Real-World Outcome & Results Evaluation"
       subtitle={`Evaluate verified achievements, evidence, and lessons for: ${plan.title}`}
       maxWidth="780px"
+      zIndex={1100}
     >
       <LogPlanOutcomeForm key={plan.id} plan={plan} onClose={onClose} />
     </Modal>

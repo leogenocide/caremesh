@@ -1,19 +1,51 @@
 import { useState } from 'react';
+import { useCareMesh } from '../../context/useCareMesh';
 import { 
   Image, 
   FileText, 
   Download, 
   Calendar, 
-  User 
+  User,
+  Upload
 } from 'lucide-react';
 
 export const GroupMediaTab = ({ community }) => {
+  const { uploadCommunityMedia, showToast } = useCareMesh();
   const [activeMediaFilter, setActiveMediaFilter] = useState('photos'); // 'photos' | 'files'
 
   if (!community) return null;
 
   const photos = community.mediaGallery || [];
   const files = community.files || [];
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      if (showToast) showToast('Photo file must be under 5MB.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result;
+      if (typeof dataUrl === 'string') {
+        const title = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+        if (uploadCommunityMedia) {
+          uploadCommunityMedia(community.id, {
+            url: dataUrl,
+            title: title ? title.charAt(0).toUpperCase() + title.slice(1) : 'Field Photo'
+          });
+        }
+      }
+    };
+    reader.onerror = () => {
+      if (showToast) showToast('Failed to read image file.', 'error');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -36,7 +68,21 @@ export const GroupMediaTab = ({ community }) => {
           </button>
         </div>
 
-        <span className="text-xs text-muted">Evidence & shared group records</span>
+        <div className="d-flex align-center gap-2">
+          {activeMediaFilter === 'photos' && (
+            <label className="btn btn-primary btn-sm d-flex align-center gap-1.5 cursor-pointer mb-0">
+              <Upload size={14} />
+              <span>Upload Photo</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                style={{ display: 'none' }}
+              />
+            </label>
+          )}
+          <span className="text-xs text-muted d-none d-sm-inline">Evidence & shared group records</span>
+        </div>
       </div>
 
       {/* 1. PHOTOS GRID */}

@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCareMesh } from '../context/useCareMesh';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/common/Pagination';
+import { EmptyState } from '../components/common/EmptyState';
 import { PlanStatusBadge, LifecycleBadge } from '../components/common/Badge';
 import { 
   Users, 
   FileText, 
   Plus, 
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  Lightbulb,
-  MessageSquare,
-  History
+  Search, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Lightbulb, 
+  MessageSquare, 
+  History 
 } from 'lucide-react';
 
 export const PlansView = () => {
@@ -36,6 +39,12 @@ export const PlansView = () => {
     }
     return true;
   });
+
+  const plansPagination = usePagination(filteredPlans, 6);
+
+  useEffect(() => {
+    plansPagination.resetPage();
+  }, [stageTab, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reviewCount = plans.filter(p => p.lifecycleStage === 'community_review' || p.lifecycleStage === 'draft' || p.lifecycleStage === 'revised').length;
   const activeCount = plans.filter(p => p.lifecycleStage === 'accepted' || p.lifecycleStage === 'active' || p.lifecycleStage === 'actions_underway').length;
@@ -63,7 +72,7 @@ export const PlansView = () => {
 
       {/* Stage Tabs & Search Filter */}
       <div className="d-flex align-center justify-between gap-3 flex-wrap">
-        <div className="touch-scroll-x gap-1 p-1 card w-100-mobile" style={{ borderRadius: 'var(--radius-full)', background: 'var(--bg-muted)', padding: '4px' }}>
+        <div className="touch-scroll-x gap-1.5 p-1.5 card w-100-mobile" style={{ borderRadius: 'var(--radius-full)', background: 'var(--bg-muted)' }}>
           <button
             type="button"
             className={`btn btn-sm ${stageTab === 'all' ? 'btn-primary' : 'btn-ghost'}`}
@@ -102,21 +111,38 @@ export const PlansView = () => {
         </div>
 
         <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-          <Search size={15} className="text-muted" style={{ position: 'absolute', left: '12px', top: '10px' }} />
+          <Search size={15} className="text-muted" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
             placeholder="Search problem, approach, or keyword..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="form-input"
-            style={{ paddingLeft: '34px', fontSize: '0.82rem', height: '34px' }}
+            style={{ paddingLeft: '34px', fontSize: '0.85rem' }}
           />
         </div>
       </div>
 
       {/* Plans & Proposals List */}
-      <div className="d-flex flex-column gap-4">
-        {filteredPlans.map(plan => {
+      {plansPagination.paginatedItems.length === 0 ? (
+        <EmptyState
+          icon={<FileText size={36} className="text-muted" />}
+          title="No Long-Term Plans Found"
+          description={searchQuery || stageTab !== 'all' ? "No proposals match your search or stage filter. Try adjusting your search query or selecting 'All Proposals'." : "There are currently no long-term proposals or civic initiatives registered."}
+          action={(
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => openCreateModal('plan')}
+            >
+              <Plus size={14} />
+              <span>Propose Long-Term Plan</span>
+            </button>
+          )}
+        />
+      ) : (
+        <div className="d-flex flex-column gap-4">
+          {plansPagination.paginatedItems.map(plan => {
           const feedbackList = plan.feedback || [];
           const riskCount = feedbackList.filter(f => f.type === 'risk').length;
           const altCount = feedbackList.filter(f => f.type === 'alternative').length;
@@ -178,13 +204,13 @@ export const PlansView = () => {
               {/* Evaluated Outcome Snapshot (if completed/evaluated) */}
               {plan.outcomeReport && (
                 <div 
-                  className="d-flex align-center justify-between p-2 px-3 mb-3 rounded gap-2"
+                  className="d-flex align-center justify-between p-2.5 px-3.5 mb-3 rounded gap-2"
                   style={{ 
                     background: plan.outcomeReport.outcomeStatus === 'achieved' ? 'rgba(220, 252, 231, 0.45)' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? 'rgba(254, 249, 195, 0.45)' : 'rgba(254, 226, 226, 0.45)', 
                     border: '1px solid var(--border-light)' 
                   }}
                 >
-                  <div className="d-flex align-center gap-1.5 text-xs text-primary min-w-0">
+                  <div className="d-flex align-center gap-2 text-xs text-primary min-w-0">
                     <span className="font-bold text-xs flex-shrink-0" style={{ color: plan.outcomeReport.outcomeStatus === 'achieved' ? '#166534' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? '#854d0e' : '#991b1b' }}>
                       {plan.outcomeReport.outcomeStatus === 'achieved' ? '🟢 Verified Result:' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? '🟡 Partial Result:' : '🔴 Outcome:'}
                     </span>
@@ -196,11 +222,11 @@ export const PlansView = () => {
 
               {/* Proposal Critique & Collaboration Signals Ribbon */}
               <div 
-                className="d-flex align-center justify-between p-2 px-3 mb-3 rounded flex-wrap gap-2"
+                className="d-flex align-center justify-between p-2.5 px-3.5 mb-3 rounded flex-wrap gap-2.5"
                 style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}
               >
                 <div className="d-flex align-center gap-3 flex-wrap text-xs">
-                  <span className="d-flex align-center gap-1 text-secondary font-medium">
+                  <span className="d-flex align-center gap-1.5 text-secondary font-medium">
                     <MessageSquare size={13} className="text-purple" />
                     <strong>{feedbackList.length}</strong> Community Critiques
                   </span>
@@ -236,7 +262,7 @@ export const PlansView = () => {
               </div>
 
               {/* Card Footer */}
-              <div className="d-flex align-center justify-between pt-2 border-top text-xs text-muted">
+              <div className="d-flex align-center justify-between pt-3 border-top text-xs text-muted">
                 <div className="d-flex align-center gap-4">
                   <span className="d-flex align-center gap-1">
                     <Users size={13} /> {plan.participants?.length || 1} Working Group Members
@@ -260,6 +286,23 @@ export const PlansView = () => {
           );
         })}
       </div>
+      )}
+
+      {/* Pagination Controls */}
+      {plansPagination.totalPages > 1 && (
+        <Pagination
+        currentPage={plansPagination.currentPage}
+        totalPages={plansPagination.totalPages}
+        totalItems={plansPagination.totalItems}
+        startIndex={plansPagination.startIndex}
+        endIndex={plansPagination.endIndex}
+        onPageChange={plansPagination.setPage}
+        pageSize={plansPagination.pageSize}
+        onPageSizeChange={plansPagination.handlePageSizeChange}
+        pageSizeOptions={[3, 6, 12]}
+        itemName="community plans"
+      />
+      )}
     </div>
   );
 };

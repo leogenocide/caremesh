@@ -1,21 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCareMesh } from '../context/useCareMesh';
 import { Tabs } from '../components/common/Tabs';
-import { UrgencyBadge, ResourceTypeBadge } from '../components/common/Badge';
+import { UrgencyBadge, ResourceTypeBadge, RequestStatusBadge } from '../components/common/Badge';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
+import { EmptyState } from '../components/common/EmptyState';
 import { 
   HandHeart, 
   Package, 
-  Sparkles, 
   GitMerge, 
-  Clock, 
   MapPin, 
   CheckCircle2, 
   User, 
   Check,
   Calendar,
   AlertCircle,
-  Filter
+  Filter,
+  Lock,
+  Globe,
+  Plus,
+  Users
 } from 'lucide-react';
+
+const STANDARD_REQUEST_CATEGORIES = [
+  { value: 'labor', label: 'Volunteer Labor' },
+  { value: 'supplies', label: 'Supplies & Material' },
+  { value: 'transport', label: 'Transportation' },
+  { value: 'equipment', label: 'Tools & Equipment' },
+  { value: 'skills', label: 'Specialized Skills' }
+];
 
 export const CollaborateView = () => {
   const {
@@ -24,36 +37,70 @@ export const CollaborateView = () => {
     highlightedEntityId,
     requests,
     resources,
+    communities,
     matchingFactors,
     currentUser,
     openCreateModal,
     respondToRequest,
     matchResourceToRequest,
-    inspectEntity
+    viewRequestDetail,
+    viewResourceDetail,
+    openRequestResourceModal,
+    isRequestVisibleToUser,
+    showToast
   } = useCareMesh();
 
   const [activeTabState, setActiveTabState] = useState('requests');
   const activeTab = currentSubTab || activeTabState;
+
 
   const handleTabChange = (tabId) => {
     setActiveTabState(tabId);
     if (setCurrentSubTab) setCurrentSubTab(tabId);
   };
 
+  const [statusFilter, setStatusFilter] = useState('active'); // 'all' | 'active' | 'open' | 'partially_fulfilled' | 'fulfilled'
   const [urgencyFilter, setUrgencyFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
+  const visibleRequests = requests.filter(r => 
+    isRequestVisibleToUser ? isRequestVisibleToUser(r, currentUser) : (r.visibility !== 'group_only')
+  );
+
+  const customCategories = useMemo(() => {
+    const stdValues = new Set(STANDARD_REQUEST_CATEGORIES.map(c => c.value));
+    const customSet = new Set();
+    visibleRequests.forEach(r => {
+      if (r.category && !stdValues.has(r.category)) {
+        customSet.add(r.category);
+      }
+    });
+    return Array.from(customSet).sort();
+  }, [visibleRequests]);
+
+  const activeNeedsCount = visibleRequests.filter(r => r.status !== 'fulfilled').length;
+
   const tabs = [
-    { id: 'requests', label: 'Help Requests & Needs', icon: <HandHeart size={16} />, count: requests.filter(r => r.status !== 'fulfilled').length },
+    { id: 'requests', label: 'Help Requests & Needs', icon: <HandHeart size={16} />, count: activeNeedsCount },
     { id: 'resources', label: 'Resource Directory', icon: <Package size={16} />, count: resources.length },
     { id: 'matcher', label: 'Transparent Resource Matcher', icon: <GitMerge size={16} /> }
   ];
 
-  const filteredRequests = requests.filter(r => {
+  const filteredRequests = visibleRequests.filter(r => {
+    if (statusFilter === 'active' && r.status === 'fulfilled') return false;
+    if (statusFilter !== 'all' && statusFilter !== 'active' && r.status !== statusFilter) return false;
     if (urgencyFilter !== 'all' && r.urgency !== urgencyFilter) return false;
     if (categoryFilter !== 'all' && r.category !== categoryFilter) return false;
     return true;
   });
+
+  const requestsPagination = usePagination(filteredRequests, 6);
+  const resourcesPagination = usePagination(resources, 6);
+
+  // Reset page when any filter changes
+  useEffect(() => {
+    requestsPagination.resetPage();
+  }, [statusFilter, urgencyFilter, categoryFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -97,10 +144,27 @@ export const CollaborateView = () => {
           {/* Controls & Filter Bar */}
           <div className="d-flex align-center justify-between gap-2 flex-wrap">
             <span className="text-xs text-muted">
-              Showing {filteredRequests.length} community help requests
+              Showing {filteredRequests.length} of {requests.length} community help requests
+              {statusFilter === 'active' && ` (${activeNeedsCount} active needs)`}
             </span>
 
             <div className="d-flex gap-2 align-center flex-wrap">
+              <div className="d-flex align-center gap-1">
+                <span className="text-xs text-muted">Status:</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="form-select"
+                  style={{ width: 'auto', padding: '0.3rem 0.65rem', fontSize: '0.8rem' }}
+                >
+                  <option value="active">Active Needs Only ({activeNeedsCount})</option>
+                  <option value="all">All Requests ({requests.length})</option>
+                  <option value="open">Open</option>
+                  <option value="partially_fulfilled">In Progress</option>
+                  <option value="fulfilled">Fulfilled</option>
+                </select>
+              </div>
+
               <div className="d-flex align-center gap-1">
                 <Filter size={13} className="text-muted" />
                 <span className="text-xs text-muted">Category:</span>
@@ -111,11 +175,18 @@ export const CollaborateView = () => {
                   style={{ width: 'auto', padding: '0.3rem 0.65rem', fontSize: '0.8rem' }}
                 >
                   <option value="all">All Categories</option>
-                  <option value="labor">Volunteer Labor</option>
-                  <option value="supplies">Supplies & Material</option>
-                  <option value="transport">Transportation</option>
-                  <option value="equipment">Tools & Equipment</option>
-                  <option value="skills">Specialized Skills</option>
+                  <optgroup label="Standard Categories">
+                    {STANDARD_REQUEST_CATEGORIES.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </optgroup>
+                  {customCategories.length > 0 && (
+                    <optgroup label="Custom Categories">
+                      {customCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
@@ -137,142 +208,181 @@ export const CollaborateView = () => {
             </div>
           </div>
 
-          <div className="grid-2 gap-3">
-            {filteredRequests.map(req => {
-              const isUserJoined = req.responses?.some(resp => resp.user?.id === currentUser.id);
-              const hasQuickActions = req.quickActions && req.quickActions.length > 0;
-
-              return (
-                <div 
-                  key={req.id} 
-                  className="card p-4 card-interactive d-flex flex-column justify-between"
-                  style={{
-                    border: req.id === highlightedEntityId ? '2px solid var(--primary-500)' : '1px solid var(--border-light)'
-                  }}
+          {requestsPagination.paginatedItems.length === 0 ? (
+            <EmptyState
+              icon={<HandHeart size={36} className="text-muted" />}
+              title="No Help Requests Found"
+              description={categoryFilter !== 'all' || urgencyFilter !== 'all' ? "No requests match your current filters. Try changing or clearing your category or urgency filter." : "There are currently no active help requests in this community area."}
+              action={(
+                <button 
+                  type="button" 
+                  className="btn btn-primary btn-sm" 
+                  onClick={() => openCreateModal('request')}
                 >
-                  <div>
-                    {/* Header with Urgency and Date */}
-                    <div className="d-flex align-center justify-between mb-2">
-                      <div className="d-flex align-center gap-2">
-                        <UrgencyBadge urgency={req.urgency} />
-                        <span className="badge badge-gray text-xs text-uppercase font-semibold">
-                          {req.category}
-                        </span>
-                      </div>
-                      <span className="text-xs text-muted">{req.createdAt}</span>
-                    </div>
+                  <Plus size={14} />
+                  <span>Post a Help Request</span>
+                </button>
+              )}
+            />
+          ) : (
+            <div className="grid-2 gap-3">
+              {requestsPagination.paginatedItems.map(req => {
+                const isOwner = req.requester?.id === currentUser?.id || req.requester_id === currentUser?.id;
+                const isUserJoined = req.responses?.some(resp => resp.user?.id === currentUser?.id);
+                const hasQuickActions = req.quickActions && req.quickActions.length > 0;
 
-                    <h4 className="font-bold text-md text-primary mb-2">{req.title}</h4>
-                    <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.45' }}>{req.description}</p>
-
-                    {/* Volunteer Progress Bar */}
-                    <div className="mb-3">
-                      <div className="d-flex justify-between text-xs text-muted mb-1">
-                        <span>Volunteers: <strong>{req.peopleJoined}</strong> of {req.peopleNeeded} needed</span>
-                        <span>{req.progressPercentage}%</span>
-                      </div>
-                      <div className="progress-bar-bg">
-                        <div className="progress-bar-fill" style={{ width: `${req.progressPercentage}%` }} />
-                      </div>
-                    </div>
-
-                    {/* Required Skills & Resources */}
-                    {req.requiredSkills && req.requiredSkills.length > 0 && (
-                      <div className="d-flex gap-1 flex-wrap mb-2">
-                        <span className="text-xs text-muted">Needed Skills:</span>
-                        {req.requiredSkills.map((s, idx) => (
-                          <span key={idx} className="badge badge-gray text-xs">{s}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Inline Quick Contribution Options if Available */}
-                    {hasQuickActions && (
-                      <div className="card p-3 mb-3" style={{ background: 'var(--amber-50)', border: '1px dashed var(--amber-300)' }}>
-                        <span className="font-bold text-xs text-amber d-flex align-center gap-1 mb-2 text-uppercase">
-                          <Sparkles size={13} /> Quick Ways to Contribute:
-                        </span>
-                        <div className="d-flex flex-column gap-2">
-                          {req.quickActions.map(qa => (
-                            <div 
-                              key={qa.id}
-                              className="d-flex align-center justify-between gap-2 p-2 rounded"
-                              style={{ background: '#ffffff', border: '1px solid var(--amber-200)' }}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="d-flex align-center gap-2 mb-1">
-                                  <span className="badge badge-amber text-xs font-semibold d-inline-flex align-center gap-1" style={{ padding: '0.1rem 0.35rem' }}>
-                                    <Clock size={11} /> {qa.timeEstimate}
-                                  </span>
-                                  <span className="text-xs font-bold text-primary text-truncate">{qa.title}</span>
-                                </div>
-                                <p className="text-xs text-secondary mb-0 text-truncate" style={{ fontSize: '0.75rem' }}>
-                                  {qa.neededContribution}
-                                </p>
-                              </div>
-
-                              <button
-                                type="button"
-                                className="btn btn-primary btn-xs flex-shrink-0"
-                                onClick={() => {
-                                  respondToRequest(req.id, `Quick Task: ${qa.title}`);
-                                  alert(`Thank you! You signed up for: "${qa.title}". Coordination notice dispatched.`);
-                                }}
+                return (
+                  <div 
+                    key={req.id} 
+                    className="card p-4 card-interactive d-flex flex-column justify-between"
+                    style={{
+                      border: req.id === highlightedEntityId ? '2px solid var(--primary-500)' : '1px solid var(--border-light)'
+                    }}
+                  >
+                    <div>
+                      {/* Header with Urgency, Status and Date */}
+                      <div className="d-flex align-center justify-between mb-2">
+                        <div className="d-flex align-center gap-2 flex-wrap">
+                          <UrgencyBadge urgency={req.urgency} />
+                          <RequestStatusBadge status={req.status} />
+                          <span className="badge badge-gray text-xs text-uppercase font-semibold">
+                            {req.category}
+                          </span>
+                          {req.communityId && (() => {
+                            const comm = communities?.find(c => c.id === req.communityId);
+                            return (
+                              <span 
+                                className={`badge text-xs d-inline-flex align-center gap-1 ${req.visibility === 'group_only' ? 'badge-primary' : 'badge-gray'}`}
+                                style={req.visibility === 'group_only' ? { backgroundColor: 'var(--primary-50)', color: 'var(--primary-700)', borderColor: 'var(--primary-200)' } : {}}
+                                title={req.visibility === 'group_only' ? `Visible only to members of ${comm?.name || 'Group'}` : `Linked to ${comm?.name || 'Group'}`}
                               >
-                                <CheckCircle2 size={12} />
-                                <span>Commit</span>
-                              </button>
-                            </div>
-                          ))}
+                                {req.visibility === 'group_only' ? <Lock size={10} /> : <Globe size={10} />}
+                                {comm ? comm.name : 'Community'}
+                              </span>
+                            );
+                          })()}
                         </div>
+                        <span className="text-xs text-muted">{req.createdAt}</span>
                       </div>
-                    )}
 
-                    {/* Metadata footer */}
-                    <div className="d-flex align-center gap-3 text-xs text-muted mb-2 flex-wrap">
-                      <span className="d-flex align-center gap-1"><MapPin size={12} /> {req.location?.address}</span>
-                      <span className="d-flex align-center gap-1"><Calendar size={12} /> {req.expiresAt}</span>
-                      <span className="d-flex align-center gap-1"><User size={12} /> By {req.requester?.name}</span>
+                      <h4 
+                        className="font-bold text-md text-primary mb-2 cursor-pointer hover:text-brand" 
+                        onClick={() => viewRequestDetail(req)}
+                        title="Click to view full request details"
+                      >
+                        {req.title}
+                      </h4>
+                      <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.45' }}>{req.description}</p>
+
+                      {/* Micro-Contributions & Quick Roles */}
+                      {hasQuickActions && (
+                        <div className="card p-2.5 mb-3" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
+                          <span className="text-xs font-bold text-muted text-uppercase d-block mb-1.5">
+                            Micro-Contributions & Sub-Tasks ({req.quickActions.length})
+                          </span>
+                          <div className="d-flex flex-column gap-1.5">
+                            {req.quickActions.map(qa => (
+                              <div key={qa.id} className="d-flex align-center justify-between gap-2 p-1.5 rounded" style={{ background: '#ffffff' }}>
+                                <div>
+                                  <span className="font-semibold text-xs text-primary">{qa.title}</span>
+                                  <p className="text-xs text-muted mb-0" style={{ fontSize: '0.725rem' }}>
+                                    {qa.timeCommitment} • {qa.slotsRemaining} of {qa.slots} spots remaining
+                                  </p>
+                                </div>
+
+                                {!isOwner && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-xs flex-shrink-0"
+                                    onClick={() => {
+                                      respondToRequest(req.id, `Quick Task: ${qa.title}`);
+                                      showToast(`Thank you! You signed up for: "${qa.title}". Coordination notice dispatched.`, 'success');
+                                    }}
+                                  >
+                                    <CheckCircle2 size={12} />
+                                    <span>Commit</span>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Metadata footer */}
+                      <div className="d-flex align-center gap-3 text-xs text-muted mb-2 flex-wrap">
+                        <span className="d-flex align-center gap-1"><MapPin size={12} /> {req.location?.address}</span>
+                        <span className="d-flex align-center gap-1"><Calendar size={12} /> {req.expiresAt}</span>
+                        <span className="d-flex align-center gap-1"><User size={12} /> By {req.requester?.name}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="d-flex gap-2 pt-3 border-top">
+                      {isOwner ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary flex-1 d-flex align-center justify-center gap-1.5"
+                          onClick={() => viewRequestDetail(req)}
+                          title="Manage your help request"
+                        >
+                          <Users size={14} className="text-brand" />
+                          <span>Your Request (Manage)</span>
+                        </button>
+                      ) : (
+                        <button
+                          className={`btn btn-sm flex-1 ${isUserJoined ? 'btn-secondary' : 'btn-primary'}`}
+                          onClick={() => {
+                            if (!isUserJoined) {
+                              respondToRequest(req.id, 'General Volunteer');
+                              showToast(`You volunteered for: "${req.title}". Thank you!`, 'success');
+                            } else {
+                              showToast('You are already participating in this coordination task.', 'info');
+                            }
+                          }}
+                        >
+                          {isUserJoined ? (
+                            <>
+                              <Check size={14} className="text-brand" />
+                              <span>You are Participating</span>
+                            </>
+                          ) : (
+                            <>
+                              <HandHeart size={14} />
+                              <span>Volunteer / Respond</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => viewRequestDetail(req)}
+                      >
+                        Request Details
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  {/* Action Buttons */}
-                  <div className="d-flex gap-2 pt-3 border-top">
-                    <button
-                      className={`btn btn-sm flex-1 ${isUserJoined ? 'btn-secondary' : 'btn-primary'}`}
-                      onClick={() => {
-                        if (!isUserJoined) {
-                          respondToRequest(req.id, 'General Volunteer');
-                          alert(`You volunteered for: "${req.title}". Thank you!`);
-                        } else {
-                          alert('You are already participating in this coordination task.');
-                        }
-                      }}
-                    >
-                      {isUserJoined ? (
-                        <>
-                          <Check size={14} className="text-brand" />
-                          <span>You are Participating</span>
-                        </>
-                      ) : (
-                        <>
-                          <HandHeart size={14} />
-                          <span>Volunteer / Respond</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => inspectEntity(req, 'request')}
-                    >
-                      Details
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Requests Pagination */}
+          {requestsPagination.totalPages > 1 && (
+            <Pagination
+              currentPage={requestsPagination.currentPage}
+              totalPages={requestsPagination.totalPages}
+              totalItems={requestsPagination.totalItems}
+              startIndex={requestsPagination.startIndex}
+              endIndex={requestsPagination.endIndex}
+              onPageChange={requestsPagination.setPage}
+              pageSize={requestsPagination.pageSize}
+              onPageSizeChange={requestsPagination.setPageSize}
+              pageSizeOptions={[4, 6, 12, 24]}
+              itemName="requests"
+            />
+          )}
         </div>
       )}
 
@@ -281,62 +391,130 @@ export const CollaborateView = () => {
         <div className="d-flex flex-column gap-3">
           <div className="d-flex align-center justify-between gap-2 flex-wrap">
             <span className="text-xs text-muted">
-              Showing {resources.length} community resources & offers
+              Showing <b>{resourcesPagination.totalItems > 0 ? `${resourcesPagination.startIndex}–${resourcesPagination.endIndex}` : '0'}</b> of <b>{resourcesPagination.totalItems}</b> community resources & offers
             </span>
           </div>
 
-          <div className="grid-2 gap-3">
-            {resources.map(res => (
-              <div key={res.id} className="card p-4 card-interactive d-flex flex-column justify-between">
-                <div>
-                  <div className="d-flex align-center justify-between mb-2">
-                    <ResourceTypeBadge type={res.contributionType} />
-                    <span className="badge badge-primary text-xs text-uppercase">{res.availability}</span>
-                  </div>
+          {resourcesPagination.paginatedItems.length === 0 ? (
+            <EmptyState
+              icon={<Package size={36} className="text-muted" />}
+              title="No Resources Listed"
+              description="There are currently no community tools, supplies, or mutual aid offers listed in this area."
+              action={(
+                <button 
+                  type="button" 
+                  className="btn btn-primary btn-sm" 
+                  onClick={() => openCreateModal('resource')}
+                >
+                  <Plus size={14} />
+                  <span>Offer a Resource</span>
+                </button>
+              )}
+            />
+          ) : (
+            <div className="grid-2 gap-3">
+              {resourcesPagination.paginatedItems.map(res => {
+                const isProvider = res.provider?.id === currentUser?.id || res.provider_id === currentUser?.id;
 
-                  <h4 className="font-bold text-md text-primary mb-2">{res.title}</h4>
-                  <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.45' }}>{res.description}</p>
+                return (
+                  <div key={res.id} className="card p-4 card-interactive d-flex flex-column justify-between">
+                    <div>
+                      <div className="d-flex align-center justify-between mb-2">
+                        <ResourceTypeBadge type={res.contributionType} />
+                        {res.loanStatus === 'on_loan' ? (
+                          <span className="badge badge-amber text-xs font-semibold">
+                            On Loan (Due {res.activeLoan?.dueDate || 'Soon'})
+                          </span>
+                        ) : res.loanStatus === 'pending_approval' ? (
+                          <span className="badge badge-purple text-xs font-semibold">
+                            Pending Request
+                          </span>
+                        ) : (
+                          <span className="badge badge-emerald text-xs font-semibold">
+                            Available
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="card p-2 mb-3 text-xs" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-                    <div className="d-flex justify-between mb-1">
-                      <span className="text-muted">Quantity / Capacity:</span>
-                      <span className="font-semibold text-primary">{res.quantity}</span>
+                      <h4 
+                        className="font-bold text-md text-primary mb-2 cursor-pointer hover:text-brand"
+                        onClick={() => viewResourceDetail(res)}
+                        title="Click to view full resource details"
+                      >
+                        {res.title}
+                      </h4>
+                      <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.45' }}>{res.description}</p>
+
+                      <div className="card p-2 mb-3 text-xs" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
+                        <div className="d-flex justify-between mb-1">
+                          <span className="text-muted">Quantity / Capacity:</span>
+                          <span className="font-semibold text-primary">{res.quantity}</span>
+                        </div>
+                        <div className="d-flex justify-between mb-1">
+                          <span className="text-muted">Condition:</span>
+                          <span className="font-semibold text-primary">{res.condition}</span>
+                        </div>
+                        <div className="d-flex justify-between">
+                          <span className="text-muted">Terms / Access:</span>
+                          <span className="text-primary">{res.conditionsTerms}</span>
+                        </div>
+                      </div>
+
+                      <div className="d-flex align-center gap-3 text-xs text-muted mb-2">
+                        <span className="d-flex align-center gap-1"><MapPin size={12} /> {res.location?.address}</span>
+                        <span className="d-flex align-center gap-1"><User size={12} /> Provider: {res.provider?.name}</span>
+                      </div>
                     </div>
-                    <div className="d-flex justify-between mb-1">
-                      <span className="text-muted">Condition:</span>
-                      <span className="font-semibold text-primary">{res.condition}</span>
-                    </div>
-                    <div className="d-flex justify-between">
-                      <span className="text-muted">Terms / Access:</span>
-                      <span className="text-primary">{res.conditionsTerms}</span>
+
+                    <div className="d-flex gap-2 pt-3 border-top">
+                      {isProvider ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm flex-1 d-flex align-center justify-center gap-1.5"
+                          onClick={() => viewResourceDetail(res)}
+                          title="Manage your offered resource"
+                        >
+                          <Package size={14} className="text-brand" />
+                          <span>Your Resource (Manage)</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm flex-1"
+                          onClick={() => openRequestResourceModal(res)}
+                        >
+                          <span>Request Resource Use</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => viewResourceDetail(res)}
+                      >
+                        Resource Details
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  <div className="d-flex align-center gap-3 text-xs text-muted mb-2">
-                    <span className="d-flex align-center gap-1"><MapPin size={12} /> {res.location?.address}</span>
-                    <span className="d-flex align-center gap-1"><User size={12} /> Provider: {res.provider?.name}</span>
-                  </div>
-                </div>
-
-                <div className="d-flex gap-2 pt-3 border-top">
-                  <button
-                    className="btn btn-primary btn-sm flex-1"
-                    onClick={() => {
-                      alert(`Coordination inquiry dispatched to ${res.provider?.name} for "${res.title}".`);
-                    }}
-                  >
-                    <span>Request Resource Use</span>
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => inspectEntity(res, 'resource')}
-                  >
-                    Details
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* Resources Pagination */}
+          {resourcesPagination.totalPages > 1 && (
+            <Pagination
+              currentPage={resourcesPagination.currentPage}
+              totalPages={resourcesPagination.totalPages}
+              totalItems={resourcesPagination.totalItems}
+              startIndex={resourcesPagination.startIndex}
+              endIndex={resourcesPagination.endIndex}
+              onPageChange={resourcesPagination.setPage}
+              pageSize={resourcesPagination.pageSize}
+              onPageSizeChange={resourcesPagination.setPageSize}
+              pageSizeOptions={[4, 6, 12, 24]}
+              itemName="resources"
+            />
+          )}
         </div>
       )}
 
@@ -356,9 +534,15 @@ export const CollaborateView = () => {
           </div>
 
           <div className="d-flex flex-column gap-4">
-            {matchingFactors.map((match) => {
-              const req = requests.find(r => r.id === match.requestId);
-              const res = resources.find(r => r.id === match.resourceId);
+            {matchingFactors
+              .filter(match => {
+                const req = requests.find(r => r.id === match.requestId);
+                if (!req) return true;
+                return isRequestVisibleToUser ? isRequestVisibleToUser(req, currentUser) : (req.visibility !== 'group_only');
+              })
+              .map((match) => {
+                const req = requests.find(r => r.id === match.requestId);
+                const res = resources.find(r => r.id === match.resourceId);
 
               return (
                 <div key={match.id} className="card p-4" style={{ background: '#ffffff', border: '1px solid var(--border-default)' }}>
@@ -422,7 +606,7 @@ export const CollaborateView = () => {
                       onClick={() => {
                         if (match.resourceId && match.requestId) {
                           matchResourceToRequest(match.resourceId, match.requestId);
-                          alert(`Match coordination opened between "${match.resourceTitle}" and "${match.requestTitle}".`);
+                          showToast(`Match coordination opened between "${match.resourceTitle}" and "${match.requestTitle}".`, 'success');
                         }
                       }}
                     >

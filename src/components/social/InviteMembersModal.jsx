@@ -22,10 +22,16 @@ export const InviteMembersModal = () => {
 
   if (!inviteModalCommunity) return null;
 
-  const existingMemberIds = inviteModalCommunity.memberIds || [];
+  const existingMemberIds = new Set(inviteModalCommunity.memberIds || []);
   
-  // Available neighbors not yet in this group
-  const nonMembers = mockUsers.filter(u => u.id !== currentUser.id && !existingMemberIds.includes(u.id));
+  // Available neighbors not yet in this group (deduplicated by ID)
+  const userMap = new Map();
+  (mockUsers || []).forEach(u => {
+    if (u?.id && u.id !== currentUser?.id && !existingMemberIds.has(u.id)) {
+      userMap.set(u.id, u);
+    }
+  });
+  const nonMembers = Array.from(userMap.values());
 
   const filteredNeighbors = nonMembers.filter(u => {
     if (!search.trim()) return true;
@@ -62,6 +68,7 @@ export const InviteMembersModal = () => {
       title={`Invite Neighbors to ${inviteModalCommunity.name}`}
       subtitle="Invite trusted local coordinators, volunteers, and neighbors to join this circle."
       maxWidth="580px"
+      zIndex={1100}
     >
       <form onSubmit={handleSendInvites} className="d-flex flex-column gap-3">
         {/* Search Bar */}

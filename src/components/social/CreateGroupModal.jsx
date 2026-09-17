@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Modal } from '../common/Modal';
+import { LocationPicker } from '../common/LocationPicker';
 import { useCareMesh } from '../../context/useCareMesh';
 import { 
   Globe, 
   Lock, 
-  MapPin, 
   ShieldCheck, 
-  Plus 
+  Plus,
+  Upload 
 } from 'lucide-react';
 
 export const CreateGroupModal = () => {
@@ -15,8 +16,14 @@ export const CreateGroupModal = () => {
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
   const [category, setCategory] = useState('environmental');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
   const [privacy, setPrivacy] = useState('public'); // 'public' | 'private'
-  const [location, setLocation] = useState('Maplewood District');
+  const [location, setLocation] = useState({
+    address: 'Maplewood District',
+    lat: 37.7749,
+    lng: -122.4194
+  });
   const [description, setDescription] = useState('');
   const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80');
   const [avatarUrl] = useState('https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=200&auto=format&fit=crop&q=80');
@@ -35,12 +42,16 @@ export const CreateGroupModal = () => {
       return;
     }
 
+    const finalCategory = isCustomCategory ? (customCategory.trim() || 'General') : category;
+
     createCommunity({
       name: name.trim(),
       handle: handle.trim() || `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-      category,
+      category: finalCategory,
       privacy,
-      location: location.trim(),
+      location: location.address ? location.address.trim() : 'Maplewood District',
+      lat: location.lat,
+      lng: location.lng,
       description: description.trim(),
       banner: bannerUrl,
       avatar: avatarUrl
@@ -50,6 +61,13 @@ export const CreateGroupModal = () => {
     setName('');
     setDescription('');
     setHandle('');
+    setIsCustomCategory(false);
+    setCustomCategory('');
+    setLocation({
+      address: 'Maplewood District',
+      lat: 37.7749,
+      lng: -122.4194
+    });
   };
 
   return (
@@ -93,10 +111,24 @@ export const CreateGroupModal = () => {
         {/* Category & Privacy Mode */}
         <div className="grid-2">
           <div>
-            <label className="form-label font-bold text-sm text-primary">Category Focus</label>
+            <div className="d-flex align-center justify-between mb-1">
+              <label className="form-label font-bold text-sm text-primary mb-0">Category Focus</label>
+              {isCustomCategory && (
+                <span className="badge badge-primary text-xs" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
+                  Custom
+                </span>
+              )}
+            </div>
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={isCustomCategory ? '__custom__' : category}
+              onChange={(e) => {
+                if (e.target.value === '__custom__') {
+                  setIsCustomCategory(true);
+                } else {
+                  setIsCustomCategory(false);
+                  setCategory(e.target.value);
+                }
+              }}
               className="form-select"
             >
               <option value="environmental">🌱 Environmental & Flood Defense</option>
@@ -104,7 +136,34 @@ export const CreateGroupModal = () => {
               <option value="food_security">🍎 Food Sharing & Community Pantries</option>
               <option value="safety">🚸 Safe Streets & Pedestrian Mobility</option>
               <option value="tool_lending">🔧 Tool Lending & Repair Network</option>
+              <option value="__custom__">✨ + Custom Category...</option>
             </select>
+
+            {isCustomCategory && (
+              <div className="mt-2 d-flex align-center gap-1.5">
+                <input
+                  type="text"
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  placeholder="e.g. Solar Cooperative, Pet Rescue..."
+                  className="form-input text-xs"
+                  required
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs text-muted"
+                  onClick={() => {
+                    setIsCustomCategory(false);
+                    setCustomCategory('');
+                    setCategory('environmental');
+                  }}
+                  title="Cancel"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
 
           <div>
@@ -130,21 +189,13 @@ export const CreateGroupModal = () => {
           </div>
         </div>
 
-        {/* Geographic Scope */}
-        <div>
-          <label className="form-label font-bold text-sm text-primary">Geographic Coverage Area</label>
-          <div className="d-flex align-center" style={{ position: 'relative' }}>
-            <MapPin size={15} className="text-muted" style={{ position: 'absolute', left: '10px' }} />
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. North Maplewood & River Basin"
-              className="form-input"
-              style={{ paddingLeft: '32px' }}
-            />
-          </div>
-        </div>
+        {/* Geographic Scope & Coordinates */}
+        <LocationPicker
+          value={location}
+          onChange={setLocation}
+          label="Geographic Coverage Area & Coordinates"
+          placeholder="e.g. North Maplewood & River Basin"
+        />
 
         {/* Description */}
         <div>
@@ -182,6 +233,30 @@ export const CreateGroupModal = () => {
                 </span>
               </div>
             ))}
+          </div>
+
+          <div className="d-flex align-center justify-between mt-2 pt-1">
+            <span className="text-xs text-muted">Or upload your own custom photo:</span>
+            <label className="btn btn-secondary btn-xs d-flex align-center gap-1 cursor-pointer mb-0">
+              <Upload size={12} />
+              <span>Upload Custom Banner</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    if (typeof ev.target?.result === 'string') {
+                      setBannerUrl(ev.target.result);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                style={{ display: 'none' }}
+              />
+            </label>
           </div>
         </div>
 

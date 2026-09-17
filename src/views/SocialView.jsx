@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { useCareMesh } from '../context/useCareMesh';
 import { Tabs } from '../components/common/Tabs';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
+import { EmptyState } from '../components/common/EmptyState';
 import { GroupCoverHeader } from '../components/social/GroupCoverHeader';
 import { GroupPostComposer } from '../components/social/GroupPostComposer';
 import { GroupPostCard } from '../components/social/GroupPostCard';
 import { GroupAboutTab } from '../components/social/GroupAboutTab';
-import { GroupEventsTab } from '../components/social/GroupEventsTab';
+import { GroupRequestsTab } from '../components/social/GroupRequestsTab';
 import { GroupMediaTab } from '../components/social/GroupMediaTab';
 import { GroupMembersTab } from '../components/social/GroupMembersTab';
+import { GroupModerationTab } from '../components/social/GroupModerationTab';
 import { 
   Users, 
   MessageSquare, 
@@ -22,6 +27,7 @@ import {
 } from 'lucide-react';
 
 export const SocialView = () => {
+  const { communityId } = useParams();
   const {
     communities,
     posts,
@@ -37,15 +43,30 @@ export const SocialView = () => {
     observations,
     requests,
     viewPlanDetail,
-    navigateTo
+    navigateTo,
+    currentSubTab,
+    selectedCommunityId,
+    setSelectedCommunityId,
+    viewUserProfile
   } = useCareMesh();
 
+  // If navigated via /social/:communityId, select it immediately
+  useEffect(() => {
+    if (communityId && communities.some(c => c.id === communityId)) {
+      setSelectedCommunityId(communityId);
+    }
+  }, [communityId, communities, setSelectedCommunityId]);
+
   // Top-level tabs
-  const [activeMainTab, setActiveMainTab] = useState('communities'); // 'communities' | 'feed' | 'messages'
-  
-  // Selected Group and its internal Facebook-style tab
-  const [selectedCommunityId, setSelectedCommunityId] = useState('com_01');
-  const [groupSubTab, setGroupSubTab] = useState('discussion'); // 'discussion' | 'about' | 'events' | 'media' | 'members'
+  const [localActiveMainTab, setLocalActiveMainTab] = useState('communities'); // 'communities' | 'feed' | 'messages'
+  const activeMainTab = (currentSubTab && ['communities', 'feed', 'messages'].includes(currentSubTab))
+    ? currentSubTab
+    : localActiveMainTab;
+  const setActiveMainTab = (tab) => {
+    setLocalActiveMainTab(tab);
+    if (navigateTo) navigateTo('social', tab);
+  };
+  const [groupSubTab, setGroupSubTab] = useState('discussion'); // 'discussion' | 'about' | 'requests' | 'media' | 'members'
   
   // Left rail group search & category filter
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
@@ -75,15 +96,20 @@ export const SocialView = () => {
     if (groupCategoryFilter !== 'all' && c.category !== groupCategoryFilter) return false;
     if (groupSearchQuery.trim()) {
       const q = groupSearchQuery.toLowerCase();
-      return c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || c.location.toLowerCase().includes(q);
+      const locStr = typeof c.location === 'object' ? (c.location?.address || '') : (c.location || '');
+      return c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || locStr.toLowerCase().includes(q);
     }
     return true;
   });
+
 
   // Group-specific posts (sorted: pinned first, then newest)
   const groupPosts = posts
     .filter(p => p.communityId === selectedCommunity?.id || (!p.communityId && selectedCommunity?.id === 'com_01'))
     .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+
+  const groupPostsPagination = usePagination(groupPosts, 5);
+  const feedPostsPagination = usePagination(posts, 6);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0];
 
@@ -328,13 +354,30 @@ export const SocialView = () => {
                     {/* Posts Feed */}
                     <div className="d-flex flex-column min-w-0 w-100" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
                       {groupPosts.length > 0 ? (
-                        groupPosts.map(post => (
-                          <GroupPostCard
-                            key={post.id}
-                            post={post}
-                            community={selectedCommunity}
-                          />
-                        ))
+                        <>
+                          {groupPostsPagination.paginatedItems.map(post => (
+                            <GroupPostCard
+                              key={post.id}
+                              post={post}
+                              community={selectedCommunity}
+                            />
+                          ))}
+
+                          {groupPostsPagination.totalPages > 1 && (
+                            <Pagination
+                              currentPage={groupPostsPagination.currentPage}
+                              totalPages={groupPostsPagination.totalPages}
+                              totalItems={groupPostsPagination.totalItems}
+                              startIndex={groupPostsPagination.startIndex}
+                              endIndex={groupPostsPagination.endIndex}
+                              onPageChange={groupPostsPagination.setPage}
+                              pageSize={groupPostsPagination.pageSize}
+                              onPageSizeChange={groupPostsPagination.setPageSize}
+                              pageSizeOptions={[3, 5, 10, 20]}
+                              itemName="posts"
+                            />
+                          )}
+                        </>
                       ) : (
                         <div className="card p-5 text-center text-muted">
                           <MessageSquare size={36} className="mx-auto mb-2 opacity-50" />
@@ -353,10 +396,10 @@ export const SocialView = () => {
                   </div>
                 )}
 
-                {/* 4. TAB: EVENTS & WORKDAYS */}
-                {groupSubTab === 'events' && (
+                {/* 4. TAB: HELP REQUESTS & MUTUAL AID */}
+                {groupSubTab === 'requests' && (
                   <div style={{ maxWidth: '820px', margin: '0 auto', width: '100%' }}>
-                    <GroupEventsTab community={selectedCommunity} />
+                    <GroupRequestsTab community={selectedCommunity} />
                   </div>
                 )}
 
@@ -371,6 +414,13 @@ export const SocialView = () => {
                 {groupSubTab === 'members' && (
                   <div style={{ maxWidth: '820px', margin: '0 auto', width: '100%' }}>
                     <GroupMembersTab community={selectedCommunity} />
+                  </div>
+                )}
+
+                {/* 7. TAB: COMMUNITY MODERATION (Admins & Elected Moderators) */}
+                {groupSubTab === 'moderation' && (
+                  <div style={{ maxWidth: '820px', margin: '0 auto', width: '100%' }}>
+                    <GroupModerationTab community={selectedCommunity} />
                   </div>
                 )}
               </>
@@ -438,18 +488,37 @@ export const SocialView = () => {
 
           {/* Posts List */}
           <div className="d-flex flex-column gap-3">
-            {posts.map(post => (
+            {feedPostsPagination.paginatedItems.length === 0 ? (
+              <EmptyState
+                icon={<Share2 size={36} className="text-muted" />}
+                title="No Neighborhood Feed Updates Yet"
+                description="Be the first neighbor to post a public announcement, situational update, or mutual aid request to the feed."
+              />
+            ) : (
+              feedPostsPagination.paginatedItems.map(post => (
               <div key={post.id} className="card p-4">
                 {/* Author Header */}
                 <div className="d-flex align-center justify-between mb-3">
-                  <div className="d-flex align-center gap-2">
+                  <div 
+                    className="d-flex align-center gap-2 user-profile-trigger"
+                    onClick={() => viewUserProfile && viewUserProfile(post.author)}
+                    title={`View ${post.author?.name || 'Author'}'s profile & contributions`}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        viewUserProfile && viewUserProfile(post.author);
+                      }
+                    }}
+                  >
                     <img
                       src={post.author?.avatar}
                       alt={post.author?.name}
                       style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
                     />
                     <div>
-                      <h5 className="font-bold text-sm text-primary">{post.author?.name}</h5>
+                      <h5 className="font-bold text-sm text-primary user-profile-name mb-0">{post.author?.name}</h5>
                       <span className="text-xs text-muted">{post.author?.handle || '@neighbor'} • {post.timestamp}</span>
                     </div>
                   </div>
@@ -496,7 +565,23 @@ export const SocialView = () => {
                   <span>{post.comments?.length || 0} Coordination Replies</span>
                 </div>
               </div>
-            ))}
+            )))}
+
+            {/* Global Feed Pagination */}
+            {feedPostsPagination.totalPages > 1 && (
+              <Pagination
+                currentPage={feedPostsPagination.currentPage}
+                totalPages={feedPostsPagination.totalPages}
+                totalItems={feedPostsPagination.totalItems}
+                startIndex={feedPostsPagination.startIndex}
+                endIndex={feedPostsPagination.endIndex}
+                onPageChange={feedPostsPagination.setPage}
+                pageSize={feedPostsPagination.pageSize}
+                onPageSizeChange={feedPostsPagination.setPageSize}
+                pageSizeOptions={[4, 6, 12, 24]}
+                itemName="feed posts"
+              />
+            )}
           </div>
         </div>
       )}
@@ -570,14 +655,28 @@ export const SocialView = () => {
                       <ArrowLeft size={18} />
                     </button>
 
-                    <img
-                      src={activeConversation.participant?.avatar}
-                      alt=""
-                      style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                    />
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-xs text-primary text-truncate">{activeConversation.title}</h4>
-                      <span className="text-xs text-muted text-truncate d-block">{activeConversation.subtitle}</span>
+                    <div 
+                      className="d-flex align-center gap-2 min-w-0 user-profile-trigger"
+                      onClick={() => activeConversation.participant && viewUserProfile && viewUserProfile(activeConversation.participant)}
+                      title={`View ${activeConversation.title}'s profile & contributions`}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          activeConversation.participant && viewUserProfile && viewUserProfile(activeConversation.participant);
+                        }
+                      }}
+                    >
+                      <img
+                        src={activeConversation.participant?.avatar}
+                        alt=""
+                        style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                      />
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-xs text-primary text-truncate user-profile-name">{activeConversation.title}</h4>
+                        <span className="text-xs text-muted text-truncate d-block">{activeConversation.subtitle}</span>
+                      </div>
                     </div>
                   </div>
                   <span className="badge badge-primary text-xs flex-shrink-0">Direct Channel</span>
@@ -586,7 +685,7 @@ export const SocialView = () => {
                 {/* Messages Body */}
                 <div className="p-3 p-md-4 d-flex flex-column gap-3 flex-1" style={{ overflowY: 'auto' }}>
                   {activeConversation.messages.map((m) => {
-                    const isMe = m.senderId === currentUser.id;
+                    const isMe = m.senderId === currentUser?.id;
                     return (
                       <div
                         key={m.id}

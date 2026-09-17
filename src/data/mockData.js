@@ -1,7 +1,7 @@
 /**
  * CareMesh Comprehensive Mock Data
  * Demonstrating interconnected real-world situations:
- * People + Places + Observations + Claims + Evidence + Disputes + Requests + Quick Actions + Resources + Events + Plans + Communities
+ * People + Places + Observations + Claims + Evidence + Disputes + Requests + Quick Actions + Resources + Plans + Communities
  */
 
 export const currentUser = {
@@ -161,6 +161,22 @@ export const mockEvidence = [
       { step: 'Spectrometry analysis completed on site', time: '7:30 AM' },
       { step: 'Report cleared and published', time: '8:00 AM' }
     ]
+  },
+  {
+    id: 'ev_01_sub',
+    title: 'Willow Creek Upstream Hydrology Telemetry Corroboration',
+    type: 'sensor',
+    author: 'Dave Martinez',
+    authorId: 'usr_dave',
+    timestamp: '1 hour ago',
+    url: '',
+    description: 'Acoustic Doppler Velocity meter #WC-04 corroborates 42-inch sediment bed deposition and 62% volumetric discharge throttling.',
+    provenanceChain: [
+      { step: 'Hydrology sensor WC-04 telemetry synchronized', time: '11:15 AM' },
+      { step: 'Verified by Dave Martinez', time: '11:30 AM' }
+    ],
+    parentEvidenceId: 'ev_01',
+    parentObservationId: 'obs_01'
   }
 ];
 
@@ -193,7 +209,37 @@ export const mockDisputes = [
     explanation: 'The silt blockage is severe, but the claim that 14 homes are in immediate danger does not account for the newly installed south berm constructed last month. The realistic immediate risk is to the 6 lowest elevation properties.',
     counterEvidenceIds: [],
     relatedObservationId: 'obs_01_sup',
-    status: 'active_challenge'
+    status: 'active_challenge',
+    responses: [
+      {
+        id: 'dresp_01',
+        disputeId: 'disp_02',
+        type: 'support',
+        author: {
+          id: 'usr_elena',
+          name: 'Elena Rostova',
+          role: 'Hydrology Engineer'
+        },
+        timestamp: '45 mins ago',
+        reason: 'Additional sensor/field data confirms this challenge',
+        explanation: 'Confirmed with municipal GIS survey #GIS-302. The south berm elevation is 4.2m, which successfully shields parcels #101 through #108 from flood crests below 4.0m.',
+        evidenceIds: ['ev_01']
+      },
+      {
+        id: 'dresp_02',
+        disputeId: 'disp_02',
+        type: 'challenge',
+        author: {
+          id: 'usr_marcus',
+          name: 'Marcus Vance',
+          role: 'Emergency Coordinator'
+        },
+        timestamp: '25 mins ago',
+        reason: 'The situation has evolved or been resolved',
+        explanation: 'Counter-rebuttal: National weather radar indicates severe storm surge expected tonight will reach 4.6m, which will overtop the south berm. The original 14-home evacuation recommendation must stand.',
+        evidenceIds: []
+      }
+    ]
   }
 ];
 
@@ -208,6 +254,50 @@ export const mockClaims = [
     disputeIds: ['disp_02'],
     assessmentNotes: 'Supported by physical water gauge depth (42" silt) and turbidity analysis (280 NTU). Active challenge logged regarding exact number of at-risk homes.',
     lastUpdated: '1 hour ago'
+  },
+  {
+    id: 'clm_01_sup',
+    observationId: 'obs_01_sup',
+    assertionText: 'Active clay bank slumping and fallen timber 150m upstream is continuously depositing silt into the culvert channel.',
+    status: 'supported',
+    supportingEvidenceIds: ['ev_01'],
+    contradictingEvidenceIds: [],
+    disputeIds: [],
+    assessmentNotes: 'Corroborating field measurement of stream bank erosion rate and sediment transport.',
+    lastUpdated: '1.5 hours ago'
+  },
+  {
+    id: 'clm_01_contra_sub',
+    observationId: 'obs_01_contra_sub',
+    assertionText: 'Staff gauge mounting bracket slipped 5.5 inches upward on retaining wall pier, overstating manual silt depth measurement.',
+    status: 'reported',
+    supportingEvidenceIds: [],
+    contradictingEvidenceIds: [],
+    disputeIds: [],
+    assessmentNotes: 'Gauge zero-point elevation dispute referencing evidence ev_01.',
+    lastUpdated: '45 mins ago'
+  },
+  {
+    id: 'clm_01_contra',
+    observationId: 'obs_01_contra',
+    assertionText: 'Drainage invert was mechanically cleared with a relief trench by city maintenance.',
+    status: 'disputed',
+    supportingEvidenceIds: ['ev_06'],
+    contradictingEvidenceIds: [],
+    disputeIds: [],
+    assessmentNotes: 'Trench relief logged but subsequently disputed due to rapid clay re-slumping.',
+    lastUpdated: '1 hour ago'
+  },
+  {
+    id: 'clm_01_contra_contra',
+    observationId: 'obs_01_contra_contra',
+    assertionText: 'Secondary silt slump refilled the excavated relief trench within 2 hours.',
+    status: 'reported',
+    supportingEvidenceIds: [],
+    contradictingEvidenceIds: [],
+    disputeIds: [],
+    assessmentNotes: 'Sub-contradiction counter-challenging the maintenance clearance report.',
+    lastUpdated: '25 mins ago'
   },
   {
     id: 'clm_02',
@@ -262,10 +352,10 @@ export const mockObservations = [
     category: 'environmental',
     description: 'Water backing up behind the primary storm grate. Upstream runoff from the steep slope has deposited over 3 feet of gravel and silt. If heavy rains continue, water will crest Elm Street.',
     location: {
-      address: 'Elm Street Creek Bridge, Maplewood',
+      address: 'Elm Street Creek Culvert Inlet, Maplewood',
       neighborhood: 'Maplewood North',
-      lat: 37.7815,
-      lng: -122.4250
+      lat: 37.7818,
+      lng: -122.4255
     },
     author: mockUsers[4], // Priya
     timestamp: '2 hours ago',
@@ -276,10 +366,9 @@ export const mockObservations = [
     claimIds: ['clm_01'],
     evidenceIds: ['ev_01', 'ev_02'],
     supportingObservationIds: ['obs_01_sup'],
-    contradictoryObservationIds: [],
+    contradictoryObservationIds: ['obs_01_contra_sub', 'obs_01_contra'],
     relatedRequestIds: ['req_01', 'req_02'],
     relatedResourceIds: ['res_01', 'res_04'],
-    relatedEventIds: ['evt_01'],
     relatedPlanIds: ['plan_01']
   },
   {
@@ -301,14 +390,96 @@ export const mockObservations = [
     status: 'action_underway',
     isSupporting: true,
     supportingTargetId: 'obs_01',
-    claimIds: ['clm_01'],
+    claimIds: ['clm_01_sup'],
+    parentClaimIds: ['clm_01'],
     evidenceIds: ['ev_01'],
     supportingObservationIds: [],
     contradictoryObservationIds: [],
     relatedRequestIds: ['req_01'],
     relatedResourceIds: ['res_01'],
-    relatedEventIds: ['evt_01'],
     relatedPlanIds: ['plan_01']
+  },
+  {
+    id: 'obs_01_contra_sub',
+    title: 'Sub-Contradiction: Staff Gauge Zero-Point Shifted 5.5 Inches Upward',
+    category: 'infrastructure',
+    description: 'Manual inspection reveals staff gauge mounting bracket slipped 5.5 inches upward on the retaining wall pier during the winter freeze, causing the 42" silt reading to overstate actual bed siltation.',
+    location: {
+      address: 'Upstream Staff Gauge Pier #WC-04, Maplewood',
+      neighborhood: 'Maplewood North',
+      lat: 37.7821,
+      lng: -122.4246
+    },
+    author: mockUsers[3], // Marcus Thorne
+    timestamp: '45 mins ago',
+    mediaUrls: [],
+    status: 'resolved_disputed',
+    isContradiction: true,
+    contradictionTargetId: 'obs_01',
+    referencedEvidenceId: 'ev_01',
+    referencedEvidenceTitle: 'Culvert Water Level & Silt Depth Measurement',
+    claimIds: ['clm_01_contra_sub'],
+    parentClaimIds: ['clm_01'],
+    evidenceIds: [],
+    supportingObservationIds: [],
+    contradictoryObservationIds: [],
+    relatedRequestIds: [],
+    relatedResourceIds: [],
+    relatedPlanIds: []
+  },
+  {
+    id: 'obs_01_contra',
+    title: 'Contradiction: Relief Trench Cleared by City Maintenance at 09:30',
+    category: 'infrastructure',
+    description: 'City public works backhoe excavated a 2-foot relief channel bypass around the culvert headwall, mitigating immediate overtopping risk.',
+    location: {
+      address: 'West Overflow Relief Channel, Maplewood',
+      neighborhood: 'Maplewood North',
+      lat: 37.7825,
+      lng: -122.4268
+    },
+    author: mockUsers[0], // Sarah Chen
+    timestamp: '1 hour ago',
+    mediaUrls: [
+      'https://images.unsplash.com/photo-1541888946425-d0fbb18f15f8?w=600&auto=format&fit=crop&q=80'
+    ],
+    status: 'under_review',
+    isContradiction: true,
+    contradictionTargetId: 'obs_01',
+    claimIds: ['clm_01_contra'],
+    parentClaimIds: ['clm_01'],
+    evidenceIds: ['ev_06'],
+    supportingObservationIds: [],
+    contradictoryObservationIds: ['obs_01_contra_contra'],
+    relatedRequestIds: [],
+    relatedResourceIds: [],
+    relatedPlanIds: []
+  },
+  {
+    id: 'obs_01_contra_contra',
+    title: 'Sub-Contradiction: Bank Slump Refilled Excavated Trench by 11:15',
+    category: 'environmental',
+    description: 'Rapid clay sloughing downstream from the excavation filled the temporary relief trench within 105 minutes. Water level has returned to +38 inches gauge depth.',
+    location: {
+      address: 'South Creek Embankment Slump, Maplewood',
+      neighborhood: 'Maplewood North',
+      lat: 37.7812,
+      lng: -122.4257
+    },
+    author: mockUsers[4], // Priya Patel
+    timestamp: '25 mins ago',
+    mediaUrls: [],
+    status: 'action_underway',
+    isContradiction: true,
+    contradictionTargetId: 'obs_01_contra',
+    claimIds: ['clm_01_contra_contra'],
+    parentClaimIds: ['clm_01_contra'],
+    evidenceIds: [],
+    supportingObservationIds: [],
+    contradictoryObservationIds: [],
+    relatedRequestIds: [],
+    relatedResourceIds: [],
+    relatedPlanIds: []
   },
   {
     id: 'obs_02',
@@ -316,10 +487,10 @@ export const mockObservations = [
     category: 'community_need',
     description: 'Central boiler circulation pump failed during overnight temperature drop to 34°F. 48 residents (many with limited mobility) are experiencing sub-55°F indoor temperatures.',
     location: {
-      address: '740 Pine Crest Ave, Maplewood',
+      address: '740 Pine Crest Ave (Boiler Room), Maplewood',
       neighborhood: 'Southside',
-      lat: 37.7689,
-      lng: -122.4285
+      lat: 37.7693,
+      lng: -122.4289
     },
     author: mockUsers[2], // Elena
     timestamp: '3 hours ago',
@@ -333,7 +504,6 @@ export const mockObservations = [
     contradictoryObservationIds: [],
     relatedRequestIds: ['req_03', 'req_04'],
     relatedResourceIds: ['res_02', 'res_05'],
-    relatedEventIds: ['evt_02'],
     relatedPlanIds: ['plan_02']
   },
   {
@@ -342,10 +512,10 @@ export const mockObservations = [
     category: 'resource',
     description: 'Orchard trees have produced an exceptional harvest. The owner has donated gleaning access to the mutual aid network to harvest and deliver fruit to 3 local food pantries.',
     location: {
-      address: '1200 Highland Ridge Way, Maplewood',
+      address: '1200 Highland Ridge Way (Upper Orchard), Maplewood',
       neighborhood: 'East Hills',
-      lat: 37.7912,
-      lng: -122.4044
+      lat: 37.7916,
+      lng: -122.4049
     },
     author: mockUsers[3], // Marcus
     timestamp: '5 hours ago',
@@ -359,7 +529,6 @@ export const mockObservations = [
     contradictoryObservationIds: [],
     relatedRequestIds: ['req_05'],
     relatedResourceIds: ['res_03'],
-    relatedEventIds: ['evt_03'],
     relatedPlanIds: ['plan_03']
   },
   {
@@ -368,10 +537,10 @@ export const mockObservations = [
     category: 'safety_concern',
     description: 'Passerby reported dense white bubbling liquid in roadside culvert near the industrial crossing, suspecting possible chemical solvent dump.',
     location: {
-      address: 'Industrial Rail Crossing & 8th St',
+      address: 'Industrial Rail Crossing & 8th St (Canal Outfall Gate)',
       neighborhood: 'West Industrial',
-      lat: 37.7650,
-      lng: -122.4110
+      lat: 37.7654,
+      lng: -122.4116
     },
     author: mockUsers[1],
     timestamp: '5 hours ago',
@@ -385,7 +554,6 @@ export const mockObservations = [
     contradictoryObservationIds: ['obs_04_contra'],
     relatedRequestIds: [],
     relatedResourceIds: [],
-    relatedEventIds: [],
     relatedPlanIds: []
   },
   {
@@ -394,10 +562,10 @@ export const mockObservations = [
     category: 'environmental',
     description: 'Field inspection and Hazmat analysis confirmed the white liquid is biodegradable citrus vehicle wash detergent draining from the municipal bus depot bay. pH measured 7.2 neutral with zero toxic solvent traces.',
     location: {
-      address: 'Industrial Rail Crossing & 8th St',
+      address: 'Industrial Rail Crossing & 8th St (Bus Depot Wash Bay)',
       neighborhood: 'West Industrial',
-      lat: 37.7650,
-      lng: -122.4110
+      lat: 37.7646,
+      lng: -122.4104
     },
     author: mockUsers[4], // Priya
     timestamp: '3 hours ago',
@@ -413,7 +581,6 @@ export const mockObservations = [
     contradictoryObservationIds: [],
     relatedRequestIds: [],
     relatedResourceIds: [],
-    relatedEventIds: [],
     relatedPlanIds: []
   },
   {
@@ -422,10 +589,10 @@ export const mockObservations = [
     category: 'safety_concern',
     description: 'Dense overgrown privacy hedge extends past the curb line, blocking driver vision of children waiting to cross from the north sidewalk.',
     location: {
-      address: '4th Ave & Oakland St, Maplewood',
+      address: '4th Ave & Oakland St (NW Crosswalk Corner), Maplewood',
       neighborhood: 'Oakland District',
-      lat: 37.7770,
-      lng: -122.4350
+      lat: 37.7774,
+      lng: -122.4354
     },
     author: currentUser,
     timestamp: '6 hours ago',
@@ -439,7 +606,81 @@ export const mockObservations = [
     contradictoryObservationIds: [],
     relatedRequestIds: ['req_06'],
     relatedResourceIds: [],
-    relatedEventIds: [],
+    relatedPlanIds: []
+  },
+  {
+    id: 'obs_06',
+    title: 'Turia River Basin High Sediment Accumulation & Embankment Runoff',
+    category: 'environmental',
+    description: 'Field inspection along Turia dry riverbed section confirms accelerated sediment buildup following torrential Mediterranean rains.',
+    location: {
+      address: 'Paseo de la Alameda (Turia Basin Silt Checkpoint), Valencia',
+      neighborhood: 'Turia Basin',
+      lat: 39.4695,
+      lng: -0.3770
+    },
+    author: mockUsers[4],
+    timestamp: '4 hours ago',
+    mediaUrls: [
+      'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80'
+    ],
+    status: 'action_underway',
+    claimIds: [],
+    evidenceIds: [],
+    supportingObservationIds: [],
+    contradictoryObservationIds: [],
+    relatedRequestIds: ['req_07'],
+    relatedResourceIds: ['res_06'],
+    relatedPlanIds: []
+  },
+  {
+    id: 'obs_07',
+    title: 'Puget Sound Coastal High Tide Driftwood Jam at Harbor Pier',
+    category: 'environmental',
+    description: 'Heavy westerly gusts have pushed floating storm debris and timber against shoreline pilings near the south marina entrance.',
+    location: {
+      address: 'Harbor Island South Marina Shoreline, Seattle',
+      neighborhood: 'Elliott Bay Coast',
+      lat: 47.6055,
+      lng: -122.3330
+    },
+    author: mockUsers[1],
+    timestamp: '2 hours ago',
+    mediaUrls: [
+      'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600&auto=format&fit=crop&q=80'
+    ],
+    status: 'active_need',
+    claimIds: [],
+    evidenceIds: [],
+    supportingObservationIds: [],
+    contradictoryObservationIds: [],
+    relatedRequestIds: ['req_08'],
+    relatedResourceIds: ['res_07'],
+    relatedPlanIds: []
+  },
+  {
+    id: 'obs_08',
+    title: 'Tokyo Waterfront Flood Defense & Gate Deployment Check',
+    category: 'safety_concern',
+    description: 'Volunteer ward monitors inspected tidal surge barriers and automated pump drains across Koto waterfront; all functioning at peak capacity.',
+    location: {
+      address: 'Koto City Waterfront Automated Surge Gate #4, Tokyo',
+      neighborhood: 'Koto Ward',
+      lat: 35.6755,
+      lng: 139.6490
+    },
+    author: mockUsers[3],
+    timestamp: '5 hours ago',
+    mediaUrls: [
+      'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80'
+    ],
+    status: 'coordinating',
+    claimIds: [],
+    evidenceIds: [],
+    supportingObservationIds: [],
+    contradictoryObservationIds: [],
+    relatedRequestIds: ['req_09'],
+    relatedResourceIds: ['res_08'],
     relatedPlanIds: []
   }
 ];
@@ -452,9 +693,9 @@ export const mockSafetyReports = [
     severity: 'high', // 'low' | 'moderate' | 'high' | 'critical'
     status: 'active', // 'reported' | 'being_assessed' | 'active' | 'resolved' | 'disputed' | 'outdated'
     location: {
-      address: 'Elm St Creek Bridge & River Rd',
-      lat: 37.7815,
-      lng: -122.4250
+      address: 'Willow Creek Lower Floodplain & River Rd, Maplewood',
+      lat: 37.7810,
+      lng: -122.4262
     },
     timestamp: '2 hours ago',
     reporter: mockUsers[4],
@@ -477,9 +718,9 @@ export const mockSafetyReports = [
     severity: 'critical',
     status: 'active',
     location: {
-      address: '740 Pine Crest Ave',
-      lat: 37.7689,
-      lng: -122.4285
+      address: '740 Pine Crest Ave (Senior Living Tower A), Maplewood',
+      lat: 37.7686,
+      lng: -122.4282
     },
     timestamp: '3 hours ago',
     reporter: mockUsers[2],
@@ -493,6 +734,75 @@ export const mockSafetyReports = [
     updatesLog: [
       { time: '8:45 AM', note: 'Facility manager alerted; Elena coordinating volunteer heater dispatch.' }
     ]
+  },
+  {
+    id: 'safe_03',
+    title: 'Flash Flood Runoff & Mudflow Warning - Turia River Basin',
+    description: 'Rapid stormwater surge in low-lying river tributaries. Volunteer emergency sandbagging and welfare checks deployed.',
+    severity: 'high',
+    status: 'active',
+    location: {
+      address: 'Paseo de la Alameda (Turia Underpass Crossing), Valencia',
+      lat: 39.4688,
+      lng: -0.3760
+    },
+    timestamp: '4 hours ago',
+    reporter: mockUsers[1],
+    evidenceIds: [],
+    relatedObservationIds: ['obs_06'],
+    mitigationActions: [
+      'Stage submersible drainage pumps near underpass tunnels',
+      'Distribute battery emergency lighting and drinking water'
+    ],
+    updatesLog: [
+      { time: '08:30 AM', note: 'Regional civil alert received; volunteer coordinator mobilized.' }
+    ]
+  },
+  {
+    id: 'safe_04',
+    title: 'Coastal Windstorm & Power Grid Outage Precaution',
+    description: 'Sustained 60mph gusts causing downed branches and localized power outages across Puget Sound communities.',
+    severity: 'moderate',
+    status: 'active',
+    location: {
+      address: 'Harbor Island North Access Bridge, Seattle',
+      lat: 47.6050,
+      lng: -122.3310
+    },
+    timestamp: '1 hour ago',
+    reporter: mockUsers[3],
+    evidenceIds: [],
+    relatedObservationIds: ['obs_07'],
+    mitigationActions: [
+      'Deploy chainsaw volunteer crews for cleared access roads',
+      'Open backup battery charging stations for medical devices'
+    ],
+    updatesLog: [
+      { time: '11:15 AM', note: 'Neighborhood watch verifying senior care facility power generators.' }
+    ]
+  },
+  {
+    id: 'safe_05',
+    title: 'Tokyo Waterfront Tidal Surge & Barrier Deployment Alert',
+    description: 'Offshore earthquake alert triggered precautionary flood gate protocols along Tokyo coastal districts.',
+    severity: 'moderate',
+    status: 'active',
+    location: {
+      address: 'Koto City Waterfront Surge Embankment Wall, Tokyo',
+      lat: 35.6750,
+      lng: 139.6520
+    },
+    timestamp: '3 hours ago',
+    reporter: mockUsers[4],
+    evidenceIds: [],
+    relatedObservationIds: ['obs_08'],
+    mitigationActions: [
+      'High-ground assembly signs illuminated at community centers',
+      'Emergency satellite communication kits activated'
+    ],
+    updatesLog: [
+      { time: '02:00 PM', note: 'All coastal monitoring water sensors transmitting normal levels.' }
+    ]
   }
 ];
 
@@ -503,9 +813,9 @@ export const mockRequests = [
     description: 'Urgent assistance needed to build a 3-foot retaining diversion wall and manually clear tree branches from the culvert intake before evening downpour.',
     category: 'labor',
     location: {
-      address: 'Elm Street Creek Bridge, Maplewood',
-      lat: 37.7815,
-      lng: -122.4250
+      address: 'Elm St Park Trailhead & Sandbag Staging Depot, Maplewood',
+      lat: 37.7816,
+      lng: -122.4239
     },
     urgency: 'high', // 'low' | 'medium' | 'high' | 'critical'
     requiredSkills: ['Heavy Lifting', 'Shoveling', 'Safety Awareness'],
@@ -514,8 +824,12 @@ export const mockRequests = [
     peopleJoined: 4,
     progressPercentage: 66,
     status: 'open', // 'open' | 'partially_fulfilled' | 'fulfilled' | 'cancelled' | 'expired'
+    communityId: 'com_01',
+    visibility: 'public',
     requester: mockUsers[1], // Dave Martinez
     createdAt: '2 hours ago',
+    scheduledDate: 'Today, Oct 24',
+    scheduledTime: '1:00 PM – 4:00 PM',
     expiresAt: 'Today at 6:00 PM',
     evidenceIds: ['ev_01'],
     matchedResourceIds: ['res_01'],
@@ -539,9 +853,9 @@ export const mockRequests = [
     description: 'To bypass blocked intake and pump water directly into the lower basin pond to relieve pressure on the road embankment.',
     category: 'equipment',
     location: {
-      address: 'Elm St Creek Bridge',
-      lat: 37.7815,
-      lng: -122.4250
+      address: 'Elm St Creek Bridge & Bypass Pump Sump, Maplewood',
+      lat: 37.7814,
+      lng: -122.4251
     },
     urgency: 'critical',
     requiredSkills: ['Small Engine Operation'],
@@ -550,6 +864,8 @@ export const mockRequests = [
     peopleJoined: 1,
     progressPercentage: 100,
     status: 'fulfilled',
+    communityId: 'com_01',
+    visibility: 'public',
     requester: mockUsers[4], // Priya
     createdAt: '3 hours ago',
     matchedResourceIds: ['res_01'],
@@ -564,9 +880,9 @@ export const mockRequests = [
     description: 'Radiant oil-filled heaters (tip-over auto shutoff certified) and heavy thermal blankets for Pine Crest Manor residents.',
     category: 'supplies',
     location: {
-      address: '740 Pine Crest Ave',
-      lat: 37.7689,
-      lng: -122.4285
+      address: '740 Pine Crest Ave (Main Lobby Distribution), Maplewood',
+      lat: 37.7696,
+      lng: -122.4280
     },
     urgency: 'high',
     requiredSkills: ['Safe Electrical Inspection'],
@@ -575,8 +891,12 @@ export const mockRequests = [
     peopleJoined: 3,
     progressPercentage: 75,
     status: 'partially_fulfilled',
+    communityId: 'com_02',
+    visibility: 'public',
     requester: mockUsers[2], // Elena
     createdAt: '3 hours ago',
+    scheduledDate: 'Today, Oct 24',
+    scheduledTime: '11:00 AM – 2:00 PM',
     matchedResourceIds: ['res_02'],
     quickActions: [
       {
@@ -597,9 +917,9 @@ export const mockRequests = [
     description: 'Four residents with mobility walkers need gentle transport to the heated Eastside Community Center for daytime warming and hot lunch.',
     category: 'transport',
     location: {
-      address: '740 Pine Crest Ave',
-      lat: 37.7689,
-      lng: -122.4285
+      address: '740 Pine Crest Ave (West Loading Bay), Maplewood',
+      lat: 37.7682,
+      lng: -122.4293
     },
     urgency: 'medium',
     requiredSkills: ['Gentle Mobility Assistance', 'Safe Winter Driving'],
@@ -608,6 +928,8 @@ export const mockRequests = [
     peopleJoined: 1,
     progressPercentage: 50,
     status: 'open',
+    communityId: 'com_02',
+    visibility: 'group_only',
     requester: mockUsers[2],
     createdAt: '2 hours ago',
     matchedResourceIds: ['res_05'],
@@ -628,9 +950,9 @@ export const mockRequests = [
     description: 'Join a gleaning crew! Bring reusable gloves. Harvest will be packed directly into crates for the Maplewood Food Bank and Senior Pantry.',
     category: 'skills',
     location: {
-      address: '1200 Highland Ridge Way',
-      lat: 37.7912,
-      lng: -122.4044
+      address: '1200 Highland Ridge Way (Harvest Sorting Station), Maplewood',
+      lat: 37.7911,
+      lng: -122.4040
     },
     urgency: 'low',
     requiredSkills: ['Fruit Picking', 'Gentle Handling'],
@@ -639,8 +961,12 @@ export const mockRequests = [
     peopleJoined: 8,
     progressPercentage: 80,
     status: 'open',
+    communityId: 'com_03',
+    visibility: 'public',
     requester: mockUsers[3],
     createdAt: '4 hours ago',
+    scheduledDate: 'Saturday, Oct 26',
+    scheduledTime: '9:30 AM – 1:30 PM',
     matchedResourceIds: ['res_03'],
     quickActions: [
       {
@@ -659,9 +985,9 @@ export const mockRequests = [
     description: 'Property owner gave permission to trim the 20ft hedge back to 3ft height. Need 2 people with electric hedge trimmers and branch shears.',
     category: 'labor',
     location: {
-      address: '4th Ave & Oakland St',
-      lat: 37.7770,
-      lng: -122.4350
+      address: '4th Ave & Oakland St (Sidewalk Staging Area), Maplewood',
+      lat: 37.7768,
+      lng: -122.4346
     },
     urgency: 'medium',
     requiredSkills: ['Hedge Trimmer Operation', 'Debris Bagging'],
@@ -670,9 +996,177 @@ export const mockRequests = [
     peopleJoined: 1,
     progressPercentage: 50,
     status: 'open',
+    communityId: 'com_04',
+    visibility: 'public',
     requester: currentUser,
     createdAt: '5 hours ago',
+    scheduledDate: 'Sunday, Oct 27',
+    scheduledTime: '10:00 AM – 12:00 PM',
     matchedResourceIds: [],
+    quickActions: [],
+    responses: []
+  },
+  {
+    id: 'req_07',
+    title: 'Urgent: 4 Volunteers for High-Capacity Water Pump Deployment',
+    description: 'Need volunteers to stage drainage pumps and position discharge lines along flooded community alleyways near Turia basin.',
+    category: 'labor',
+    location: {
+      address: 'Paseo de la Alameda (Alleyway Drainage Staging), Valencia',
+      lat: 39.4712,
+      lng: -0.3755
+    },
+    urgency: 'high',
+    requiredSkills: ['Pump Handling', 'Flood Water Safety'],
+    requiredResources: ['Rubber Boots', 'Work Gloves', 'High-Vis Vests'],
+    peopleNeeded: 4,
+    peopleJoined: 2,
+    progressPercentage: 50,
+    status: 'open',
+    communityId: 'com_01',
+    visibility: 'group_only',
+    requester: mockUsers[1],
+    createdAt: '3 hours ago',
+    scheduledDate: 'Today, Oct 24',
+    scheduledTime: '2:00 PM – 5:00 PM',
+    matchedResourceIds: ['res_06'],
+    quickActions: [],
+    responses: []
+  },
+  {
+    id: 'req_08',
+    title: 'Emergency Power & Battery Charging for Home Medical Equipment',
+    description: 'Power grid down across harbor neighborhood. Seeking portable power stations to keep continuous oxygen concentrators powered.',
+    category: 'equipment',
+    location: {
+      address: 'Harbor Island Community First Aid Shelter, Seattle',
+      lat: 47.6070,
+      lng: -122.3315
+    },
+    urgency: 'critical',
+    requiredSkills: ['Electrical Safety', 'Equipment Handling'],
+    requiredResources: ['Portable Battery Stations', 'Extension Cords'],
+    peopleNeeded: 3,
+    peopleJoined: 2,
+    progressPercentage: 66,
+    status: 'open',
+    communityId: null,
+    visibility: 'public',
+    requester: mockUsers[3],
+    createdAt: '1 hour ago',
+    matchedResourceIds: ['res_07'],
+    quickActions: [],
+    responses: []
+  },
+  {
+    id: 'req_09',
+    title: 'Volunteer Evacuation Guides for Multilingual Community Members',
+    description: 'Volunteers fluent in English, Japanese, and Portuguese to assist waterfront residents with flood evacuation maps and bus shuttles.',
+    category: 'skills',
+    location: {
+      address: 'Koto City Waterfront Multilingual Evacuation Hub, Tokyo',
+      lat: 35.6770,
+      lng: 139.6515
+    },
+    urgency: 'medium',
+    requiredSkills: ['Language Translation', 'Emergency Wayfinding'],
+    requiredResources: ['Megaphones', 'Directional Signs'],
+    peopleNeeded: 5,
+    peopleJoined: 4,
+    progressPercentage: 80,
+    status: 'open',
+    communityId: null,
+    visibility: 'public',
+    requester: mockUsers[4],
+    createdAt: '4 hours ago',
+    matchedResourceIds: ['res_08'],
+    quickActions: [],
+    responses: []
+  },
+  {
+    id: 'req_10',
+    title: 'Planning Circle: Willow Creek Watershed Phase 2 Restoration',
+    description: 'Open community coordination session discussing Phase 2 riparian willow planting, culvert restructuring, and water quality telemetry grant applications.',
+    category: 'skills',
+    location: {
+      address: 'Willow Creek Watershed Action Pavilion, Maplewood',
+      lat: 37.7827,
+      lng: -122.4258
+    },
+    urgency: 'medium',
+    requiredSkills: ['Hydrology Planning', 'Grant Coordination', 'Community Outreach'],
+    requiredResources: ['Presentation Slides', 'Hydrology Maps'],
+    peopleNeeded: 8,
+    peopleJoined: 4,
+    progressPercentage: 50,
+    status: 'open',
+    communityId: 'com_01',
+    visibility: 'public',
+    requester: mockUsers[4], // Priya
+    createdAt: '6 hours ago',
+    scheduledDate: 'Monday, Oct 28',
+    scheduledTime: '7:00 PM – 8:30 PM',
+    evidenceIds: ['ev_01'],
+    matchedResourceIds: ['res_04'],
+    quickActions: [],
+    responses: [
+      { user: currentUser, role: 'Reviewing hydraulic models', time: '2 hours ago' },
+      { user: mockUsers[1], role: 'Site access survey', time: '3 hours ago' }
+    ]
+  },
+  {
+    id: 'req_11',
+    title: 'Equipment Calibration & Cache Readiness Session',
+    description: 'Hands-on session to test, clean, and inventory shared trash pumps, suction lines, and water turbidity probes ahead of expected winter storm cycles.',
+    category: 'equipment',
+    location: {
+      address: 'Elm Street Creek Action Shed, Maplewood',
+      lat: 37.7820,
+      lng: -122.4245
+    },
+    urgency: 'low',
+    requiredSkills: ['Small Engine Maintenance', 'Tool Inventory'],
+    requiredResources: ['Spark Plug Wrenches', 'Engine Oil', 'Replacement Air Filters'],
+    peopleNeeded: 4,
+    peopleJoined: 3,
+    progressPercentage: 75,
+    status: 'open',
+    communityId: 'com_01',
+    visibility: 'group_only',
+    requester: mockUsers[1], // Dave
+    createdAt: '1 day ago',
+    scheduledDate: 'Wednesday, Oct 30',
+    scheduledTime: '5:30 PM – 7:30 PM',
+    evidenceIds: [],
+    matchedResourceIds: ['res_01'],
+    quickActions: [],
+    responses: []
+  },
+  {
+    id: 'req_12',
+    title: 'CERT Neighborhood Radio Check & Medical Cache Inventory',
+    description: 'Regular neighborhood communication check over GMRS/FRS radios and audit of emergency first aid and heating supplies at Southside warming center.',
+    category: 'skills',
+    location: {
+      address: '740 Pine Crest Ave (Southside Warming Center Radio Room), Maplewood',
+      lat: 37.7690,
+      lng: -122.4273
+    },
+    urgency: 'medium',
+    requiredSkills: ['Radio Operation', 'First Aid Inventory'],
+    requiredResources: ['GMRS Handheld Radios', 'First Aid Stock Checklists'],
+    peopleNeeded: 6,
+    peopleJoined: 5,
+    progressPercentage: 83,
+    status: 'open',
+    communityId: 'com_02',
+    visibility: 'public',
+    requester: mockUsers[2], // Elena
+    createdAt: '1 day ago',
+    scheduledDate: 'Friday, Nov 1',
+    scheduledTime: '6:00 PM – 7:30 PM',
+    evidenceIds: [],
+    matchedResourceIds: ['res_02'],
     quickActions: [],
     responses: []
   }
@@ -706,9 +1200,9 @@ export const mockResources = [
     contributionType: 'lend',
     provider: currentUser,
     location: {
-      address: 'Eastside District, Maplewood',
-      lat: 37.7749,
-      lng: -122.4194
+      address: 'Eastside District Equipment Cache, Maplewood',
+      lat: 37.7753,
+      lng: -122.4190
     },
     availability: 'immediate',
     quantity: '6 Heaters + 10 Blankets',
@@ -725,9 +1219,9 @@ export const mockResources = [
     contributionType: 'make_available',
     provider: mockUsers[3], // Marcus
     location: {
-      address: '1200 Highland Ridge Way',
-      lat: 37.7912,
-      lng: -122.4044
+      address: '1200 Highland Ridge Way (Equipment Tool Shed), Maplewood',
+      lat: 37.7907,
+      lng: -122.4046
     },
     availability: 'immediate',
     quantity: 'Full Set',
@@ -744,9 +1238,9 @@ export const mockResources = [
     contributionType: 'offer_skill',
     provider: mockUsers[4], // Priya
     location: {
-      address: 'Elm St Creek Path',
-      lat: 37.7815,
-      lng: -122.4250
+      address: 'Elm St Creek Path (Mobile Testing Station), Maplewood',
+      lat: 37.7807,
+      lng: -122.4242
     },
     availability: 'on_call',
     quantity: '5-10 tests / day',
@@ -763,9 +1257,9 @@ export const mockResources = [
     contributionType: 'offer_transportation',
     provider: currentUser,
     location: {
-      address: 'Maplewood Central',
-      lat: 37.7749,
-      lng: -122.4194
+      address: 'Maplewood Central Transit Staging',
+      lat: 37.7745,
+      lng: -122.4198
     },
     availability: 'scheduled',
     quantity: '4 Passenger seats + luggage',
@@ -773,6 +1267,63 @@ export const mockResources = [
     conditionsTerms: 'Available today 12:00 PM - 5:00 PM.',
     validUntil: 'Today',
     linkedRequestIds: ['req_04']
+  },
+  {
+    id: 'res_06',
+    title: '4 Commercial Submersible Drainage Pumps + 200m Hose',
+    description: 'Electric 2-inch submersible pumps capable of discharging 250 liters/min. Equipped with heavy-duty thermal cutoff and camlock hose adapters.',
+    category: 'equipment',
+    contributionType: 'lend',
+    provider: mockUsers[1],
+    location: {
+      address: 'Paseo de la Alameda (Equipment Logistics Depot), Valencia',
+      lat: 39.4705,
+      lng: -0.3780
+    },
+    availability: 'immediate',
+    quantity: '4 Pumps + Accessories',
+    condition: 'Fully inspected and ready',
+    conditionsTerms: 'Will assist with initial installation at community sites.',
+    validUntil: 'Until storm passes',
+    linkedRequestIds: ['req_07']
+  },
+  {
+    id: 'res_07',
+    title: 'EcoFlow 3600Wh Portable Power Station & 400W Solar Array',
+    description: 'High-capacity battery station with 3600W AC output (surge 7200W). Clean, fume-free indoor power for medical gear and communication rigs.',
+    category: 'equipment',
+    contributionType: 'lend',
+    provider: mockUsers[3],
+    location: {
+      address: 'Harbor Island South Staging Pier, Seattle',
+      lat: 47.6068,
+      lng: -122.3335
+    },
+    availability: 'immediate',
+    quantity: '1 Power Station + 2 Solar Panels',
+    condition: '100% charged and tested',
+    conditionsTerms: 'Priority for critical medical equipment support.',
+    validUntil: 'Through power restoration',
+    linkedRequestIds: ['req_08']
+  },
+  {
+    id: 'res_08',
+    title: '50 Clean Water Filtration Gravity Cubes & Emergency Rations',
+    description: '0.1-micron hollow-fiber membrane filters providing 5,000 liters of potable water per day without electricity or chemicals.',
+    category: 'supplies',
+    contributionType: 'donate',
+    provider: mockUsers[4],
+    location: {
+      address: 'Koto City Waterfront Emergency Distribution Depot, Tokyo',
+      lat: 35.6768,
+      lng: 139.6485
+    },
+    availability: 'immediate',
+    quantity: '50 Filter Kits + 200 Meal Packs',
+    condition: 'Factory sealed in waterproof crates',
+    conditionsTerms: 'Free allocation for waterfront displacement centers.',
+    validUntil: 'Ongoing',
+    linkedRequestIds: ['req_09']
   }
 ];
 
@@ -848,103 +1399,7 @@ export const mockMatchingFactors = [
   }
 ];
 
-export const mockEvents = [
-  {
-    id: 'evt_01',
-    title: 'Emergency Culvert Clearing & Flood Diversion Operation',
-    eventType: 'assistance_operation',
-    description: 'Coordinated volunteer task force to clear sediment debris, position 3-inch trash pump, and stack protective sandbag line along vulnerable homes.',
-    location: {
-      address: 'Elm Street Creek Bridge, Maplewood',
-      lat: 37.7815,
-      lng: -122.4250
-    },
-    date: 'Today, Oct 24',
-    time: '1:00 PM – 4:00 PM',
-    organizer: mockUsers[1], // Dave Martinez
-    participants: [currentUser, mockUsers[1], mockUsers[4]],
-    maxParticipants: 10,
-    status: 'upcoming', // 'upcoming' | 'in_progress' | 'completed' | 'cancelled'
-    relatedRequestIds: ['req_01', 'req_02'],
-    relatedResourceIds: ['res_01', 'res_04'],
-    relatedPlanIds: ['plan_01'],
-    chatMessages: [
-      { id: 'm1', sender: mockUsers[1], text: 'Pump trailer is loaded with 100ft hose. Heading to Elm St now.', time: '11:30 AM' },
-      { id: 'm2', sender: mockUsers[4], text: 'Water level is steady but rain expected at 3 PM. Let’s set the intake first.', time: '11:35 AM' },
-      { id: 'm3', sender: currentUser, text: 'I am bringing 4 extra shovels and high-vis vests.', time: '11:42 AM' }
-    ]
-  },
-  {
-    id: 'evt_02',
-    title: 'Pine Crest Manor Resident Warming & Wellness Coordination',
-    eventType: 'community_activity',
-    description: 'Distributing portable heaters, thermos soups, and warm clothing packages to all residents affected by the boiler failure.',
-    location: {
-      address: '740 Pine Crest Ave Lobby',
-      lat: 37.7689,
-      lng: -122.4285
-    },
-    date: 'Today, Oct 24',
-    time: '11:00 AM – 2:00 PM',
-    organizer: mockUsers[2], // Elena
-    participants: [currentUser, mockUsers[2]],
-    maxParticipants: 6,
-    status: 'in_progress',
-    relatedRequestIds: ['req_03', 'req_04'],
-    relatedResourceIds: ['res_02', 'res_05'],
-    relatedPlanIds: ['plan_02'],
-    chatMessages: [
-      { id: 'm10', sender: mockUsers[2], text: 'We have checked units 101 through 118. Units 204 and 209 need extra heaters.', time: '10:15 AM' },
-      { id: 'm11', sender: currentUser, text: '4 radiator heaters delivered to front desk. Bringing up blankets now.', time: '10:30 AM' }
-    ]
-  },
-  {
-    id: 'evt_03',
-    title: 'Highland Community Fruit Harvest & Food Bank Dropoff',
-    eventType: 'volunteer_activity',
-    description: 'Community gleaning session at the heritage orchard followed by sorting and direct delivery to Maplewood Community Pantry.',
-    location: {
-      address: '1200 Highland Ridge Way',
-      lat: 37.7912,
-      lng: -122.4044
-    },
-    date: 'Saturday, Oct 26',
-    time: '9:30 AM – 1:30 PM',
-    organizer: mockUsers[3], // Marcus
-    participants: [mockUsers[3], currentUser, mockUsers[4]],
-    maxParticipants: 15,
-    status: 'upcoming',
-    relatedRequestIds: ['req_05'],
-    relatedResourceIds: ['res_03'],
-    relatedPlanIds: ['plan_03'],
-    chatMessages: [
-      { id: 'm20', sender: mockUsers[3], text: 'Poles and crates are ready at the south barn. Bring water and hats!', time: 'Yesterday' }
-    ]
-  },
-  {
-    id: 'evt_04',
-    title: 'Willow Creek Watershed Restoration Planning Circle',
-    eventType: 'chat_only',
-    description: 'Online open coordination session discussing Phase 2 riparian willow planting and culvert restructuring grant application.',
-    location: {
-      address: 'CareMesh Virtual Coordination Room #WC-PLAN',
-      lat: 37.7815,
-      lng: -122.4250
-    },
-    date: 'Monday, Oct 28',
-    time: '7:00 PM – 8:30 PM',
-    organizer: mockUsers[4],
-    participants: [currentUser, mockUsers[1], mockUsers[4]],
-    maxParticipants: 30,
-    status: 'upcoming',
-    relatedRequestIds: [],
-    relatedResourceIds: [],
-    relatedPlanIds: ['plan_01'],
-    chatMessages: [
-      { id: 'm30', sender: mockUsers[4], text: 'I will present the turbidity and hydraulic model slides in the virtual room.', time: '2 days ago' }
-    ]
-  }
-];
+export const mockEvents = [];
 
 export const mockPlans = [
   {
@@ -953,7 +1408,7 @@ export const mockPlans = [
     problemStatement: 'The historic gravity-fed natural spring and stone catchment weir on Upper Willow Ridge—which serves as the sole off-grid backup drinking water source for 40 hillside households during power cuts—was heavily contaminated by upstream landslide silt, cracked stone channels, and runoff after recent severe storms.',
     desiredOutcome: 'Restore continuous gravity-fed potable water flow (target: 45 L/min at < 5 NTU turbidity), construct durable bio-engineered gravel pre-filters, prevent downstream sediment intrusion into the yellow-billed cuckoo sanctuary, and establish community water purity telemetry with volunteer maintenance protocols.',
     proposedApproach: 'Deploy volunteer work teams to hand-clear 120ft of clogged stone conduit during the November dry window, install a 3-tier bio-retention rock filter bed, anchor an 80ft geotextile sediment curtain, and install solar-powered IoT water purity sensors.',
-    resourcesNeeded: '15 tons washed basalt/river gravel, 80ft geotextile silt curtain, 400 linear feet food-grade poly pipe, 4 certified water coliform testing kits, 1 solar turbidity sensor beacon, 6 coordinated volunteer weekend workdays.',
+    resourcesNeeded: '15 tons washed basalt/river gravel, 80ft geotextile silt curtain, 400 linear feet food-grade poly pipe, 4 certified water coliform testing kits, 1 solar turbidity sensor beacon, 6 scheduled volunteer action sessions.',
     location: 'Willow Creek Springhead & Upper Ridge Trailhead, Maplewood',
     affectedParties: '40 hillside households relying on gravity backup, downstream yellow-billed cuckoo nesting sanctuary (200m south), Ridge Trail hikers and foragers.',
     lifecycleStage: 'community_review', // 'draft' | 'community_review' | 'revised' | 'accepted' | 'active' | 'completed' | 'cancelled'
@@ -1079,9 +1534,8 @@ export const mockPlans = [
         isRevisionDecision: false
       }
     ],
-    linkedRequestIds: ['req_01', 'req_02'],
+    linkedRequestIds: ['req_01', 'req_02', 'req_10'],
     linkedResourceIds: ['res_01', 'res_04'],
-    linkedEventIds: ['evt_01', 'evt_04'],
     linkedObservationIds: ['obs_01', 'obs_01_sup'],
     linkedClaimIds: ['clm_01'],
     evidenceIds: ['ev_01', 'ev_02'],
@@ -1201,9 +1655,8 @@ export const mockPlans = [
         incorporatedFeedbackIds: ['fb_202']
       }
     ],
-    linkedRequestIds: ['req_03', 'req_04'],
+    linkedRequestIds: ['req_03', 'req_04', 'req_12'],
     linkedResourceIds: ['res_02', 'res_05'],
-    linkedEventIds: ['evt_02'],
     linkedObservationIds: ['obs_02'],
     linkedClaimIds: ['clm_02'],
     evidenceIds: ['ev_03', 'ev_04'],
@@ -1322,7 +1775,6 @@ export const mockPlans = [
     ],
     linkedRequestIds: ['req_05'],
     linkedResourceIds: ['res_03'],
-    linkedEventIds: ['evt_03'],
     linkedObservationIds: ['obs_03'],
     linkedClaimIds: ['clm_03'],
     evidenceIds: ['ev_05'],
@@ -1337,7 +1789,7 @@ export const mockPlans = [
     problemStatement: 'Flash stormwater runoff from the commercial plaza parking lot was discharging untreated petroleum and road silt directly into the Maplewood Creek tributary, eroding 400ft of riverbank and flooding the Oak St pedestrian underpass during storms > 1.0 inch/hr.',
     desiredOutcome: 'Capture and naturally filter 85% of parking lot runoff, eliminate pedestrian underpass flooding, stabilize 400ft of creek bank with native vegetation, and reduce sediment turbidity to < 15 NTU.',
     proposedApproach: 'Construct a 250ft bio-swale planted with deep-rooted native sedges and rushes, install permeable gravel check dams, anchor coir erosion logs along the bank, and redirect storm discharge through a vegetated infiltration basin.',
-    resourcesNeeded: '400 native sedge & rush plugs, 30 tons crushed granite, 8 coir log rolls, 1 municipal curb-cut permit, 12 volunteer planting workdays.',
+    resourcesNeeded: '400 native sedge & rush plugs, 30 tons crushed granite, 8 coir log rolls, 1 municipal curb-cut permit, 12 scheduled volunteer planting sessions.',
     location: 'Oak St Underpass & Commercial Plaza West Boundary, Maplewood',
     affectedParties: 'Oak St commuters, commercial plaza tenants, downstream native trout habitat, municipal stormwater utility.',
     lifecycleStage: 'completed',
@@ -1405,7 +1857,7 @@ export const mockPlans = [
     milestones: [
       { id: 'm_401', title: 'Topographical drainage survey & GPR utility mapping', dueDate: 'May 10', status: 'completed', completedDate: 'May 9', assignedTo: 'Priya Sharma' },
       { id: 'm_402', title: 'Excavation & crushed granite check dam installation', dueDate: 'May 28', status: 'completed', completedDate: 'May 26', assignedTo: 'Dave Martinez' },
-      { id: 'm_403', title: 'Community planting workday: 400 native sedge plugs', dueDate: 'Jun 12', status: 'completed', completedDate: 'Jun 12', assignedTo: 'Maya Lin' },
+      { id: 'm_403', title: 'Community planting action: 400 native sedge plugs', dueDate: 'Jun 12', status: 'completed', completedDate: 'Jun 12', assignedTo: 'Maya Lin' },
       { id: 'm_404', title: 'Coir erosion log anchoring along 400ft riverbank', dueDate: 'Jun 24', status: 'completed', completedDate: 'Jun 22', assignedTo: 'Dave Martinez' },
       { id: 'm_405', title: 'Post-storm water quality telemetry & infiltration audit', dueDate: 'Aug 15', status: 'completed', completedDate: 'Aug 14', assignedTo: 'Priya Sharma' }
     ],
@@ -1431,9 +1883,8 @@ export const mockPlans = [
         incorporatedFeedbackIds: ['fb_401']
       }
     ],
-    linkedRequestIds: [],
+    linkedRequestIds: ['req_06'],
     linkedResourceIds: ['res_01'],
-    linkedEventIds: ['evt_04'],
     linkedObservationIds: ['obs_01'],
     linkedClaimIds: ['clm_01'],
     evidenceIds: ['ev_01'],
@@ -1532,7 +1983,6 @@ export const mockPlans = [
     ],
     linkedRequestIds: [],
     linkedResourceIds: [],
-    linkedEventIds: [],
     linkedObservationIds: [],
     linkedClaimIds: [],
     evidenceIds: [],
@@ -1625,8 +2075,7 @@ export const mockCommunities = [
       }
     ],
     linkedPlanIds: ['plan_01'],
-    linkedEventIds: ['evt_01', 'evt_04'],
-    linkedRequestIds: ['req_01', 'req_02'],
+    linkedRequestIds: ['req_01', 'req_02', 'req_07', 'req_10', 'req_11'],
     isJoined: true
   },
   {
@@ -1678,8 +2127,7 @@ export const mockCommunities = [
       }
     ],
     linkedPlanIds: ['plan_02'],
-    linkedEventIds: ['evt_02'],
-    linkedRequestIds: ['req_03', 'req_04'],
+    linkedRequestIds: ['req_03', 'req_04', 'req_12'],
     isJoined: true
   },
   {
@@ -1709,7 +2157,6 @@ export const mockCommunities = [
     mediaGallery: [],
     files: [],
     linkedPlanIds: ['plan_03'],
-    linkedEventIds: ['evt_03'],
     linkedRequestIds: ['req_05'],
     isJoined: false
   },
@@ -1734,7 +2181,6 @@ export const mockCommunities = [
     mediaGallery: [],
     files: [],
     linkedPlanIds: [],
-    linkedEventIds: [],
     linkedRequestIds: ['req_06'],
     isJoined: false
   }
@@ -1806,9 +2252,9 @@ export const mockPosts = [
     content: 'The Bartlett pears at Highland Orchard are in prime condition! We have crates and fruit-picking poles ready for our Saturday morning gleaning session. All harvested fruit goes directly to local community pantries.',
     timestamp: '4 hours ago',
     isPinned: false,
-    linkedEntityType: 'event',
-    linkedEntityId: 'evt_03',
-    linkedEntityTitle: 'Highland Community Fruit Harvest & Food Bank Dropoff',
+    linkedEntityType: 'request',
+    linkedEntityId: 'req_05',
+    linkedEntityTitle: 'Volunteers Needed: Pick & Crate 800 lbs of Pears at Highland Ridge',
     endorsedCount: 18,
     comments: []
   },
@@ -1830,6 +2276,7 @@ export const mockPosts = [
 export const mockNotifications = [
   {
     id: 'notif_01',
+    userId: 'usr_me',
     type: 'resource_match',
     title: 'Resource Match Compatible',
     body: 'Your AWD Transport offer matches Request: "Need AWD Vehicle to Transport 4 Seniors to Community Center".',
@@ -1841,6 +2288,7 @@ export const mockNotifications = [
   },
   {
     id: 'notif_02',
+    userId: 'usr_me',
     type: 'safety_alert',
     title: 'Active Safety Alert in your area',
     body: 'Flash Flood Risk at Elm St Creek Bridge. Volunteers actively staging sandbag diversion.',
@@ -1851,6 +2299,7 @@ export const mockNotifications = [
   },
   {
     id: 'notif_03',
+    userId: 'usr_dave',
     type: 'plan_update',
     title: 'Milestone Completed in Willow Creek Plan',
     body: 'Dave Martinez completed milestone: "Emergency temporary diversion wall & pump installation".',
@@ -1861,6 +2310,7 @@ export const mockNotifications = [
   },
   {
     id: 'notif_04',
+    userId: 'usr_me',
     type: 'request_response',
     title: 'Volunteer Joined Request',
     body: 'Maya Lin joined your volunteer request for Elm St Culvert Sandbagging.',
@@ -1869,6 +2319,64 @@ export const mockNotifications = [
     targetView: 'collaborate',
     targetSubTab: 'requests',
     targetEntityId: 'req_01'
+  },
+  {
+    id: 'notif_05',
+    userId: 'usr_priya',
+    type: 'observation_logged',
+    title: 'New Field Observation Documented',
+    body: 'Priya Patel documented: "Severe Silt & Debris Jam at Elm Street Creek Culvert" with photo provenance.',
+    timestamp: '2 hours ago',
+    isRead: false,
+    targetView: 'explore',
+    targetEntityId: 'obs_01'
+  },
+  {
+    id: 'notif_06',
+    userId: 'usr_marcus',
+    type: 'resource_loan_request',
+    title: 'Equipment Loan Requested',
+    body: 'Request submitted to borrow "Honda 3-Inch Commercial Trash Pump (380 GPM) + 100ft Hoses".',
+    timestamp: '3 hours ago',
+    isRead: false,
+    targetView: 'collaborate',
+    targetSubTab: 'resources',
+    targetEntityId: 'res_01'
+  },
+  {
+    id: 'notif_07',
+    userId: 'usr_me',
+    type: 'request_scheduled',
+    title: 'Scheduled Help Request Starting Soon',
+    body: 'Volunteer coordination starts in 1 hour for "Need 6 Volunteers & 200 Sandbags at Elm St Culvert".',
+    timestamp: '4 hours ago',
+    isRead: true,
+    targetView: 'collaborate',
+    targetSubTab: 'requests',
+    targetEntityId: 'req_01'
+  },
+  {
+    id: 'notif_08',
+    userId: 'usr_dave',
+    type: 'claim_dispute',
+    title: 'Claim Ground Truth Verified',
+    body: 'Culvert inlet sediment blockage claim verified with field sensors and physical water gauge depth.',
+    timestamp: '5 hours ago',
+    isRead: true,
+    targetView: 'explore',
+    targetEntityId: 'clm_01'
+  },
+  {
+    id: 'notif_09',
+    userId: 'usr_priya',
+    type: 'community_post',
+    title: 'Community Action Circle Update',
+    body: 'New coordination thread posted in "Elm Street Creek Flood Action Circle".',
+    timestamp: '6 hours ago',
+    isRead: true,
+    targetView: 'social',
+    targetSubTab: 'communities',
+    targetEntityId: 'com_01'
   }
 ];
 
