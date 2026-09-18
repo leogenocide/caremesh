@@ -129,7 +129,6 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
       <div 
         className="group-hero-cover"
         style={{
-          height: '190px',
           position: 'relative',
           background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
           overflow: 'hidden'
@@ -171,7 +170,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
               title="Upload new cover banner"
             >
               <Camera size={14} />
-              <span>Change Cover</span>
+              <span className="d-none d-sm-inline">Change Cover</span>
               <input
                 type="file"
                 accept="image/*"
@@ -191,20 +190,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
         >
           {/* Avatar and Main Titles */}
           <div className="d-flex align-items-end gap-3 flex-wrap min-w-0 flex-1">
-            <div
-              style={{
-                width: '84px',
-                height: '84px',
-                borderRadius: 'var(--radius-xl)',
-                border: '4px solid #ffffff',
-                boxShadow: 'var(--shadow-md)',
-                background: '#ffffff',
-                flexShrink: 0,
-                marginTop: '-44px',
-                position: 'relative',
-                zIndex: 2
-              }}
-            >
+            <div className="group-avatar-box">
               <img
                 src={community.avatar}
                 alt={community.name}
@@ -216,8 +202,8 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
                     position: 'absolute',
                     bottom: '-4px',
                     right: '-4px',
-                    width: '26px',
-                    height: '26px',
+                    width: '24px',
+                    height: '24px',
                     borderRadius: '50%',
                     background: 'var(--primary-600)',
                     color: '#ffffff',
@@ -230,7 +216,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
                   }}
                   title="Upload new community avatar"
                 >
-                  <Camera size={12} />
+                  <Camera size={11} />
                   <input
                     type="file"
                     accept="image/*"
@@ -269,7 +255,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
           </div>
 
           {/* Group Action Buttons */}
-          <div className="d-flex align-center gap-2 flex-wrap flex-shrink-0">
+          <div className="group-cover-actions">
             <button
               className={`btn btn-sm ${isJoined ? 'btn-secondary' : 'btn-primary'}`}
               onClick={() => toggleJoinCommunity(community.id)}
@@ -319,8 +305,8 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
 
         {/* 3. Facebook Groups Sub-Navigation Tabs */}
         <div 
-          className="touch-scroll-x gap-1 border-top pt-2" 
-          style={{ borderTop: '1px solid var(--border-light)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+          className="touch-tab-nav border-top pt-2" 
+          style={{ borderTop: '1px solid var(--border-light)' }}
         >
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;

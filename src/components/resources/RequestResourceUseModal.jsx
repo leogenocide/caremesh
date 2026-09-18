@@ -85,19 +85,8 @@ const RequestResourceUseContent = ({
 
   return (
     <div 
-      className="modal-overlay" 
+      className="modal-overlay animate-fade-in" 
       onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.7)',
-        backdropFilter: 'blur(5px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem'
-      }}
     >
       <div 
         className="modal-content card p-0 animate-scale-in" 
@@ -105,43 +94,41 @@ const RequestResourceUseContent = ({
         style={{
           width: '100%',
           maxWidth: '620px',
-          maxHeight: 'min(90vh, 90dvh)',
-          borderRadius: 'var(--radius-xl)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: 'var(--shadow-xl)',
           border: '1px solid var(--border-light)'
         }}
       >
         {/* Header */}
         <div 
-          className="p-4 d-flex align-center justify-between border-bottom flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: '#ffffff' }}
+          className="modal-header border-bottom flex-shrink-0"
+          style={{ 
+            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
+            color: '#ffffff'
+          }}
         >
           <div className="d-flex align-center gap-3">
             <div 
               style={{ 
-                width: '42px', 
-                height: '42px', 
+                width: '38px', 
+                height: '38px', 
                 borderRadius: 'var(--radius-lg)', 
                 background: 'rgba(59, 130, 246, 0.2)', 
                 display: 'flex', 
                 alignItems: 'center', 
-                justifyContent: 'center',
-                color: '#60a5fa'
+                justifyContent: 'center', 
+                color: '#60a5fa',
+                flexShrink: 0
               }}
             >
-              <Package size={22} />
+              <Package size={20} />
             </div>
             <div>
               <div className="d-flex align-center gap-2">
                 <h3 className="font-bold text-md text-white mb-0">Request Resource Use</h3>
-                <span className="badge" style={{ background: 'rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.68rem' }}>
+                <span className="badge d-none d-sm-inline-flex" style={{ background: 'rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.68rem' }}>
                   Equipment & Capability Loan
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mb-0" style={{ opacity: 0.9, fontSize: '0.78rem' }}>
+              <p className="text-xs text-slate-300 mb-0 d-none d-sm-block" style={{ opacity: 0.9, fontSize: '0.78rem' }}>
                 Coordinate borrowing and shared custody with resource provider
               </p>
             </div>
@@ -151,6 +138,7 @@ const RequestResourceUseContent = ({
             type="button" 
             className="btn btn-ghost btn-sm btn-icon text-white" 
             onClick={onClose}
+            aria-label="Close dialog"
           >
             <X size={20} />
           </button>
@@ -160,7 +148,7 @@ const RequestResourceUseContent = ({
         <div className="p-3 border-bottom d-flex align-center justify-between gap-3 flex-wrap flex-shrink-0" style={{ background: 'var(--bg-subtle)' }}>
           <div className="d-flex align-center gap-2.5 min-w-0">
             <div className="min-w-0">
-              <div className="d-flex align-center gap-1.5 mb-1">
+              <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
                 <ResourceTypeBadge type={resource.contributionType} />
                 <span className="badge badge-gray text-xs">{resource.category}</span>
                 <span className="text-xs text-muted d-flex align-center gap-1">
@@ -189,7 +177,7 @@ const RequestResourceUseContent = ({
         </div>
 
         {/* Body Form or Success Screen */}
-        <div className="p-4 overflow-y-auto" style={{ overflowY: 'auto', flex: 1, minHeight: 0, maxHeight: 'calc(90vh - 140px)', WebkitOverflowScrolling: 'touch' }}>
+        <div className="modal-body overflow-y-auto" style={{ flex: 1, minHeight: 0 }}>
           {isSuccess ? (
             <div className="text-center py-4 d-flex flex-column align-center gap-3">
               <div 

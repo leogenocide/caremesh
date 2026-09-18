@@ -125,25 +125,15 @@ export const PublicRecordsModerationModal = () => {
     <div 
       className="modal-overlay" 
       onClick={closePublicRecordsModModal}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(5px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem'
-      }}
+      style={{ zIndex: 9999 }}
     >
       <div 
         className="modal-content card p-0 animate-scale-in" 
         style={{
           width: '100%',
           maxWidth: '900px',
-          height: '88vh',
-          maxHeight: '800px',
+          maxHeight: '90vh',
+          minHeight: '340px',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -231,7 +221,7 @@ export const PublicRecordsModerationModal = () => {
           <div className="d-flex flex-column flex-1 overflow-hidden" style={{ minHeight: 0 }}>
             {/* Navigation Tabs & Global Search Bar */}
             <div className="p-3 border-bottom d-flex align-center justify-between gap-3 flex-wrap flex-shrink-0" style={{ background: 'var(--bg-subtle)' }}>
-              <div className="d-flex gap-2">
+              <div className="touch-tab-nav">
                 <button
                   type="button"
                   className={`btn btn-xs ${activeTab === 'reports' ? 'btn-primary' : 'btn-ghost'}`}

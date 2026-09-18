@@ -85,10 +85,7 @@ export const InviteMembersModal = () => {
         </div>
 
         {/* Neighbors List */}
-        <div 
-          className="d-flex flex-column gap-2"
-          style={{ maxHeight: '320px', overflowY: 'auto', paddingRight: '4px' }}
-        >
+        <div className="d-flex flex-column gap-2 invite-modal-list">
           {filteredNeighbors.length > 0 ? (
             filteredNeighbors.map(user => {
               const isSelected = selectedUserIds.includes(user.id);

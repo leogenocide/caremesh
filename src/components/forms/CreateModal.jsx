@@ -231,7 +231,7 @@ export const CreateModal = () => {
       maxWidth="720px"
     >
       {/* Type Selector Tabs */}
-      <div className="touch-scroll-x gap-2 mb-3 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
+      <div className="touch-tab-nav mb-3 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
         {types.map(t => (
           <button
             key={t.id}
@@ -754,7 +754,7 @@ export const CreateModal = () => {
         )}
 
         {/* Submit */}
-        <div className="d-flex justify-end gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-light)' }}>
+        <div className="d-flex justify-end gap-2 mt-3 pt-3 flex-wrap" style={{ borderTop: '1px solid var(--border-light)' }}>
           <button 
             type="button" 
             className="btn btn-ghost" 

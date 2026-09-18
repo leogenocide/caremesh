@@ -72,7 +72,7 @@ export const PlansView = () => {
 
       {/* Stage Tabs & Search Filter */}
       <div className="d-flex align-center justify-between gap-3 flex-wrap">
-        <div className="touch-scroll-x gap-1.5 p-1.5 card w-100-mobile" style={{ borderRadius: 'var(--radius-full)', background: 'var(--bg-muted)' }}>
+        <div className="touch-tab-nav gap-1.5 p-1.5 card w-100-mobile" style={{ borderRadius: 'var(--radius-full)', background: 'var(--bg-muted)' }}>
           <button
             type="button"
             className={`btn btn-sm ${stageTab === 'all' ? 'btn-primary' : 'btn-ghost'}`}
@@ -262,8 +262,8 @@ export const PlansView = () => {
               </div>
 
               {/* Card Footer */}
-              <div className="d-flex align-center justify-between pt-3 border-top text-xs text-muted">
-                <div className="d-flex align-center gap-4">
+              <div className="d-flex align-center justify-between pt-3 border-top text-xs text-muted flex-wrap gap-2">
+                <div className="d-flex align-center gap-3 flex-wrap">
                   <span className="d-flex align-center gap-1">
                     <Users size={13} /> {plan.participants?.length || 1} Working Group Members
                   </span>

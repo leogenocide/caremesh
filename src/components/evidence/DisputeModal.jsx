@@ -218,7 +218,7 @@ export const DisputeModal = () => {
           <label className="form-label font-bold text-xs text-secondary mb-1.5 d-block">
             Choose Challenge Approach
           </label>
-          <div className="d-flex gap-2 p-1 card" style={{ background: 'var(--bg-subtle)' }}>
+          <div className="d-flex gap-2 p-1 card dispute-mode-switcher" style={{ background: 'var(--bg-subtle)' }}>
             <button
               type="button"
               className={`btn btn-sm flex-1 d-flex align-center justify-center gap-2 ${challengeMode === 'claim_dispute' ? 'btn-primary' : 'btn-ghost'}`}
@@ -356,7 +356,7 @@ export const DisputeModal = () => {
             </div>
 
             {/* Actions */}
-            <div className="d-flex align-center justify-end gap-2 pt-2 border-top">
+            <div className="d-flex align-center justify-end gap-2 pt-2 border-top flex-wrap">
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -489,7 +489,7 @@ export const DisputeModal = () => {
             )}
 
             {/* Actions */}
-            <div className="d-flex align-center justify-end gap-2 pt-2 border-top">
+            <div className="d-flex align-center justify-end gap-2 pt-2 border-top flex-wrap">
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"

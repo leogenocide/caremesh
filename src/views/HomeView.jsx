@@ -165,7 +165,7 @@ export const HomeView = () => {
 
 
           {/* Quick Action Button Ribbon */}
-          <div className="d-flex gap-2 flex-wrap">
+          <div className="home-hero-actions">
             <button 
               type="button"
               className="btn btn-sm shadow-sm" 

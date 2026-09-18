@@ -317,10 +317,11 @@ export const EvidenceDetailModal = () => {
           </div>
 
           {/* Sub-Post Tabs */}
-          <div className="d-flex gap-2 border-bottom pb-2 mb-3">
+          <div className="touch-tab-nav border-bottom pb-2 mb-3">
             <button
               type="button"
               className={`btn btn-xs ${activeTab === 'sub_evidence' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
               onClick={() => setActiveTab('sub_evidence')}
             >
               <ShieldCheck size={13} />
@@ -329,6 +330,7 @@ export const EvidenceDetailModal = () => {
             <button
               type="button"
               className={`btn btn-xs ${activeTab === 'sub_contradictions' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
               onClick={() => setActiveTab('sub_contradictions')}
             >
               <AlertCircle size={13} className="text-rose" />

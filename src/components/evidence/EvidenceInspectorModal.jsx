@@ -616,9 +616,10 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
         )}
 
         {/* Tab Switcher */}
-        <div className="d-flex gap-2 border-bottom pb-2 flex-wrap" style={{ borderBottom: '1px solid var(--border-light)' }}>
+        <div className="touch-tab-nav border-bottom pb-2">
           <button
             className={`btn btn-sm ${activeTab === 'evidence' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('evidence')}
           >
             <ShieldCheck size={14} />
@@ -627,6 +628,7 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
 
           <button
             className={`btn btn-sm ${activeTab === 'disputes' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('disputes')}
           >
             <ShieldAlert size={14} className="text-rose" />
@@ -635,6 +637,7 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
 
           <button
             className={`btn btn-sm ${activeTab === 'observations' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('observations')}
           >
             <GitBranch size={14} />
@@ -643,6 +646,7 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
 
           <button
             className={`btn btn-sm ${activeTab === 'assessment' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('assessment')}
           >
             <FileText size={14} />
