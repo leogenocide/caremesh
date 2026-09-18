@@ -1213,7 +1213,7 @@ export const CareMeshMap = ({
       </div>
 
       {/* Map Surface */}
-      <div style={{ position: 'relative', width: '100%', height, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
+      <div className="caremesh-map-wrapper" style={{ position: 'relative', width: '100%', height: height || undefined, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
         {/* Active Custom Pin Shower Status Banner */}

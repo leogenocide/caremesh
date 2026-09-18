@@ -113,7 +113,7 @@ export const CollaborateView = () => {
           </p>
         </div>
 
-        <div className="d-flex gap-2">
+        <div className="collaborate-header-actions">
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => openCreateModal('resource')}
@@ -148,16 +148,16 @@ export const CollaborateView = () => {
               {statusFilter === 'active' && ` (${activeNeedsCount} active needs)`}
             </span>
 
-            <div className="d-flex gap-2 align-center flex-wrap">
+            <div className="collaborate-filter-bar">
               <div className="d-flex align-center gap-1">
-                <span className="text-xs text-muted">Status:</span>
+                <span className="text-xs text-muted flex-shrink-0">Status:</span>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="form-select"
-                  style={{ width: 'auto', padding: '0.3rem 0.65rem', fontSize: '0.8rem' }}
+                  className="form-select text-xs"
+                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
                 >
-                  <option value="active">Active Needs Only ({activeNeedsCount})</option>
+                  <option value="active">Active Needs ({activeNeedsCount})</option>
                   <option value="all">All Requests ({requests.length})</option>
                   <option value="open">Open</option>
                   <option value="partially_fulfilled">In Progress</option>
@@ -166,13 +166,13 @@ export const CollaborateView = () => {
               </div>
 
               <div className="d-flex align-center gap-1">
-                <Filter size={13} className="text-muted" />
-                <span className="text-xs text-muted">Category:</span>
+                <Filter size={13} className="text-muted flex-shrink-0" />
+                <span className="text-xs text-muted flex-shrink-0">Category:</span>
                 <select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="form-select"
-                  style={{ width: 'auto', padding: '0.3rem 0.65rem', fontSize: '0.8rem' }}
+                  className="form-select text-xs"
+                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
                 >
                   <option value="all">All Categories</option>
                   <optgroup label="Standard Categories">
@@ -191,12 +191,12 @@ export const CollaborateView = () => {
               </div>
 
               <div className="d-flex align-center gap-1">
-                <span className="text-xs text-muted">Urgency:</span>
+                <span className="text-xs text-muted flex-shrink-0">Urgency:</span>
                 <select
                   value={urgencyFilter}
                   onChange={(e) => setUrgencyFilter(e.target.value)}
-                  className="form-select"
-                  style={{ width: 'auto', padding: '0.3rem 0.65rem', fontSize: '0.8rem' }}
+                  className="form-select text-xs"
+                  style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }}
                 >
                   <option value="all">All Urgencies</option>
                   <option value="critical">Critical</option>
@@ -318,7 +318,7 @@ export const CollaborateView = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="d-flex gap-2 pt-3 border-top">
+                    <div className="collaborate-card-actions pt-3 border-top">
                       {isOwner ? (
                         <button
                           type="button"
@@ -466,7 +466,7 @@ export const CollaborateView = () => {
                       </div>
                     </div>
 
-                    <div className="d-flex gap-2 pt-3 border-top">
+                    <div className="collaborate-card-actions pt-3 border-top">
                       {isProvider ? (
                         <button
                           type="button"
@@ -600,9 +600,9 @@ export const CollaborateView = () => {
                     </div>
                   </div>
 
-                  <div className="d-flex align-center justify-end gap-2 mt-3 pt-2 border-top">
+                  <div className="d-flex align-center justify-end gap-2 mt-3 pt-2 border-top flex-wrap">
                     <button
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-primary btn-sm w-100-mobile"
                       onClick={() => {
                         if (match.resourceId && match.requestId) {
                           matchResourceToRequest(match.resourceId, match.requestId);

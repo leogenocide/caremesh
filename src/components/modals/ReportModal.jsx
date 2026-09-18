@@ -97,17 +97,7 @@ const ReportModalContent = ({ reportTarget, closeReportModal, reportContent }) =
     <div 
       className="modal-overlay" 
       onClick={closeReportModal}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
-        backdropFilter: 'blur(4px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem'
-      }}
+      style={{ zIndex: 9999 }}
     >
       <div 
         className="modal-content card p-0 animate-scale-in" 

@@ -96,10 +96,11 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="d-flex border-bottom pb-1 gap-2">
+        <div className="touch-tab-nav border-bottom pb-1 gap-2">
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('overview')}
           >
             Hazard Overview
@@ -107,6 +108,7 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'timeline' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('timeline')}
           >
             Updates Timeline ({localUpdates.length})
@@ -114,6 +116,7 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'mitigation' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('mitigation')}
           >
             Mitigation Actions ({report.mitigationActions?.length || 0})

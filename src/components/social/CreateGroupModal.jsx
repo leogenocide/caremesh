@@ -215,7 +215,7 @@ export const CreateGroupModal = () => {
           <label className="form-label font-bold text-xs text-muted text-uppercase">
             Choose a Cover Theme Banner
           </label>
-          <div className="grid-4 gap-2 mb-2">
+          <div className="create-group-banners-grid mb-2">
             {presetBanners.map((p, idx) => (
               <div
                 key={idx}

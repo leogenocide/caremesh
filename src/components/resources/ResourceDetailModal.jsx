@@ -197,7 +197,7 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="d-flex border-bottom pb-1 gap-2 flex-wrap">
+        <div className="touch-tab-nav border-bottom pb-1">
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}

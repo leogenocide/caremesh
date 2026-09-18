@@ -187,7 +187,7 @@ const LogPlanOutcomeForm = ({ plan, onClose }) => {
           <label className="form-label font-bold text-xs text-primary text-uppercase d-block mb-2">
             Outcome Status
           </label>
-          <div className="grid-3 gap-2">
+          <div className="outcome-status-grid gap-2">
             {/* Achieved */}
             <div
               className={`p-3 rounded cursor-pointer card-interactive d-flex flex-column gap-1 text-center ${outcomeStatus === 'achieved' ? 'border-brand' : ''}`}
@@ -364,7 +364,7 @@ const LogPlanOutcomeForm = ({ plan, onClose }) => {
         </div>
 
         {/* Modal Actions */}
-        <div className="d-flex align-center justify-end gap-2 pt-2 border-top">
+        <div className="d-flex align-center justify-end gap-2 pt-2 border-top flex-wrap">
           <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
             Cancel
           </button>

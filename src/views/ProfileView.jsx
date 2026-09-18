@@ -431,8 +431,8 @@ export const ProfileView = () => {
       ) : (
         <>
           {/* Sub-tab Switcher */}
-          <div className="touch-scroll-x gap-2.5 border-bottom pb-3 mb-2">
-        <button
+          <div className="touch-tab-nav border-bottom pb-2 mb-2">
+            <button
           className={`btn btn-sm ${activeSubTab === 'contributions' ? 'btn-primary' : 'btn-ghost'}`}
           style={{ whiteSpace: 'nowrap' }}
           onClick={() => setActiveSubTab('contributions')}

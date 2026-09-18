@@ -455,7 +455,7 @@ export const AdminGovernanceView = () => {
       </div>
 
       {/* KPI Metric Summary Grid */}
-      <div className="d-grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+      <div className="d-grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
         <div className="card p-3 d-flex align-center gap-3">
           <div className="p-2.5 rounded" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
             <Users size={22} />
@@ -506,7 +506,7 @@ export const AdminGovernanceView = () => {
       </div>
 
       {/* Main Navigation Tabs */}
-      <div className="d-flex align-center gap-2 border-bottom pb-2 flex-wrap">
+      <div className="touch-tab-nav border-bottom pb-2">
         <button
           type="button"
           className={`btn btn-sm ${activeTab === 'users' ? 'btn-primary' : 'btn-ghost'}`}
@@ -1063,17 +1063,7 @@ export const AdminGovernanceView = () => {
         <div 
           className="modal-overlay" 
           onClick={() => setSelectedVaultPostForPurge(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.75)',
-            backdropFilter: 'blur(5px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem'
-          }}
+          style={{ zIndex: 9999 }}
         >
           <div className="modal-content card p-4 animate-scale-in" style={{ maxWidth: '480px', width: '100%' }}>
             <div className="d-flex align-center gap-2 text-rose mb-2">

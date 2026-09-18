@@ -454,7 +454,7 @@ export const ExploreView = () => {
       <div className="explore-layout-grid">
         {/* Map Column (Hidden on mobile if user switched to List tab) */}
         {viewMode !== 'list_only' && (
-          <div className={`d-flex flex-column gap-2 ${mobileTab === 'list' ? 'd-none d-md-flex' : ''}`} style={{ position: 'sticky', top: '72px' }}>
+          <div className={`explore-map-column d-flex flex-column gap-2 ${mobileTab === 'list' ? 'd-none d-md-flex' : ''}`}>
             <CareMeshMap 
               selectedEntity={selectedEntity}
               onSelectEntity={handleSelectFromMap}

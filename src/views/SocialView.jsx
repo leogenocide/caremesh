@@ -23,7 +23,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Link2,
-  ArrowLeft
+  ArrowLeft,
+  X
 } from 'lucide-react';
 
 export const SocialView = () => {
@@ -194,10 +195,31 @@ export const SocialView = () => {
           <aside 
             className={`social-left-rail flex-column gap-3 ${isMobileGroupsOpen ? 'd-flex' : 'd-none d-md-flex'}`}
           >
+            {/* Mobile Header with Close Button */}
+            {isMobileGroupsOpen && (
+              <div className="d-flex d-md-none align-center justify-between p-2.5 rounded bg-white border mb-1">
+                <span className="font-bold text-xs text-primary d-flex align-center gap-1.5">
+                  <Users size={14} className="text-brand" />
+                  <span>Community Groups & Circles</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs text-muted"
+                  onClick={() => setIsMobileGroupsOpen(false)}
+                  aria-label="Close group directory"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
             {/* Create Group Button */}
             <button
               className="btn btn-primary w-100 d-flex align-center justify-center gap-2"
-              onClick={openCreateGroupModal}
+              onClick={() => {
+                setIsMobileGroupsOpen(false);
+                openCreateGroupModal();
+              }}
             >
               <Plus size={16} />
               <span>Create New Group</span>
@@ -296,6 +318,7 @@ export const SocialView = () => {
                       onClick={() => {
                         setSelectedCommunityId(grp.id);
                         setGroupSubTab('discussion');
+                        setIsMobileGroupsOpen(false);
                       }}
                     >
                       <div className="d-flex align-center gap-2 mb-1">

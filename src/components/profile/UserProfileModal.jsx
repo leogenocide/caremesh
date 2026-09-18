@@ -278,7 +278,7 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
         </div>
 
         {/* Quick Stats Grid */}
-        <div className="grid-4 gap-2">
+        <div className="profile-stats-grid mb-2">
           <div className="card p-2 text-center" style={{ background: 'var(--bg-subtle)' }}>
             <span className="font-bold text-md text-primary d-block">{userResources.length}</span>
             <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>Shared Resources</span>
@@ -298,7 +298,7 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
         </div>
 
         {/* Content Tabs */}
-        <div className="d-flex gap-1 border-bottom pb-2 flex-wrap" style={{ borderBottom: '1px solid var(--border-light)' }}>
+        <div className="touch-tab-nav border-bottom pb-2">
           <button
             type="button"
             className={`btn btn-xs ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}
