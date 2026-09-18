@@ -39,7 +39,7 @@ export function formatUser(row) {
 
 // POST /api/auth/register
 router.post('/register', (req, res) => {
-  const { name, handle, email, password, role, bio, location, skills } = req.body;
+  const { name, handle, email, password, bio, location, skills } = req.body;
 
   if (!name || !handle || !email || !password) {
     return res.status(400).json({ error: 'Name, handle, email, and password are required.' });
@@ -52,10 +52,14 @@ router.post('/register', (req, res) => {
 
   const id = `usr_${Date.now()}`;
   const passwordHash = bcrypt.hashSync(password, 10);
-  const isCaleb = email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL.toLowerCase();
-  const userRole = isCaleb ? 'System Administrator' : (role || 'Community Member');
-  const isPublicMod = isCaleb ? 1 : 0;
-  const userBadges = isCaleb ? ['System Administrator', 'Verified Administrator'] : ['Community Member'];
+  
+  if (email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL.toLowerCase()) {
+    return res.status(400).json({ error: 'System Administrator account is pre-provisioned and cannot be registered.' });
+  }
+
+  const userRole = 'Community Member';
+  const isPublicMod = 0;
+  const userBadges = ['Community Member'];
 
   db.prepare(`
     INSERT INTO users (id, name, handle, email, password_hash, role, avatar, bio, address, neighborhood, lat, lng, skills, badges, privacy_settings, stats, is_public_moderator)
@@ -105,6 +109,15 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials.' });
   }
 
+  // Account restriction check
+  if (user.status === 'restricted') {
+    return res.status(403).json({
+      error: 'Account Restricted',
+      message: 'Your account has been restricted by an administrator due to community standard violations.',
+      reason: user.restriction_reason || 'Violation of community safety and anti-spam standards.'
+    });
+  }
+
   const formatted = formatUser(user);
   const token = signToken(formatted);
 
@@ -116,9 +129,9 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
-// POST /api/auth/google (Google OAuth / Gmail Login & Auto-Provisioning)
+// POST /api/auth/google (Gmail / Google Login with mandatory password verification)
 router.post('/google', (req, res) => {
-  const { email, name, avatar, googleId, credential } = req.body;
+  const { email, password, credential } = req.body;
 
   let googlePayload = null;
   if (credential) {
@@ -135,96 +148,40 @@ router.post('/google', (req, res) => {
 
   const targetEmail = (googlePayload?.email || email || '').trim().toLowerCase();
   if (!targetEmail) {
-    return res.status(400).json({ error: 'Google email is required.' });
+    return res.status(400).json({ error: 'Gmail or Google email is required.' });
   }
 
-  const isCaleb = targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase();
-  const targetName = (googlePayload?.name || name || targetEmail.split('@')[0] || (isCaleb ? 'Caleb Zothansanga' : 'Community Neighbor')).trim();
-  const targetAvatar = googlePayload?.picture || avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
-  const targetGoogleId = googlePayload?.sub || googleId || `g_${Date.now()}`;
-
-  // 1. Check if user exists by google_id
-  let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(targetGoogleId);
-
-  // 2. If not found by google_id, check by email
-  if (!user) {
-    user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(targetEmail);
+  // MANDATORY SECURITY ENFORCEMENT: Every login from Gmail requires password authentication.
+  // No guest user can bypass password checks or obtain admin access without valid password.
+  if (!password) {
+    return res.status(401).json({ 
+      error: 'Password authentication required. Every login from Gmail requires account password verification.' 
+    });
   }
 
-  if (user) {
-    // Existing user: Link google_id and ensure Caleb has System Administrator privileges
-    if (isCaleb) {
-      db.prepare(`
-        UPDATE users 
-        SET google_id = COALESCE(google_id, ?), 
-            auth_provider = 'google',
-            role = 'System Administrator',
-            is_public_moderator = 1
-        WHERE id = ?
-      `).run(targetGoogleId, user.id);
-    } else if (!user.google_id || user.auth_provider !== 'google') {
-      db.prepare(`
-        UPDATE users 
-        SET google_id = COALESCE(google_id, ?), 
-            auth_provider = 'google' 
-        WHERE id = ?
-      `).run(targetGoogleId, user.id);
-    }
-
-    const formatted = formatUser(db.prepare('SELECT * FROM users WHERE id = ?').get(user.id));
-    const token = signToken(formatted);
-    return res.json({ token, user: formatted, isNewUser: false });
+  const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ? OR handle = ?').get(targetEmail, targetEmail);
+  if (!user || !user.password_hash) {
+    return res.status(401).json({ error: 'Invalid credentials. Account not found or password not configured.' });
   }
 
-  // 3. New user: Generate unique handle from email
-  const baseHandle = isCaleb ? 'caleb_admin' : targetEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
-  let handleCandidate = `@${baseHandle}`;
-  const existingHandle = db.prepare('SELECT id FROM users WHERE handle = ?').get(handleCandidate);
-  if (existingHandle) {
-    handleCandidate = `@${baseHandle}_${Math.floor(100 + Math.random() * 900)}`;
+  const valid = bcrypt.compareSync(password, user.password_hash);
+  if (!valid) {
+    return res.status(401).json({ error: 'Invalid password for this account.' });
   }
 
-  const newId = `usr_g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const newRole = isCaleb ? 'System Administrator' : 'Community Member';
-  const newIsMod = isCaleb ? 1 : 0;
-  const newBadges = isCaleb 
-    ? ['System Administrator', 'Verified Administrator', 'Community Leader'] 
-    : ['Verified Gmail Member'];
+  // Account restriction check
+  if (user.status === 'restricted') {
+    return res.status(403).json({
+      error: 'Account Restricted',
+      message: 'Your account has been restricted by an administrator due to community standard violations.',
+      reason: user.restriction_reason || 'Violation of community safety and anti-spam standards.'
+    });
+  }
 
-  db.prepare(`
-    INSERT INTO users (
-      id, name, handle, email, password_hash, role, avatar, bio,
-      address, neighborhood, lat, lng, skills, badges, privacy_settings,
-      stats, is_public_moderator, google_id, auth_provider
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    newId,
-    targetName,
-    handleCandidate,
-    targetEmail,
-    null,
-    newRole,
-    targetAvatar,
-    isCaleb 
-      ? 'Primary System Administrator for CareMesh.' 
-      : `Community member connecting via Gmail (${targetEmail}).`,
-    'Maplewood Local Area',
-    'Maplewood',
-    37.7749,
-    -122.4194,
-    JSON.stringify(isCaleb ? ['System Administration', 'Platform Security', 'Mutual Aid Governance'] : ['Community Member', 'Neighbor']),
-    JSON.stringify(newBadges),
-    JSON.stringify({ showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true }),
-    JSON.stringify({ contributions: 1, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 }),
-    newIsMod,
-    targetGoogleId,
-    'google'
-  );
+  const formatted = formatUser(user);
+  const token = signToken(formatted);
 
-  const newUser = formatUser(db.prepare('SELECT * FROM users WHERE id = ?').get(newId));
-  const token = signToken(newUser);
-
-  return res.status(201).json({ token, user: newUser, isNewUser: true });
+  return res.json({ token, user: formatted, isNewUser: false });
 });
 
 export default router;

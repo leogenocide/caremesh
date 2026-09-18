@@ -1385,3 +1385,257 @@ textarea:focus-visible,
   to { transform: rotate(360deg); }
 }
 
+/* ==========================================================================
+   Member Readiness Checker Modal - Responsive & Touch / Landscape Architecture
+   ========================================================================== */
+
+.readiness-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+
+.readiness-modal-dialog {
+  width: 100%;
+  max-width: 840px;
+  max-height: min(90vh, 90dvh);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  margin: auto;
+  position: relative;
+}
+
+.readiness-modal-header {
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+  color: #ffffff;
+  padding: 1.15rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.readiness-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6ee7b7;
+  flex-shrink: 0;
+}
+
+.readiness-modal-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+}
+
+.readiness-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--border-light);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+  touch-action: pan-y;
+}
+
+.readiness-detail-pane {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+  min-width: 0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  touch-action: pan-y;
+}
+
+.readiness-form-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  min-height: 0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  touch-action: pan-y;
+}
+
+.readiness-mobile-switcher {
+  display: none;
+}
+
+.readiness-status-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.readiness-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem;
+}
+
+.readiness-inputs-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 0.65rem;
+}
+
+/* Responsive Overrides: Mobile Portrait (< 768px) */
+@media (max-width: 767.98px) {
+  .readiness-modal-overlay {
+    padding: 0.5rem;
+    align-items: center;
+  }
+
+  .readiness-modal-dialog {
+    max-height: 94dvh;
+    border-radius: var(--radius-lg);
+  }
+
+  .readiness-modal-header {
+    padding: 0.85rem 1rem;
+  }
+
+  .readiness-header-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .readiness-header-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .readiness-header-desc {
+    display: none !important;
+  }
+
+  .readiness-header-badge {
+    display: none !important;
+  }
+
+  .readiness-sidebar {
+    display: none !important;
+  }
+
+  .readiness-mobile-switcher {
+    display: block;
+  }
+
+  .readiness-detail-pane {
+    padding: 0.85rem;
+    gap: 0.85rem;
+  }
+
+  .readiness-form-container {
+    padding: 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .readiness-form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+}
+
+/* Responsive Overrides: Landscape View & Short Viewports (max-height: 540px) */
+@media (max-height: 540px) {
+  .readiness-modal-overlay {
+    align-items: flex-start !important;
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  .readiness-modal-dialog {
+    max-height: calc(100dvh - 0.7rem) !important;
+    margin: 0 auto !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  .readiness-modal-header {
+    padding: 0.45rem 0.85rem !important;
+  }
+
+  .readiness-header-icon {
+    width: 26px !important;
+    height: 26px !important;
+  }
+
+  .readiness-header-icon svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  .readiness-modal-header h3 {
+    font-size: 0.85rem !important;
+  }
+
+  .readiness-header-desc {
+    display: none !important;
+  }
+
+  .readiness-header-badge {
+    display: none !important;
+  }
+
+  .readiness-sidebar {
+    width: 210px !important;
+  }
+
+  .readiness-sidebar .p-3 {
+    padding: 0.55rem 0.75rem !important;
+  }
+
+  .readiness-detail-pane {
+    padding: 0.65rem 0.85rem !important;
+    gap: 0.65rem !important;
+  }
+
+  .readiness-form-container {
+    padding: 0.65rem 0.85rem !important;
+    gap: 0.55rem !important;
+  }
+}
+
+/* Very Small Mobile (< 400px) */
+@media (max-width: 399.98px) {
+  .readiness-inputs-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .readiness-status-options {
+    gap: 0.3rem;
+  }
+}
+
+
