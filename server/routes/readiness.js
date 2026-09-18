@@ -53,6 +53,7 @@ export function formatReadinessCheck(row) {
     creator,
     creatorId: row.creator_id,
     communityId: row.community_id,
+    requestId: row.request_id || null,
     title: row.title,
     description: row.description || '',
     notes: row.description || '',
@@ -80,13 +81,17 @@ export function formatReadinessCheck(row) {
 
 // GET /api/readiness
 router.get('/', optionalAuth, (req, res) => {
-  const { communityId } = req.query;
+  const { communityId, requestId } = req.query;
   let sql = 'SELECT * FROM readiness_checks WHERE 1=1';
   const params = [];
 
   if (communityId) {
     sql += ' AND community_id = ?';
     params.push(communityId);
+  }
+  if (requestId) {
+    sql += ' AND request_id = ?';
+    params.push(requestId);
   }
 
   sql += ' ORDER BY created_at DESC';
@@ -106,7 +111,11 @@ router.get('/:id', optionalAuth, (req, res) => {
 
 // POST /api/readiness
 router.post('/', optionalAuth, (req, res) => {
-  const creatorId = req.user ? req.user.id : (req.body.creatorId || 'usr_me');
+  const creatorId = req.user?.id || req.body?.creatorId;
+  if (!creatorId) {
+    return res.status(401).json({ error: 'Authentication required to initiate a readiness check.' });
+  }
+
   const {
     title,
     description = '',
@@ -115,7 +124,8 @@ router.post('/', optionalAuth, (req, res) => {
     shiftTime,
     targetHeadcount = 5,
     requiredSkills = [],
-    communityId = null
+    communityId = null,
+    requestId = null
   } = req.body;
 
   if (!title) {
@@ -128,12 +138,13 @@ router.post('/', optionalAuth, (req, res) => {
   const finalHeadcount = Number(targetHeadcount) || 5;
 
   db.prepare(`
-    INSERT INTO readiness_checks (id, creator_id, community_id, title, description, target_date, target_headcount, required_skills, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+    INSERT INTO readiness_checks (id, creator_id, community_id, request_id, title, description, target_date, target_headcount, required_skills, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
   `).run(
     id,
     creatorId,
-    communityId,
+    communityId || null,
+    requestId || null,
     title,
     finalDescription,
     finalDate,
@@ -141,15 +152,40 @@ router.post('/', optionalAuth, (req, res) => {
     JSON.stringify(requiredSkills)
   );
 
+  // Dispatch notifications to committed volunteers if linked to a request
+  if (requestId) {
+    try {
+      const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(requestId);
+      const volunteerRows = db.prepare('SELECT DISTINCT user_id FROM request_responses WHERE request_id = ? AND user_id != ?').all(requestId, creatorId);
+      const notifInsert = db.prepare(`
+        INSERT INTO notifications (id, user_id, type, title, body, timestamp, is_read, target_view, target_sub_tab, target_entity_id)
+        VALUES (?, ?, 'readiness_check', 'Volunteer Readiness Check', ?, 'Just now', 0, 'collaborate', 'requests', ?)
+      `);
+      for (const v of volunteerRows) {
+        notifInsert.run(
+          `notif_${Date.now()}_${v.user_id}`,
+          v.user_id,
+          `Roll-Call: Please confirm your readiness for help request "${request?.title || title}".`,
+          requestId
+        );
+      }
+    } catch (e) {
+      console.warn('Could not dispatch volunteer readiness notifications:', e.message);
+    }
+  }
+
   const created = formatReadinessCheck(db.prepare('SELECT * FROM readiness_checks WHERE id = ?').get(id));
   res.status(201).json(created);
 });
 
 // POST /api/readiness/:id/respond
 router.post('/:id/respond', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
-  const check = db.prepare('SELECT * FROM readiness_checks WHERE id = ?').get(req.params.id);
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to respond to readiness checks.' });
+  }
 
+  const check = db.prepare('SELECT * FROM readiness_checks WHERE id = ?').get(req.params.id);
   if (!check) {
     return res.status(404).json({ error: 'Readiness check not found' });
   }
@@ -184,6 +220,11 @@ router.post('/:id/respond', optionalAuth, (req, res) => {
 
 // POST /api/readiness/:id/close
 router.post('/:id/close', optionalAuth, (req, res) => {
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to close readiness checks.' });
+  }
+
   const check = db.prepare('SELECT * FROM readiness_checks WHERE id = ?').get(req.params.id);
   if (!check) {
     return res.status(404).json({ error: 'Readiness check not found' });

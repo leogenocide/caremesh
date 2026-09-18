@@ -36,14 +36,20 @@ export function formatConversation(row, currentUserId = 'usr_me') {
 
 // GET /api/conversations
 router.get('/', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || 'usr_me');
+  const userId = req.user?.id || req.query.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to view conversations.' });
+  }
   const rows = db.prepare('SELECT * FROM conversations WHERE user1_id = ? OR user2_id = ? ORDER BY created_at DESC').all(userId, userId);
   res.json(rows.map(r => formatConversation(r, userId)));
 });
 
 // GET /api/conversations/:id
 router.get('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || 'usr_me');
+  const userId = req.user?.id || req.query.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to view conversation.' });
+  }
   const row = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Conversation not found' });
@@ -63,7 +69,10 @@ router.post('/:id/messages', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  const senderId = req.user ? req.user.id : (req.body.senderId || 'usr_me');
+  const senderId = req.user?.id || req.body.senderId;
+  if (!senderId) {
+    return res.status(401).json({ error: 'Authentication required to send messages.' });
+  }
   const conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(req.params.id);
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });

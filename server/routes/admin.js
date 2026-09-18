@@ -13,8 +13,7 @@ const router = express.Router();
  * Require caller to be a System Admin
  */
 function requireSystemAdmin(req, res, next) {
-  const currentUserId = req.user ? req.user.id : (req.query.userId || req.body?.userId || 'usr_me');
-  const caller = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId);
+  const caller = req.user;
 
   if (!caller || !isSystemAdmin(caller)) {
     return res.status(403).json({ error: 'Access forbidden: System Administrator privileges required.' });
@@ -29,8 +28,7 @@ function requireSystemAdmin(req, res, next) {
  * (Public moderators can inspect the evidence vault including circle quarantined discussions)
  */
 function requireAdminOrPublicMod(req, res, next) {
-  const currentUserId = req.user ? req.user.id : (req.query.userId || req.body?.userId || 'usr_me');
-  const caller = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId);
+  const caller = req.user;
 
   if (!caller || (!isSystemAdmin(caller) && !caller.is_public_moderator)) {
     return res.status(403).json({ error: 'Access forbidden: System Admin or Public Moderator privileges required.' });
@@ -167,6 +165,45 @@ router.get('/users/:id/reports', optionalAuth, requireSystemAdmin, (req, res) =>
     auditHistory: audits,
     quarantinedPosts
   });
+});
+
+// POST /api/admin/users/:id/toggle-public-moderator - Promote or revoke Public Moderator role
+router.post('/users/:id/toggle-public-moderator', optionalAuth, requireSystemAdmin, (req, res) => {
+  const targetUserId = req.params.id;
+  const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(targetUserId);
+
+  if (!targetUser) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const newStatus = req.body.isPublicModerator !== undefined
+    ? (req.body.isPublicModerator ? 1 : 0)
+    : (targetUser.is_public_moderator ? 0 : 1);
+  const actionType = newStatus ? 'promote_public_moderator' : 'revoke_public_moderator';
+  const reason = req.body.reason || (newStatus ? 'Appointed to Public Records Moderator' : 'Public Records Moderator role revoked');
+
+  db.prepare('UPDATE users SET is_public_moderator = ? WHERE id = ?').run(newStatus, targetUserId);
+
+  logModerationAudit(db, {
+    moderatorId: req.adminUser.id,
+    moderatorRole: req.adminUser.role || 'System Administrator',
+    actionType,
+    targetType: 'user',
+    targetId: targetUserId,
+    targetAuthorId: targetUserId,
+    targetContentSnapshot: {
+      id: targetUser.id,
+      name: targetUser.name,
+      handle: targetUser.handle,
+      email: targetUser.email,
+      previousRole: targetUser.is_public_moderator ? 'Public Moderator' : 'Member'
+    },
+    reason,
+    notes: req.body.notes || `Public Moderator status changed to ${Boolean(newStatus)} by ${req.adminUser.name}`
+  });
+
+  const updated = formatUser(db.prepare('SELECT * FROM users WHERE id = ?').get(targetUserId));
+  res.json({ success: true, user: updated, isPublicModerator: Boolean(newStatus) });
 });
 
 // GET /api/admin/audit-logs - Stream of all moderation audit logs across platform

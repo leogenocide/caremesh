@@ -2,6 +2,7 @@ import express from 'express';
 import { db, logModerationAudit } from '../db/database.js';
 import { formatUser } from './auth.js';
 import { optionalAuth } from '../middleware/auth.js';
+import { isSystemAdmin } from './communities.js';
 
 const router = express.Router();
 
@@ -22,9 +23,12 @@ router.get('/:id', (req, res) => {
 
 // PATCH /api/users/:id
 router.patch('/:id', optionalAuth, (req, res) => {
-  const currentUserId = req.user ? req.user.id : (req.body?.currentUserId || 'usr_me');
+  const currentUserId = req.user?.id || req.body?.currentUserId;
+  if (!currentUserId) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
   const callingUser = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId);
-  const isPlatformAdmin = callingUser && (callingUser.role === 'admin' || callingUser.role === 'Admin');
+  const isPlatformAdmin = callingUser && isSystemAdmin(callingUser);
 
   if (currentUserId !== req.params.id && !isPlatformAdmin) {
     return res.status(403).json({ error: 'Access forbidden: you cannot modify another user’s profile.' });
@@ -85,11 +89,10 @@ router.post('/:id/toggle-public-moderator', (req, res) => {
 
 // POST /api/users/:id/restrict - Restrict user account (System Admin only)
 router.post('/:id/restrict', optionalAuth, (req, res) => {
-  const adminId = req.user ? req.user.id : (req.body?.adminId || 'usr_me');
-  const admin = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(adminId);
+  const adminId = req.user?.id || req.body?.adminId;
+  const admin = req.user || (adminId ? db.prepare('SELECT * FROM users WHERE id = ?').get(adminId) : null);
 
-  const isAdmin = admin && (admin.id === 'usr_me' || (admin.role && admin.role.toLowerCase().includes('admin')));
-  if (!isAdmin) {
+  if (!admin || !isSystemAdmin(admin)) {
     return res.status(403).json({ error: 'Only system administrators can restrict user accounts.' });
   }
 
@@ -107,11 +110,11 @@ router.post('/:id/restrict', optionalAuth, (req, res) => {
         restricted_at = CURRENT_TIMESTAMP,
         restricted_by_id = ?
     WHERE id = ?
-  `).run(reason, adminId, req.params.id);
+  `).run(reason, admin.id, req.params.id);
 
   logModerationAudit(db, {
-    moderatorId: adminId,
-    moderatorRole: admin.role || 'admin',
+    moderatorId: admin.id,
+    moderatorRole: admin.role || 'System Administrator',
     communityId: null,
     actionType: 'restrict_user',
     targetType: 'user',
@@ -127,11 +130,10 @@ router.post('/:id/restrict', optionalAuth, (req, res) => {
 
 // POST /api/users/:id/unrestrict - Restore user account to active status (System Admin only)
 router.post('/:id/unrestrict', optionalAuth, (req, res) => {
-  const adminId = req.user ? req.user.id : (req.body?.adminId || 'usr_me');
-  const admin = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(adminId);
+  const adminId = req.user?.id || req.body?.adminId;
+  const admin = req.user || (adminId ? db.prepare('SELECT * FROM users WHERE id = ?').get(adminId) : null);
 
-  const isAdmin = admin && (admin.id === 'usr_me' || (admin.role && admin.role.toLowerCase().includes('admin')));
-  if (!isAdmin) {
+  if (!admin || !isSystemAdmin(admin)) {
     return res.status(403).json({ error: 'Only system administrators can unrestrict user accounts.' });
   }
 

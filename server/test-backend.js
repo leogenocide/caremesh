@@ -6,6 +6,8 @@ const BASE_URL = 'http://localhost:3001/api';
 
 async function runTests() {
   resetRateLimits();
+  db.prepare("DELETE FROM communities WHERE id LIKE 'com_priv_%' OR handle LIKE '%privwatch%'").run();
+  db.prepare("UPDATE users SET is_public_moderator = 0 WHERE id != 'usr_caleb' AND email != 'caleb.zothansanga@gmail.com'").run();
   console.log('🧪 Starting CareMesh Backend Verification Test Suite...\n');
 
   // 1. Health Check
@@ -27,16 +29,20 @@ async function runTests() {
   assert(bootData.matchingFactors.length > 0, 'Should contain matching factors');
   console.log(`   ✓ Bootstrap delivered ${bootData.plans.length} plans, ${bootData.observations.length} observations, ${bootData.matchingFactors.length} match evaluations.\n`);
 
-  // 3. Auth & Persona Switching
-  console.log('3. Testing Authentication & Persona Switching (/api/auth)...');
-  // Login
-  const loginRes = await fetch(`${BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ login: '@mayalin', password: 'password123' })
-  });
-  assert.strictEqual(loginRes.status, 200, 'Login should succeed');
-  const loginData = await loginRes.json();
+  // 3. Auth & System Administrator Verification
+  console.log('3. Testing Authentication & System Administrator Elevation (/api/auth)...');
+  const loginAs = async (login, password = 'password123') => {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password })
+    });
+    if (!res.ok) throw new Error(`loginAs failed for ${login} with status ${res.status}`);
+    return await res.json();
+  };
+
+  // Login as Maya Lin
+  const loginData = await loginAs('@mayalin');
   assert(loginData.token, 'Should return JWT token');
   assert.strictEqual(loginData.user.handle, '@mayalin');
 
@@ -46,25 +52,34 @@ async function runTests() {
     'Authorization': `Bearer ${token}`
   };
 
-  const flushServerRateLimits = async () => {
-    await fetch(`${BASE_URL}/admin/antispam/reset-client`, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ clientId: 'all' })
-    });
+  // Verify Caleb Zothansanga System Administrator auto-elevation
+  const calebData = await loginAs('caleb.zothansanga@gmail.com');
+  assert(calebData.token, 'Should return JWT token for System Admin');
+  assert.strictEqual(calebData.user.email, 'caleb.zothansanga@gmail.com');
+  assert.strictEqual(calebData.user.role, 'System Administrator');
+  assert.strictEqual(Boolean(calebData.user.isPublicModerator), true);
+  const calebHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${calebData.token}`
   };
-  await flushServerRateLimits();
 
-  // Switch persona to Dr. Priya Sharma
-  const switchRes = await fetch(`${BASE_URL}/auth/switch-user`, {
+  // Verify deprecated/insecure demo switch-user endpoint is removed (returns 404)
+  const deprecatedSwitchRes = await fetch(`${BASE_URL}/auth/switch-user`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: 'usr_priya' })
   });
-  assert.strictEqual(switchRes.status, 200);
-  const switchData = await switchRes.json();
-  assert.strictEqual(switchData.user.name, 'Priya Sharma');
-  console.log('   ✓ Login and Persona Switching verified.\n');
+  assert.strictEqual(deprecatedSwitchRes.status, 404, 'switch-user endpoint must be removed');
+
+  const flushServerRateLimits = async () => {
+    await fetch(`${BASE_URL}/admin/antispam/reset-client`, {
+      method: 'POST',
+      headers: calebHeaders,
+      body: JSON.stringify({ clientId: 'all' })
+    });
+  };
+  await flushServerRateLimits();
+  console.log('   ✓ Authentication, Caleb System Admin elevation, and switch-user removal verified.\n');
 
   // 4. Observations & Evidence
   console.log('4. Testing Observations & Provenance Evidence Creation...');
@@ -321,12 +336,13 @@ async function runTests() {
   const comRes = await fetch(`${BASE_URL}/communities`);
   const communities = await comRes.json();
   assert(communities.length > 0);
+  const targetComm = communities.find(c => c.id === 'com_01') || communities[0];
 
   const postRes = await fetch(`${BASE_URL}/communities/feed/posts`, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({
-      communityId: communities[0].id,
+      communityId: targetComm.id,
       content: 'Volunteer reminder: Bring water bottles to Saturday morning rain garden maintenance!',
       poll: {
         question: 'Will you need a ride from downtown?',
@@ -425,6 +441,7 @@ async function runTests() {
   });
   assert.strictEqual(delPostRes.status, 200, 'Delete post should return 200');
   console.log('   ✓ Feed post & comment edit and delete verified.');
+  await flushServerRateLimits();
 
   // 11b. Request Edit & Delete
   const newReqRes = await fetch(`${BASE_URL}/requests`, {
@@ -502,6 +519,7 @@ async function runTests() {
   });
   assert.strictEqual(delResRes.status, 200);
   console.log('   ✓ Resource edit and delete verified.');
+  await flushServerRateLimits();
 
   // 11d. Observation Edit & Delete
   const editObsRes = await fetch(`${BASE_URL}/observations/${obsData.id}`, {
@@ -643,23 +661,27 @@ async function runTests() {
   assert.strictEqual(appointedElection.status, 'passed');
   console.log('   ✓ Democratic community moderator nomination, voting & appointment verified.');
 
-  // 12d. Public Records Moderator Toggle
-  const toggleModRes = await fetch(`${BASE_URL}/users/usr_me/toggle-public-moderator`, {
+  // 12d. Public Records Moderator Toggle (Guarded by System Admin)
+  const toggleModRes = await fetch(`${BASE_URL}/admin/users/usr_dave/toggle-public-moderator`, {
     method: 'POST',
-    headers: authHeaders
+    headers: calebHeaders,
+    body: JSON.stringify({ isPublicModerator: true, reason: 'Promoted by System Admin Caleb for public community stewardship' })
   });
   assert.strictEqual(toggleModRes.status, 200);
   const toggleModData = await toggleModRes.json();
-  assert.strictEqual(typeof toggleModData.isPublicModerator, 'boolean');
-  console.log('   ✓ Public Records Moderator role toggle verified.');
+  assert.strictEqual(Boolean(toggleModData.isPublicModerator), true);
+
+  // Non-system admin (Maya) attempting toggle receives 403
+  const nonAdminToggleRes = await fetch(`${BASE_URL}/admin/users/usr_dave/toggle-public-moderator`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ isPublicModerator: false })
+  });
+  assert.strictEqual(nonAdminToggleRes.status, 403, 'Non-system admin must be forbidden from toggling public moderator');
+  console.log('   ✓ Public Records Moderator role toggle and RBAC security guard verified.');
 
   // 12e. Reports & Moderation Queue
-  const daveSwitchRes12 = await fetch(`${BASE_URL}/auth/switch-user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 'usr_dave' })
-  });
-  const daveData12 = await daveSwitchRes12.json();
+  const daveData12 = await loginAs('usr_dave');
   const daveHeaders12 = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${daveData12.token}`
@@ -672,60 +694,64 @@ async function runTests() {
     body: JSON.stringify({
       targetType: 'post',
       targetId: testPost.id,
-      reason: 'Hostility or abusive disruption',
+      reason: 'inappropriate',
+      notes: 'Contains unverified claims during emergency response.',
       scope: 'community',
       communityId: 'com_01'
     })
   });
   assert.strictEqual(reportPostRes.status, 201);
-  const postReport = await reportPostRes.json();
-  assert.strictEqual(postReport.targetType, 'post');
+  const reportPostData = await reportPostRes.json();
+  assert.strictEqual(reportPostData.status, 'pending');
 
-  // Profile picture report (public scope)
+  // User avatar report (Dave reports Maya's avatar)
   const reportAvatarRes = await fetch(`${BASE_URL}/reports`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: daveHeaders12,
     body: JSON.stringify({
-      targetType: 'profile_picture',
-      targetId: 'usr_priya',
-      reason: 'Inappropriate or offensive avatar image',
-      scope: 'public_records',
-      reportedUserId: 'usr_priya'
+      targetType: 'user_avatar',
+      targetId: 'usr_me',
+      reason: 'harassment',
+      notes: 'Testing avatar reporting queue',
+      scope: 'public'
     })
   });
   assert.strictEqual(reportAvatarRes.status, 201);
-  const avatarReport = await reportAvatarRes.json();
-  assert.strictEqual(avatarReport.targetType, 'profile_picture');
+  const reportAvatarData = await reportAvatarRes.json();
+  assert.strictEqual(reportAvatarData.status, 'pending');
 
-  // Resolve post report (remove post)
-  const resolvePostRes = await fetch(`${BASE_URL}/reports/${postReport.id}`, {
+  // Resolve post report (Community Moderator / Admin resolves)
+  const resolvePostRes = await fetch(`${BASE_URL}/reports/${reportPostData.id}`, {
     method: 'PATCH',
     headers: authHeaders,
     body: JSON.stringify({
-      action: 'remove_post',
-      resolutionNotes: 'Removed violating test post'
+      status: 'resolved',
+      actionTaken: 'quarantined',
+      resolutionNotes: 'Post moved to moderation review queue'
     })
   });
   assert.strictEqual(resolvePostRes.status, 200);
 
-  // Resolve avatar report (reset avatar)
-  const resolveAvatarRes = await fetch(`${BASE_URL}/reports/${avatarReport.id}`, {
+  // Resolve avatar report (Public Moderator / Admin resolves)
+  const resolveAvatarRes = await fetch(`${BASE_URL}/reports/${reportAvatarData.id}`, {
     method: 'PATCH',
     headers: authHeaders,
     body: JSON.stringify({
-      action: 'reset_avatar',
+      status: 'resolved',
+      actionTaken: 'dismissed',
       resolutionNotes: 'Reset avatar to safe default placeholder'
     })
   });
   assert.strictEqual(resolveAvatarRes.status, 200);
   console.log('   ✓ Post and Profile Picture reports & moderation resolutions verified.');
 
-  // 12f. Member Readiness Checker
+  // 12f. Member Readiness Checker with Request Linkage
   const createCheckRes = await fetch(`${BASE_URL}/readiness`, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({
       title: 'Emergency Watershed Repair Shift',
+      requestId: 'req_01',
       communityId: 'com_01',
       shiftTime: 'Tomorrow 9:00 AM',
       targetHeadcount: 4,
@@ -735,6 +761,15 @@ async function runTests() {
   assert.strictEqual(createCheckRes.status, 201);
   const readinessCheck = await createCheckRes.json();
   assert.strictEqual(readinessCheck.title, 'Emergency Watershed Repair Shift');
+  assert.strictEqual(readinessCheck.requestId, 'req_01');
+
+  // Fetch readiness checks filtered by requestId
+  const getByReqRes = await fetch(`${BASE_URL}/readiness?requestId=req_01`, {
+    headers: authHeaders
+  });
+  assert.strictEqual(getByReqRes.status, 200);
+  const reqChecks = await getByReqRes.json();
+  assert(reqChecks.some(rc => rc.id === readinessCheck.id), 'Should find readiness check for req_01');
 
   // Member responds: Ready with 4 hours
   const respondCheckRes = await fetch(`${BASE_URL}/readiness/${readinessCheck.id}/respond`, {
@@ -759,7 +794,7 @@ async function runTests() {
   assert.strictEqual(closeCheckRes.status, 200);
   const closedCheck = await closeCheckRes.json();
   assert.strictEqual(closedCheck.status, 'closed');
-  console.log('   ✓ Member Readiness Checker creation, responses, and closing verified.\n');
+  console.log('   ✓ Member Readiness Checker request linkage, responses, and closing verified.\n');
 
   // 13. Testing Lending & Equipment Loan Lifecycle
   console.log('13. Testing Lending & Equipment Loan Lifecycle (Request Use, Approval, Custody, Return)...');
@@ -768,19 +803,24 @@ async function runTests() {
   // 13a. Submit loan request (verify provider self-borrow rejected, borrower usr_elena accepted)
   const selfBorrowRes = await fetch(`${BASE_URL}/resources/res_01/request-use`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: daveHeaders12, // Dave is provider of res_01
     body: JSON.stringify({
-      borrowerId: 'usr_dave', // usr_dave is provider
+      borrowerId: 'usr_dave',
       purpose: 'Borrowing own pump'
     })
   });
   assert.strictEqual(selfBorrowRes.status, 400);
 
+  const elenaData = await loginAs('usr_elena');
+  const elenaHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${elenaData.token}`
+  };
+
   const loanReqRes = await fetch(`${BASE_URL}/resources/res_01/request-use`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: elenaHeaders,
     body: JSON.stringify({
-      borrowerId: 'usr_elena',
       purpose: 'Clearing ditch along North 4th Street',
       startDate: '2026-09-06',
       dueDate: '2026-09-10',
@@ -800,7 +840,7 @@ async function runTests() {
   // 13b. Provider approves loan
   const approveLoanRes = await fetch(`${BASE_URL}/resources/assignments/${loanReqData.assignment.id}/status`, {
     method: 'PATCH',
-    headers: authHeaders,
+    headers: daveHeaders12,
     body: JSON.stringify({
       status: 'accepted',
       notes: 'Approved. Pickup at Maplewood Yard.'
@@ -817,7 +857,7 @@ async function runTests() {
   // 13c. Borrower marks in-transit / returned
   const inTransitRes = await fetch(`${BASE_URL}/resources/assignments/${loanReqData.assignment.id}/status`, {
     method: 'PATCH',
-    headers: authHeaders,
+    headers: elenaHeaders,
     body: JSON.stringify({
       status: 'in_transit',
       notes: 'Dropped off at yard gate.'
@@ -831,7 +871,7 @@ async function runTests() {
   // 13d. Provider confirms return & condition
   const completeLoanRes = await fetch(`${BASE_URL}/resources/assignments/${loanReqData.assignment.id}/status`, {
     method: 'PATCH',
-    headers: authHeaders,
+    headers: daveHeaders12,
     body: JSON.stringify({
       status: 'completed',
       returnCondition: 'Good / Cleaned',
@@ -1136,6 +1176,7 @@ async function runTests() {
   // ==========================================
   // 18. Testing Structured Evidence Types
   // ==========================================
+  await flushServerRateLimits();
   console.log('18. Testing Structured Evidence Types (Measurement, Sensor, Lab Test)...');
 
   const evidenceTypesToTest = ['measurement', 'sensor', 'lab_test', 'document', 'photo'];
@@ -1229,6 +1270,7 @@ async function runTests() {
   // ==========================================
   // 20. Testing Poster / Admin Deletion of Everything (Cascade & Insides)
   // ==========================================
+  await flushServerRateLimits();
   console.log('20. Testing Poster / Admin Deletion of Everything (Posts, Evidence, Disputes, Responses, Safety, Plan Parts)...');
 
   // 20a. Evidence creation and cascade deletion
@@ -1383,14 +1425,8 @@ async function runTests() {
   assert.ok(meNotifs.length > 0, 'usr_me should have notifications');
   assert.ok(meNotifs.every(n => n.userId === 'usr_me'), 'All usr_me notifications must have userId === usr_me');
 
-  // Switch/Login as Dave
-  const daveSwitchRes = await fetch(`${BASE_URL}/auth/switch-user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 'usr_dave' })
-  });
-  assert.strictEqual(daveSwitchRes.status, 200);
-  const daveData = await daveSwitchRes.json();
+  // Login as Dave
+  const daveData = await loginAs('usr_dave');
   const daveHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${daveData.token}`
@@ -1449,13 +1485,8 @@ async function runTests() {
   assert.strictEqual(testPrivateReqRes.status, 201);
   const testPrivateReq = await testPrivateReqRes.json();
 
-  // Create an outsider user
-  const outsiderLoginRes = await fetch(`${BASE_URL}/auth/switch-user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 'usr_priya' }) // Priya is not in com_01
-  });
-  const outsiderData = await outsiderLoginRes.json();
+  // Login as outsider user
+  const outsiderData = await loginAs('usr_priya'); // Priya is not in com_01
   const outsiderHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${outsiderData.token}`
@@ -1718,10 +1749,10 @@ async function runTests() {
   });
   assert.strictEqual(davePrivPostRes.status, 403, 'Non-member posting in private circle must return 403');
 
-  // Platform admin (Maya) posts in the private circle -> 201
+  // Platform admin (Caleb) posts in the private circle -> 201
   const adminPrivPostRes = await fetch(`${BASE_URL}/communities/feed/posts`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({
       communityId: privCircleId,
       content: 'Admin safety announcement in private circle'
@@ -1738,10 +1769,10 @@ async function runTests() {
   });
   assert.strictEqual(davePrivCommentRes.status, 403, 'Non-member commenting in private circle must return 403');
 
-  // Platform admin (Maya) comments on the post in private circle -> 201
+  // Platform admin (Caleb) comments on the post in private circle -> 201
   const adminPrivCommentRes = await fetch(`${BASE_URL}/communities/feed/posts/${adminPrivPost.id}/comments`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ text: 'Admin update note' })
   });
   assert.strictEqual(adminPrivCommentRes.status, 201, 'Platform admin can comment in private circle');
@@ -1769,12 +1800,7 @@ async function runTests() {
   const testEvent = await testEventRes.json();
 
   // Non-organizer non-admin (Marcus) tries to edit Dave's event -> 403
-  const marcusSwitchRes = await fetch(`${BASE_URL}/auth/switch-user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 'usr_marcus' })
-  });
-  const marcusData = await marcusSwitchRes.json();
+  const marcusData = await loginAs('usr_marcus');
   const marcusHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${marcusData.token}`
@@ -1787,10 +1813,10 @@ async function runTests() {
   });
   assert.strictEqual(unauthorizedEditEventRes.status, 403, 'Non-organizer cannot edit event');
 
-  // Platform admin (Maya) edits Dave's event -> 200
+  // Platform admin (Caleb) edits Dave's event -> 200
   const adminEditEventRes = await fetch(`${BASE_URL}/projects/${testEvent.id}`, {
     method: 'PATCH',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ title: 'Dave Neighborhood Clean-up (Admin Verified)' })
   });
   assert.strictEqual(adminEditEventRes.status, 200, 'Platform admin can edit event for moderation');
@@ -1802,10 +1828,10 @@ async function runTests() {
   });
   assert.strictEqual(unauthorizedDelEventRes.status, 403, 'Non-organizer cannot delete event');
 
-  // Platform admin deletes event -> 200
+  // Platform admin (Caleb) deletes event -> 200
   const adminDelEventRes = await fetch(`${BASE_URL}/projects/${testEvent.id}`, {
     method: 'DELETE',
-    headers: authHeaders
+    headers: calebHeaders
   });
   assert.strictEqual(adminDelEventRes.status, 200, 'Platform admin can delete event for moderation');
   console.log('   ✓ Project/Event admin moderation (edit & delete) verified.');
@@ -1833,18 +1859,18 @@ async function runTests() {
   });
   assert.strictEqual(unauthorizedEditRes.status, 403, 'Non-owner non-admin cannot edit resource');
 
-  // Platform admin edits resource -> 200
+  // Platform admin (Caleb) edits resource -> 200
   const adminEditRes = await fetch(`${BASE_URL}/resources/${testResource.id}`, {
     method: 'PATCH',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ title: 'Dave Cordless Drill (Moderated)' })
   });
   assert.strictEqual(adminEditRes.status, 200, 'Platform admin can edit resource for moderation');
 
-  // Platform admin deletes resource -> 200
+  // Platform admin (Caleb) deletes resource -> 200
   const adminDelRes = await fetch(`${BASE_URL}/resources/${testResource.id}`, {
     method: 'DELETE',
-    headers: authHeaders
+    headers: calebHeaders
   });
   assert.strictEqual(adminDelRes.status, 200, 'Platform admin can delete resource for moderation');
   console.log('   ✓ Resource admin moderation (edit & delete) verified.\n');
@@ -1860,19 +1886,19 @@ async function runTests() {
   assert.strictEqual(unauthAdminUsersRes.status, 403, 'Non-admin accessing /api/admin/users must return 403');
 
   // Admin searches by keyword "Elena" -> returns user
-  const adminSearchRes = await fetch(`${BASE_URL}/admin/users?search=Elena`, { headers: authHeaders });
+  const adminSearchRes = await fetch(`${BASE_URL}/admin/users?search=Elena`, { headers: calebHeaders });
   assert.strictEqual(adminSearchRes.status, 200);
   const searchResults = await adminSearchRes.json();
   assert.ok(searchResults.some(u => u.name.includes('Elena')), 'Search by name must find Elena');
 
   // Admin filters by role=admin -> all returned must have admin role
-  const adminRoleRes = await fetch(`${BASE_URL}/admin/users?role=admin`, { headers: authHeaders });
+  const adminRoleRes = await fetch(`${BASE_URL}/admin/users?role=admin`, { headers: calebHeaders });
   assert.strictEqual(adminRoleRes.status, 200);
   const roleResults = await adminRoleRes.json();
   assert.ok(roleResults.every(u => (u.role || '').toLowerCase() === 'admin'), 'Role filter must only return admins');
 
   // Admin filters by status=active -> all returned must have status active
-  const adminStatusRes = await fetch(`${BASE_URL}/admin/users?status=active`, { headers: authHeaders });
+  const adminStatusRes = await fetch(`${BASE_URL}/admin/users?status=active`, { headers: calebHeaders });
   assert.strictEqual(adminStatusRes.status, 200);
   const statusResults = await adminStatusRes.json();
   assert.ok(statusResults.every(u => u.status === 'active'), 'Status filter must only return active users');
@@ -1895,7 +1921,7 @@ async function runTests() {
   const filedReport = await filedReportRes.json();
 
   // Admin fetches dossier for Marcus
-  const dossierRes = await fetch(`${BASE_URL}/admin/users/usr_marcus/reports`, { headers: authHeaders });
+  const dossierRes = await fetch(`${BASE_URL}/admin/users/usr_marcus/reports`, { headers: calebHeaders });
   assert.strictEqual(dossierRes.status, 200);
   const dossier = await dossierRes.json();
   assert.strictEqual(dossier.user.id, 'usr_marcus');
@@ -1924,7 +1950,7 @@ async function runTests() {
   // Moderator deletes/quarantines post
   const modDeleteRes = await fetch(`${BASE_URL}/communities/feed/posts/${softPost.id}`, {
     method: 'DELETE',
-    headers: authHeaders
+    headers: calebHeaders
   });
   assert.strictEqual(modDeleteRes.status, 200);
   const modDelData = await modDeleteRes.json();
@@ -1936,7 +1962,7 @@ async function runTests() {
   assert.ok(!feedAfter.some(p => p.id === softPost.id), 'Quarantined post must NOT appear in normal feed');
 
   // Verify post IS retained in Circle Evidence Vault
-  const circleVaultRes = await fetch(`${BASE_URL}/communities/com_01/moderation/vault`, { headers: authHeaders });
+  const circleVaultRes = await fetch(`${BASE_URL}/communities/com_01/moderation/vault`, { headers: calebHeaders });
   assert.strictEqual(circleVaultRes.status, 200);
   const circleVault = await circleVaultRes.json();
   const quarantinedPostInCircle = circleVault.find(p => p.id === softPost.id);
@@ -1947,12 +1973,7 @@ async function runTests() {
   // D. Public Moderator Evidence Vault Access (Option A requirement)
   // Enable public moderator on Dave or Priya
   db.prepare('UPDATE users SET is_public_moderator = 1 WHERE id = ?').run('usr_priya');
-  const priyaSwitchRes = await fetch(`${BASE_URL}/auth/switch-user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 'usr_priya' })
-  });
-  const priyaData = await priyaSwitchRes.json();
+  const priyaData = await loginAs('usr_priya');
   const priyaModHeaders = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${priyaData.token}`
@@ -1969,7 +1990,7 @@ async function runTests() {
   // System Admin restores the quarantined post
   const restoreRes = await fetch(`${BASE_URL}/admin/vault/${softPost.id}/restore`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ reason: 'Appeal accepted, post compliant' })
   });
   assert.strictEqual(restoreRes.status, 200);
@@ -1982,10 +2003,10 @@ async function runTests() {
   assert.ok(feedRestored.some(p => p.id === softPost.id), 'Restored post must reappear in community feed');
 
   // Quarantine again and then permanently purge
-  await fetch(`${BASE_URL}/communities/feed/posts/${softPost.id}`, { method: 'DELETE', headers: authHeaders });
+  await fetch(`${BASE_URL}/communities/feed/posts/${softPost.id}`, { method: 'DELETE', headers: calebHeaders });
   const purgeRes = await fetch(`${BASE_URL}/admin/vault/${softPost.id}/purge`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ reason: 'Confirmed egregious violation' })
   });
   assert.strictEqual(purgeRes.status, 200);
@@ -1997,7 +2018,7 @@ async function runTests() {
   // Restrict Marcus
   const restrictRes = await fetch(`${BASE_URL}/users/usr_marcus/restrict`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ reason: 'Spamming harmful material', notes: 'Temporary administrative suspension' })
   });
   assert.strictEqual(restrictRes.status, 200);
@@ -2021,7 +2042,7 @@ async function runTests() {
   // Admin reinstates (unrestricts) Marcus
   const unrestrictRes = await fetch(`${BASE_URL}/users/usr_marcus/unrestrict`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ reason: 'Disciplinary review period concluded' })
   });
   assert.strictEqual(unrestrictRes.status, 200);
@@ -2043,10 +2064,10 @@ async function runTests() {
   console.log('   ✓ Account restriction enforcement & reinstatement verified.');
 
   // G. Anti-Spam Write Rate Limiting & Admin Exemption
-  // System Admin (authHeaders) write action gets Unlimited header
+  // System Admin (calebHeaders) write action gets Unlimited header
   const adminWriteRes = await fetch(`${BASE_URL}/communities/feed/posts`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({
       communityId: 'com_01',
       content: 'Admin write verification'
@@ -2059,7 +2080,7 @@ async function runTests() {
   console.log('   ✓ Anti-spam rate limiting & system admin exemption verified.');
 
   // H. Platform Moderation Audit Trail
-  const auditRes = await fetch(`${BASE_URL}/admin/audit-logs`, { headers: authHeaders });
+  const auditRes = await fetch(`${BASE_URL}/admin/audit-logs`, { headers: calebHeaders });
   assert.strictEqual(auditRes.status, 200);
   const allAudits = await auditRes.json();
   assert.ok(allAudits.length >= 4, 'Audit logs must capture moderation actions');
@@ -2071,7 +2092,7 @@ async function runTests() {
   console.log('   ✓ Platform moderation audit trail recording verified.');
 
   // I. Live Anti-Spam Telemetry & Quota Reset
-  const telemetryRes = await fetch(`${BASE_URL}/admin/antispam/telemetry`, { headers: authHeaders });
+  const telemetryRes = await fetch(`${BASE_URL}/admin/antispam/telemetry`, { headers: calebHeaders });
   assert.strictEqual(telemetryRes.status, 200, 'Admin telemetry endpoint must return 200');
   const telemetryData = await telemetryRes.json();
   assert.strictEqual(typeof telemetryData.windowSeconds, 'number');
@@ -2081,7 +2102,7 @@ async function runTests() {
 
   const resetClientRes = await fetch(`${BASE_URL}/admin/antispam/reset-client`, {
     method: 'POST',
-    headers: authHeaders,
+    headers: calebHeaders,
     body: JSON.stringify({ clientId: 'all' })
   });
   assert.strictEqual(resetClientRes.status, 200);

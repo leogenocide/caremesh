@@ -221,6 +221,7 @@ export const CareMeshProvider = ({ children }) => {
 
   const [isReadinessModalOpen, setIsReadinessModalOpen] = useState(false);
   const [readinessModalCommunity, setReadinessModalCommunity] = useState(null);
+  const [readinessModalCheckId, setReadinessModalCheckId] = useState(null);
 
   const [isPublicRecordsModModalOpen, setIsPublicRecordsModModalOpen] = useState(false);
 
@@ -2990,31 +2991,9 @@ export const CareMeshProvider = ({ children }) => {
     setNotifications([notif]);
   };
 
-  const switchUser = async (userId) => {
-    try {
-      const res = await api.auth.switchUser(userId);
-      if (res?.user) {
-        setCurrentUser(res.user);
-        localStorage.setItem('caremesh_user', JSON.stringify(res.user));
-        const bootstrapData = await refreshUserData(res.user);
-        const notif = {
-          id: `notif_${Date.now()}`,
-          userId: res.user.id,
-          type: 'auth_switch',
-          title: 'Switched Active Account',
-          body: `Now active as ${res.user.name} (${res.user.handle}).`,
-          timestamp: 'Just now',
-          isRead: false,
-          targetView: 'profile',
-          targetEntityId: res.user.id
-        };
-        setNotifications(prev => [notif, ...(bootstrapData?.notifications || prev.filter(n => n.userId === res.user.id))]);
-      }
-      return res;
-    } catch (err) {
-      console.warn('Backend switchUser error:', err);
-      throw err;
-    }
+  const switchUser = async () => {
+    openAuthModal('login');
+    showToast?.('Please sign in with your account credentials.', 'info');
   };
 
   const switchUserAccount = switchUser;
@@ -3072,13 +3051,23 @@ export const CareMeshProvider = ({ children }) => {
     setIsReportModalOpen(false);
   };
 
-  const openReadinessModal = useCallback((community = null) => {
-    setReadinessModalCommunity(community);
+  const openReadinessModal = useCallback((communityOrOptions = null, targetCheckId = null) => {
+    if (communityOrOptions && typeof communityOrOptions === 'object' && !communityOrOptions.membersCount && !communityOrOptions.slug) {
+      if (communityOrOptions.requestId || communityOrOptions.request || communityOrOptions.checkId) {
+        setReadinessModalCommunity(null);
+        setReadinessModalCheckId(communityOrOptions.checkId || targetCheckId || null);
+        setIsReadinessModalOpen(true);
+        return;
+      }
+    }
+    setReadinessModalCommunity(communityOrOptions);
+    setReadinessModalCheckId(targetCheckId || null);
     setIsReadinessModalOpen(true);
   }, []);
 
   const closeReadinessModal = () => {
     setReadinessModalCommunity(null);
+    setReadinessModalCheckId(null);
     setIsReadinessModalOpen(false);
   };
 
@@ -3913,6 +3902,7 @@ export const CareMeshProvider = ({ children }) => {
       closeReportModal,
       isReadinessModalOpen,
       readinessModalCommunity,
+      readinessModalCheckId,
       openReadinessModal,
       closeReadinessModal,
       isPublicRecordsModModalOpen,

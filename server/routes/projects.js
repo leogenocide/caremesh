@@ -3,16 +3,9 @@ import { db } from '../db/database.js';
 import { formatUser } from './auth.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { parsePaginationParams, executePaginatedQuery } from '../utils/pagination.js';
+import { isPlatformAdmin } from './communities.js';
 
 const router = express.Router();
-
-function isPlatformAdmin(user) {
-  if (!user) return false;
-  if (user.id === 'usr_me') return true;
-  if (user.is_public_moderator) return true;
-  const role = (user.role || '').toLowerCase();
-  return role.includes('admin') || role.includes('coordinator');
-}
 
 export function formatProject(row) {
   if (!row) return null;
@@ -119,7 +112,10 @@ router.post('/', optionalAuth, (req, res) => {
   }
 
   const id = `evt_${Date.now()}`;
-  const organizerId = req.user ? req.user.id : (req.body.organizerId || 'usr_me');
+  const organizerId = req.user ? req.user.id : req.body.organizerId;
+  if (!organizerId) {
+    return res.status(401).json({ error: 'Authentication required to create a project or event.' });
+  }
 
   const tx = db.transaction(() => {
     db.prepare(`
@@ -154,7 +150,11 @@ router.post('/', optionalAuth, (req, res) => {
 
 // POST /api/projects/:id/join
 router.post('/:id/join', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  const userId = req.user ? req.user.id : req.body.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to join an event.' });
+  }
+
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!project) {
     return res.status(404).json({ error: 'Project not found' });
@@ -186,7 +186,11 @@ router.post('/:id/messages', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  const senderId = req.user ? req.user.id : (req.body.senderId || 'usr_me');
+  const senderId = req.user ? req.user.id : req.body.senderId;
+  if (!senderId) {
+    return res.status(401).json({ error: 'Authentication required to post messages.' });
+  }
+
   const id = `msg_${Date.now()}`;
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -200,7 +204,11 @@ router.post('/:id/messages', optionalAuth, (req, res) => {
 
 // PATCH /api/projects/:id
 router.patch('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  const userId = req.user ? req.user.id : req.body.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to modify an event.' });
+  }
+
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!project) {
     return res.status(404).json({ error: 'Event / project not found' });
@@ -235,7 +243,11 @@ router.patch('/:id', optionalAuth, (req, res) => {
 
 // DELETE /api/projects/:id
 router.delete('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || req.body?.userId || 'usr_me');
+  const userId = req.user ? req.user.id : (req.query.userId || req.body?.userId);
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to delete an event.' });
+  }
+
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!project) {
     return res.status(404).json({ error: 'Event / project not found' });

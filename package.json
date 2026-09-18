@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node server/index.js",
     "server": "node server/index.js",
     "server:test": "node server/test-backend.js",
     "dev:all": "concurrently -k -p \"[{name}]\" -n \"SERVER,VITE\" -c \"cyan.bold,green.bold\" \"node server/index.js\" \"vite\"",

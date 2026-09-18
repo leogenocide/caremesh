@@ -588,6 +588,7 @@ CREATE TABLE IF NOT EXISTS readiness_checks (
   id TEXT PRIMARY KEY,
   creator_id TEXT NOT NULL,
   community_id TEXT,
+  request_id TEXT,
   title TEXT NOT NULL,
   description TEXT,
   target_date TEXT,
@@ -595,7 +596,8 @@ CREATE TABLE IF NOT EXISTS readiness_checks (
   required_skills TEXT DEFAULT '[]',
   status TEXT DEFAULT 'active', -- 'active' | 'closed'
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (creator_id) REFERENCES users(id)
+  FOREIGN KEY (creator_id) REFERENCES users(id),
+  FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS readiness_responses (
@@ -642,6 +644,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 CREATE INDEX IF NOT EXISTS idx_reports_comm ON reports(community_id);
 CREATE INDEX IF NOT EXISTS idx_elections_comm ON moderator_elections(community_id);
 CREATE INDEX IF NOT EXISTS idx_readiness_comm ON readiness_checks(community_id);
+CREATE INDEX IF NOT EXISTS idx_readiness_req ON readiness_checks(request_id);
 CREATE INDEX IF NOT EXISTS idx_res_assignments_res ON resource_assignments(resource_id);
 CREATE INDEX IF NOT EXISTS idx_audit_mod ON moderation_audit_logs(moderator_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON moderation_audit_logs(target_id);

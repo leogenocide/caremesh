@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import { initDatabase } from './db/database.js';
@@ -107,15 +108,19 @@ app.use('/api', (req, res) => {
   res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
-// Serve React frontend
+// Serve React frontend (production build)
 const frontendPath = path.join(__dirname, '../dist');
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
 
-app.use(express.static(frontendPath));
-
-// React Router fallback
-app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
-});
+  // React Router SPA fallback for non-API GET requests
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      return res.sendFile(path.join(frontendPath, 'index.html'));
+    }
+    next();
+  });
+}
 
 // Error handling middleware
 app.use((err, req, res, _next) => {
@@ -129,10 +134,10 @@ app.use((err, req, res, _next) => {
   });
 });
 
-export const server = app.listen(PORT, () => {
-  console.log(`🚀 CareMesh Backend Server running on http://localhost:${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`📦 Bootstrap API: http://localhost:${PORT}/api/bootstrap`);
+export const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 CareMesh Server running on http://0.0.0.0:${PORT}`);
+  console.log(`📡 Health check: http://0.0.0.0:${PORT}/api/health`);
+  console.log(`📦 Bootstrap API: http://0.0.0.0:${PORT}/api/bootstrap`);
 });
 
 server.on('error', (err) => {

@@ -20,7 +20,6 @@ import {
   LogIn,
   LogOut,
   UserPlus,
-  Check,
   Globe,
   UserCheck,
   ShieldCheck
@@ -44,8 +43,6 @@ export const Navbar = () => {
     communities,
     openAuthModal,
     logoutUser,
-    switchUserAccount,
-    mockUsers,
     openPublicRecordsModModal,
     openReadinessModal
   } = useCareMesh();
@@ -54,6 +51,11 @@ export const Navbar = () => {
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const isSystemAdminUser = currentUser?.email === 'caleb.zothansanga@gmail.com' || 
+    currentUser?.role === 'System Administrator' || 
+    currentUser?.role === 'admin' || 
+    currentUser?.isAdmin;
 
   const notifRef = useRef(null);
   const createMenuRef = useRef(null);
@@ -524,7 +526,7 @@ export const Navbar = () => {
         </div>
 
         {/* System Admin Governance Quick Link */}
-        {(currentUser?.isAdmin || currentUser?.role === 'admin' || currentUser?.id === 'usr_me') && (
+        {isSystemAdminUser && (
           <button
             type="button"
             className="btn btn-ghost btn-icon d-none d-sm-inline-flex"
@@ -744,7 +746,7 @@ export const Navbar = () => {
                   <span>Platform Oversight</span>
                 </span>
 
-                {(currentUser?.isAdmin || currentUser?.role === 'admin' || currentUser?.id === 'usr_me') && (
+                {isSystemAdminUser && (
                   <button
                     type="button"
                     className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
@@ -774,7 +776,7 @@ export const Navbar = () => {
                     <Globe size={14} className="text-blue-600" />
                     <span>Public Records Moderation</span>
                   </div>
-                  {(currentUser?.isPublicModerator || currentUser?.isAdmin) && (
+                  {(currentUser?.isPublicModerator || currentUser?.isAdmin || isSystemAdminUser) && (
                     <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem' }}>Mod</span>
                   )}
                 </button>
@@ -792,41 +794,6 @@ export const Navbar = () => {
                     <span>Member Readiness Checker</span>
                   </div>
                 </button>
-              </div>
-
-              {/* Demo Persona Switcher */}
-              <div className="p-2 border-bottom">
-                <span className="text-xs font-bold text-secondary d-flex align-center gap-1 px-2 py-1 mb-1" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <Sparkles size={12} className="text-brand" />
-                  <span>Switch Demo Persona</span>
-                </span>
-                <div className="d-flex flex-column gap-1">
-                  {(mockUsers || []).map(u => {
-                    const isActive = currentUser?.id === u.id || currentUser?.handle === u.handle;
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        className={`btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 ${isActive ? 'bg-primary-50 text-brand font-semibold' : ''}`}
-                        onClick={() => {
-                          switchUserAccount(u.id);
-                          setIsUserMenuOpen(false);
-                        }}
-                        style={{ fontSize: '0.78rem' }}
-                      >
-                        <div className="d-flex align-center gap-2 min-w-0">
-                          <img
-                            src={u.avatar}
-                            alt={u.name}
-                            style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
-                          />
-                          <span className="text-truncate">{u.name}</span>
-                        </div>
-                        {isActive && <Check size={14} className="text-brand flex-shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
 
               {/* Auth Actions */}

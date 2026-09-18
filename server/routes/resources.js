@@ -3,16 +3,9 @@ import { db } from '../db/database.js';
 import { formatUser } from './auth.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { parsePaginationParams, executePaginatedQuery } from '../utils/pagination.js';
+import { isPlatformAdmin } from './communities.js';
 
 const router = express.Router();
-
-function isPlatformAdmin(user) {
-  if (!user) return false;
-  if (user.id === 'usr_me') return true;
-  if (user.is_public_moderator) return true;
-  const role = (user.role || '').toLowerCase();
-  return role.includes('admin') || role.includes('coordinator');
-}
 
 export function formatResourceAssignment(row) {
   if (!row) return null;
@@ -166,8 +159,12 @@ router.post('/', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'Title, description, category, and contributionType are required.' });
   }
 
-  const id = `res_${Date.now()}`;
-  const providerId = req.user ? req.user.id : (req.body.providerId || 'usr_me');
+  const providerId = req.user?.id || req.body?.providerId;
+  if (!providerId) {
+    return res.status(401).json({ error: 'Authentication required to offer a resource.' });
+  }
+
+  const id = req.body?.id || `res_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
   db.prepare(`
     INSERT INTO resources (id, title, description, category, contribution_type, provider_id, address, lat, lng, availability, quantity, condition, conditions_terms, valid_until)
@@ -195,7 +192,10 @@ router.post('/', optionalAuth, (req, res) => {
 
 // PATCH /api/resources/:id
 router.patch('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to edit a resource.' });
+  }
   const resource = db.prepare('SELECT * FROM resources WHERE id = ?').get(req.params.id);
   if (!resource) {
     return res.status(404).json({ error: 'Resource not found' });
@@ -237,7 +237,10 @@ router.post('/:id/request-use', optionalAuth, (req, res) => {
     return res.status(404).json({ error: 'Resource not found' });
   }
 
-  const borrowerId = req.body.borrowerId || (req.user ? req.user.id : 'usr_me');
+  const borrowerId = req.user?.id || req.body?.borrowerId;
+  if (!borrowerId) {
+    return res.status(401).json({ error: 'Authentication required to borrow a resource.' });
+  }
 
   // 1. Provider cannot borrow their own resource
   if (resource.provider_id === borrowerId) {
@@ -428,7 +431,10 @@ router.patch('/assignments/:assignmentId/status', optionalAuth, (req, res) => {
 
 // DELETE /api/resources/:id
 router.delete('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || req.body?.userId || 'usr_me');
+  const userId = req.user ? req.user.id : (req.query.userId || req.body?.userId);
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to delete a resource.' });
+  }
   const resource = db.prepare('SELECT * FROM resources WHERE id = ?').get(req.params.id);
   if (!resource) {
     return res.status(404).json({ error: 'Resource not found' });

@@ -22,14 +22,20 @@ export function formatNotification(row) {
 
 // GET /api/notifications
 router.get('/', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || 'usr_me');
+  const userId = req.user?.id || req.query.userId;
+  if (!userId) {
+    return res.json([]);
+  }
   const rows = db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC').all(userId);
   res.json(rows.map(formatNotification));
 });
 
 // PATCH /api/notifications/:id/read
 router.patch('/:id/read', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body?.userId || 'usr_me');
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to mark notification read.' });
+  }
   const row = db.prepare('SELECT * FROM notifications WHERE id = ?').get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Notification not found' });
@@ -45,7 +51,10 @@ router.patch('/:id/read', optionalAuth, (req, res) => {
 
 // POST /api/notifications/read-all
 router.post('/read-all', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body?.userId || 'usr_me');
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to mark all notifications read.' });
+  }
   db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(userId);
   res.json({ success: true });
 });
