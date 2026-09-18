@@ -51,9 +51,30 @@ export function seedDatabase(force = false) {
 
     // 1. Users
     const insertUser = db.prepare(`
-      INSERT OR REPLACE INTO users (id, name, handle, email, password_hash, role, avatar, bio, address, neighborhood, lat, lng, skills, badges, privacy_settings, stats)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO users (id, name, handle, email, password_hash, role, avatar, bio, address, neighborhood, lat, lng, skills, badges, privacy_settings, stats, is_public_moderator)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+
+    // Primary System Administrator (Caleb Zothansanga)
+    insertUser.run(
+      'usr_caleb',
+      'Caleb Zothansanga',
+      '@caleb_admin',
+      'caleb.zothansanga@gmail.com',
+      defaultPasswordHash,
+      'System Administrator',
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      'Primary System Administrator for CareMesh Civic Resilience Network.',
+      'Maplewood Local Area',
+      'Maplewood',
+      37.7749,
+      -122.4194,
+      JSON.stringify(['System Administration', 'Platform Security', 'Mutual Aid Governance']),
+      JSON.stringify(['System Administrator', 'Verified Administrator', 'Community Leader']),
+      JSON.stringify({ showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true }),
+      JSON.stringify({ contributions: 50, resourcesShared: 10, plansJoined: 5, requestsFulfilled: 12 }),
+      1
+    );
 
     for (const u of mockUsers) {
       const email = u.id === 'usr_me' ? 'maya@caremesh.org' : `${u.handle.replace('@', '')}@caremesh.org`;
@@ -73,7 +94,8 @@ export function seedDatabase(force = false) {
         JSON.stringify(u.skills || []),
         JSON.stringify(u.badges || []),
         JSON.stringify(u.privacySettings || { showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true }),
-        JSON.stringify(u.stats || { contributions: 12, resourcesShared: 2, plansJoined: 1, requestsFulfilled: 3 })
+        JSON.stringify(u.stats || { contributions: 12, resourcesShared: 2, plansJoined: 1, requestsFulfilled: 3 }),
+        0
       );
     }
 

@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from '../db/database.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
+import { SYSTEM_ADMIN_EMAIL } from './communities.js';
 
 const router = express.Router();
 
@@ -51,11 +52,14 @@ router.post('/register', (req, res) => {
 
   const id = `usr_${Date.now()}`;
   const passwordHash = bcrypt.hashSync(password, 10);
-  const userRole = role || 'Community Member';
+  const isCaleb = email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL.toLowerCase();
+  const userRole = isCaleb ? 'System Administrator' : (role || 'Community Member');
+  const isPublicMod = isCaleb ? 1 : 0;
+  const userBadges = isCaleb ? ['System Administrator', 'Verified Administrator'] : ['Community Member'];
 
   db.prepare(`
-    INSERT INTO users (id, name, handle, email, password_hash, role, avatar, bio, address, neighborhood, lat, lng, skills, badges, privacy_settings, stats)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, name, handle, email, password_hash, role, avatar, bio, address, neighborhood, lat, lng, skills, badges, privacy_settings, stats, is_public_moderator)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
@@ -70,9 +74,10 @@ router.post('/register', (req, res) => {
     location?.lat || 37.7749,
     location?.lng || -122.4194,
     JSON.stringify(skills || []),
-    JSON.stringify(['Community Member']),
+    JSON.stringify(userBadges),
     JSON.stringify({ showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true }),
-    JSON.stringify({ contributions: 1, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 })
+    JSON.stringify({ contributions: 1, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 }),
+    isPublicMod
   );
 
   const newUser = formatUser(db.prepare('SELECT * FROM users WHERE id = ?').get(id));
@@ -111,24 +116,6 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
-// POST /api/auth/switch-user (Demo persona switcher for testing Maya, Dave, Elena, Marcus, Priya)
-router.post('/switch-user', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: 'userId is required.' });
-  }
-
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-  if (!user) {
-    return res.status(404).json({ error: 'User not found.' });
-  }
-
-  const formatted = formatUser(user);
-  const token = signToken(formatted);
-
-  res.json({ token, user: formatted });
-});
-
 // POST /api/auth/google (Google OAuth / Gmail Login & Auto-Provisioning)
 router.post('/google', (req, res) => {
   const { email, name, avatar, googleId, credential } = req.body;
@@ -151,7 +138,8 @@ router.post('/google', (req, res) => {
     return res.status(400).json({ error: 'Google email is required.' });
   }
 
-  const targetName = (googlePayload?.name || name || targetEmail.split('@')[0] || 'Community Neighbor').trim();
+  const isCaleb = targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase();
+  const targetName = (googlePayload?.name || name || targetEmail.split('@')[0] || (isCaleb ? 'Caleb Zothansanga' : 'Community Neighbor')).trim();
   const targetAvatar = googlePayload?.picture || avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
   const targetGoogleId = googlePayload?.sub || googleId || `g_${Date.now()}`;
 
@@ -164,8 +152,17 @@ router.post('/google', (req, res) => {
   }
 
   if (user) {
-    // Existing user: Link google_id and mark provider if not set
-    if (!user.google_id || user.auth_provider !== 'google') {
+    // Existing user: Link google_id and ensure Caleb has System Administrator privileges
+    if (isCaleb) {
+      db.prepare(`
+        UPDATE users 
+        SET google_id = COALESCE(google_id, ?), 
+            auth_provider = 'google',
+            role = 'System Administrator',
+            is_public_moderator = 1
+        WHERE id = ?
+      `).run(targetGoogleId, user.id);
+    } else if (!user.google_id || user.auth_provider !== 'google') {
       db.prepare(`
         UPDATE users 
         SET google_id = COALESCE(google_id, ?), 
@@ -180,7 +177,7 @@ router.post('/google', (req, res) => {
   }
 
   // 3. New user: Generate unique handle from email
-  const baseHandle = targetEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+  const baseHandle = isCaleb ? 'caleb_admin' : targetEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
   let handleCandidate = `@${baseHandle}`;
   const existingHandle = db.prepare('SELECT id FROM users WHERE handle = ?').get(handleCandidate);
   if (existingHandle) {
@@ -188,6 +185,11 @@ router.post('/google', (req, res) => {
   }
 
   const newId = `usr_g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const newRole = isCaleb ? 'System Administrator' : 'Community Member';
+  const newIsMod = isCaleb ? 1 : 0;
+  const newBadges = isCaleb 
+    ? ['System Administrator', 'Verified Administrator', 'Community Leader'] 
+    : ['Verified Gmail Member'];
 
   db.prepare(`
     INSERT INTO users (
@@ -201,18 +203,20 @@ router.post('/google', (req, res) => {
     handleCandidate,
     targetEmail,
     null,
-    'Community Member',
+    newRole,
     targetAvatar,
-    `Community member connecting via Gmail (${targetEmail}).`,
+    isCaleb 
+      ? 'Primary System Administrator for CareMesh.' 
+      : `Community member connecting via Gmail (${targetEmail}).`,
     'Maplewood Local Area',
     'Maplewood',
     37.7749,
     -122.4194,
-    JSON.stringify(['Community Member', 'Neighbor']),
-    JSON.stringify(['Verified Gmail Member']),
+    JSON.stringify(isCaleb ? ['System Administration', 'Platform Security', 'Mutual Aid Governance'] : ['Community Member', 'Neighbor']),
+    JSON.stringify(newBadges),
     JSON.stringify({ showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true }),
     JSON.stringify({ contributions: 1, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 }),
-    0,
+    newIsMod,
     targetGoogleId,
     'google'
   );

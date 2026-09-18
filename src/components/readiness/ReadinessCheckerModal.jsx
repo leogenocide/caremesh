@@ -15,13 +15,13 @@ export const ReadinessCheckerModal = () => {
     isReadinessModalOpen,
     closeReadinessModal,
     readinessModalCommunity,
+    readinessModalCheckId,
     currentUser,
     readinessChecks,
     createReadinessCheck,
     submitReadinessResponse,
     closeReadinessCheck,
-    communities,
-    mockUsers
+    communities
   } = useCareMesh();
 
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -61,11 +61,12 @@ export const ReadinessCheckerModal = () => {
   // Filter checks for current community if specified, otherwise show all
   const activeCommunityId = readinessModalCommunity?.id;
   const filteredChecks = activeCommunityId 
-    ? readinessChecks.filter(rc => rc.communityId === activeCommunityId || !rc.communityId)
+    ? readinessChecks.filter(rc => rc.communityId === activeCommunityId || !rc.communityId || rc.id === readinessModalCheckId)
     : readinessChecks;
 
-  const currentActiveCheck = selectedCheckId 
-    ? filteredChecks.find(rc => rc.id === selectedCheckId)
+  const effectiveCheckId = selectedCheckId || readinessModalCheckId;
+  const currentActiveCheck = effectiveCheckId 
+    ? (readinessChecks.find(rc => rc.id === effectiveCheckId) || filteredChecks[0])
     : filteredChecks[0];
 
   // Check if current user has already responded to the selected check
@@ -384,6 +385,11 @@ export const ReadinessCheckerModal = () => {
                             <span className={`badge text-xs ${currentActiveCheck.status === 'active' ? 'badge-primary' : 'badge-gray'}`}>
                               {currentActiveCheck.status === 'active' ? 'Poll Open' : 'Closed'}
                             </span>
+                            {(currentActiveCheck.requestId || currentActiveCheck.request_id) && (
+                              <span className="badge badge-emerald text-xs font-semibold">
+                                🤝 Volunteer Roll Call
+                              </span>
+                            )}
                           </div>
                           <span className="text-xs text-muted d-block mt-0.5">
                             Shift: {currentActiveCheck.shiftTime || 'Upcoming schedule'}
@@ -540,7 +546,7 @@ export const ReadinessCheckerModal = () => {
                           </div>
                         ) : (
                           currentActiveCheck.responses.map(resp => {
-                            const user = resp.user || mockUsers.find(u => u.id === resp.userId) || (currentUser?.id && resp.userId === currentUser.id ? currentUser : null);
+                            const user = resp.user || (currentUser?.id && resp.userId === currentUser.id ? currentUser : null);
                             const isReady = resp.status === 'ready';
                             const isStandby = resp.status === 'standby';
 

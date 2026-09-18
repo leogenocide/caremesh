@@ -175,8 +175,11 @@ router.post('/', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'Title, description, and category are required.' });
   }
 
+  const requesterId = req.user?.id || req.body?.requesterId;
+  if (!requesterId) {
+    return res.status(401).json({ error: 'Authentication required to create a help request.' });
+  }
   const id = `req_${Date.now()}`;
-  const requesterId = req.user ? req.user.id : (req.body.requesterId || 'usr_me');
 
   const tx = db.transaction(() => {
     db.prepare(`
@@ -219,7 +222,10 @@ router.post('/', optionalAuth, (req, res) => {
 // POST /api/requests/:id/respond
 router.post('/:id/respond', optionalAuth, (req, res) => {
   const { role = 'Volunteer Assistance' } = req.body;
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to volunteer for a request.' });
+  }
 
   const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
   if (!request) {

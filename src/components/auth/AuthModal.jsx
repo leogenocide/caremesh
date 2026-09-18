@@ -5,7 +5,6 @@ import { GoogleAccountPickerModal } from './GoogleAccountPickerModal';
 import { 
   LogIn, 
   UserPlus, 
-  Sparkles, 
   AlertCircle, 
   Lock, 
   User
@@ -17,9 +16,7 @@ export const AuthModal = () => {
     authModalMode,
     closeAuthModal,
     loginUser,
-    registerUser,
-    switchUserAccount,
-    mockUsers
+    registerUser
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState(authModalMode || 'login'); // 'login' | 'register'
@@ -29,7 +26,7 @@ export const AuthModal = () => {
 
   // Sign In Form State
   const [loginIdentifier, setLoginIdentifier] = useState('');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginPassword, setLoginPassword] = useState('');
 
   // Register Form State
   const [regName, setRegName] = useState('');
@@ -103,19 +100,6 @@ export const AuthModal = () => {
       closeAuthModal();
     } catch (err) {
       setErrorMsg(err.message || 'Registration failed. Handle or email may already be in use.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoPersonaClick = async (userId) => {
-    setErrorMsg('');
-    setLoading(true);
-    try {
-      await switchUserAccount(userId);
-      closeAuthModal();
-    } catch {
-      setErrorMsg('Failed to switch demo persona.');
     } finally {
       setLoading(false);
     }
@@ -235,9 +219,6 @@ export const AuthModal = () => {
                   required
                 />
               </div>
-              <span className="text-xs text-muted mt-1 d-block" style={{ fontSize: '0.7rem' }}>
-                Default demo password for seeded accounts is <code>password123</code>
-              </span>
             </div>
 
             <button
@@ -247,39 +228,6 @@ export const AuthModal = () => {
             >
               {loading ? 'Signing In...' : 'Sign In'}
             </button>
-
-            {/* Quick Persona Switcher for Evaluation */}
-            <div className="mt-2 pt-2 border-top">
-              <span className="text-xs font-bold text-secondary d-flex align-center gap-1 mb-2">
-                <Sparkles size={13} className="text-brand" />
-                <span>Or Select a Demo Persona:</span>
-              </span>
-              <div className="d-flex flex-column gap-1.5">
-                {(mockUsers || []).map(u => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    className="btn btn-ghost text-left p-2 rounded d-flex align-center justify-between card-interactive"
-                    style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}
-                    onClick={() => handleDemoPersonaClick(u.id)}
-                    disabled={loading}
-                  >
-                    <div className="d-flex align-center gap-2">
-                      <img
-                        src={u.avatar}
-                        alt={u.name}
-                        style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
-                      />
-                      <div>
-                        <span className="font-bold text-xs text-primary d-block">{u.name}</span>
-                        <span className="text-xs text-muted" style={{ fontSize: '0.7rem' }}>{u.handle}</span>
-                      </div>
-                    </div>
-                    <span className="badge badge-gray text-xs" style={{ fontSize: '0.65rem' }}>Switch</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </form>
         )}
 

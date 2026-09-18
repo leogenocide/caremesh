@@ -16,6 +16,14 @@ export const GoogleAccountPickerModal = ({ isOpen, onClose, onSuccess }) => {
   // Preset community Google accounts for 1-click login
   const presetGoogleAccounts = [
     {
+      name: 'Caleb Zothansanga',
+      email: 'caleb.zothansanga@gmail.com',
+      displayEmail: 'caleb.zothansanga@gmail.com',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      role: 'System Administrator',
+      googleId: 'g_sub_caleb_zothansanga'
+    },
+    {
       name: 'Maya Lin',
       email: 'maya@caremesh.org',
       displayEmail: 'maya.lin@gmail.com',

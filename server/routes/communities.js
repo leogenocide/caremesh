@@ -6,22 +6,23 @@ import { parsePaginationParams, executePaginatedQuery } from '../utils/paginatio
 
 const router = express.Router();
 
+export const SYSTEM_ADMIN_EMAIL = 'caleb.zothansanga@gmail.com';
+
 export function isSystemAdmin(user) {
   if (!user) return false;
-  if (user.id === 'usr_me') return true;
+  if (user.email && user.email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL.toLowerCase()) return true;
   const role = (user.role || '').toLowerCase();
-  return role.includes('admin') || role.includes('coordinator');
+  return role === 'system administrator' || role === 'admin' || role === 'coordinator';
 }
 
 export function isPlatformAdmin(user) {
   if (!user) return false;
-  if (user.id === 'usr_me') return true;
-  if (user.is_public_moderator) return true;
-  const role = (user.role || '').toLowerCase();
-  return role.includes('admin') || role.includes('coordinator');
+  if (isSystemAdmin(user)) return true;
+  if (user.is_public_moderator || user.isPublicModerator) return true;
+  return false;
 }
 
-export function formatCommunity(row, currentUserId = 'usr_me') {
+export function formatCommunity(row, currentUserId = null) {
   if (!row) return null;
 
   const memberRows = db.prepare(`
@@ -109,14 +110,14 @@ export function formatPost(row) {
 
 // GET /api/communities
 router.get('/', optionalAuth, (req, res) => {
-  const currentUserId = req.user ? req.user.id : 'usr_me';
+  const currentUserId = req.user?.id || null;
   const rows = db.prepare('SELECT * FROM communities ORDER BY created_at DESC').all();
   res.json(rows.map(r => formatCommunity(r, currentUserId)));
 });
 
 // GET /api/communities/:id
 router.get('/:id', optionalAuth, (req, res) => {
-  const currentUserId = req.user ? req.user.id : 'usr_me';
+  const currentUserId = req.user?.id || null;
   const row = db.prepare('SELECT * FROM communities WHERE id = ?').get(req.params.id);
   if (!row) {
     return res.status(404).json({ error: 'Community not found' });
@@ -126,13 +127,16 @@ router.get('/:id', optionalAuth, (req, res) => {
 
 // POST /api/communities
 router.post('/', optionalAuth, (req, res) => {
+  const creatorId = req.user?.id || req.body?.creatorId;
+  if (!creatorId) {
+    return res.status(401).json({ error: 'Authentication required to create a community circle.' });
+  }
   const { name, handle, category, privacy = 'public', description, location } = req.body;
   if (!name || !handle || !description) {
     return res.status(400).json({ error: 'Name, handle, and description are required' });
   }
 
   const id = `com_${Date.now()}`;
-  const creatorId = req.user ? req.user.id : 'usr_me';
   const cleanHandle = handle.startsWith('@') ? handle : `@${handle}`;
 
   const tx = db.transaction(() => {
@@ -163,7 +167,10 @@ router.post('/', optionalAuth, (req, res) => {
 
 // POST /api/communities/:id/join
 router.post('/:id/join', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to join or leave a community circle.' });
+  }
   const community = db.prepare('SELECT * FROM communities WHERE id = ?').get(req.params.id);
   if (!community) {
     return res.status(404).json({ error: 'Community not found' });
@@ -240,13 +247,17 @@ router.get('/feed/posts', optionalAuth, (req, res) => {
 
 // POST /api/posts
 router.post('/feed/posts', optionalAuth, (req, res) => {
+  const authorId = req.user?.id || req.body?.authorId;
+  if (!authorId) {
+    return res.status(401).json({ error: 'Authentication required to post in community feed.' });
+  }
+
   const { communityId, content, category = null, mediaUrls = [], poll, linkedEntityType, linkedEntityId, linkedEntityTitle } = req.body;
   if (!communityId || !content) {
     return res.status(400).json({ error: 'communityId and content are required' });
   }
 
   const id = `post_${Date.now()}`;
-  const authorId = req.user ? req.user.id : (req.body.authorId || 'usr_me');
   const timestamp = 'Just now';
 
   const comm = db.prepare('SELECT privacy FROM communities WHERE id = ?').get(communityId);
@@ -295,7 +306,10 @@ router.post('/feed/posts', optionalAuth, (req, res) => {
 
 // POST /api/posts/:id/endorse
 router.post('/feed/posts/:id/endorse', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  const userId = req.user?.id || req.body?.userId;
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to endorse posts.' });
+  }
   const post = db.prepare('SELECT author_id, endorsed_count, endorser_ids FROM posts WHERE id = ?').get(req.params.id);
   if (!post) {
     return res.status(404).json({ error: 'Post not found' });

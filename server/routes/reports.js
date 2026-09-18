@@ -56,9 +56,9 @@ export function formatReport(row) {
 router.get('/', optionalAuth, (req, res) => {
   const { isPaginated, page, limit } = parsePaginationParams(req.query);
   const { communityId, type, status, scope } = req.query;
-  const currentUserId = req.user ? req.user.id : (req.query.userId || 'usr_me');
-  const currentUserRow = db.prepare('SELECT role, is_public_moderator FROM users WHERE id = ?').get(currentUserId);
-  const isGlobalMod = currentUserRow && (currentUserRow.role === 'admin' || Boolean(currentUserRow.is_public_moderator));
+  const currentUserId = req.user?.id || req.query.userId;
+  const currentUserRow = currentUserId ? db.prepare('SELECT role, is_public_moderator FROM users WHERE id = ?').get(currentUserId) : null;
+  const isGlobalMod = currentUserRow && (currentUserRow.role === 'admin' || currentUserRow.role === 'System Administrator' || Boolean(currentUserRow.is_public_moderator));
 
   const whereClauses = [];
   const params = [];
@@ -113,7 +113,10 @@ router.get('/', optionalAuth, (req, res) => {
 
 // POST /api/reports
 router.post('/', optionalAuth, (req, res) => {
-  const reporterId = req.user ? req.user.id : (req.body.reporterId || 'usr_me');
+  const reporterId = req.user?.id || req.body?.reporterId;
+  if (!reporterId) {
+    return res.status(401).json({ error: 'Authentication required to submit a report.' });
+  }
   const {
     type,
     targetType,
@@ -124,7 +127,8 @@ router.post('/', optionalAuth, (req, res) => {
     reportedUserId,
     communityId = null,
     reason,
-    details = ''
+    details = '',
+    notes = ''
   } = req.body;
 
   const resolvedType = type || targetType;
@@ -134,48 +138,50 @@ router.post('/', optionalAuth, (req, res) => {
     const post = db.prepare('SELECT author_id FROM posts WHERE id = ?').get(targetId);
     if (post) resolvedReportedUserId = post.author_id;
   }
-  if (!resolvedReportedUserId && resolvedType === 'profile_picture' && targetId) {
+  if (!resolvedReportedUserId && (resolvedType === 'profile_picture' || resolvedType === 'user_avatar' || resolvedType === 'user' || (targetId && String(targetId).startsWith('usr_')))) {
     resolvedReportedUserId = targetId;
   }
+  if (!resolvedReportedUserId) {
+    resolvedReportedUserId = 'usr_system';
+  }
+
   if (!resolvedType || !targetId || !reason) {
-    return res.status(400).json({ error: 'type (or targetType), targetId, and reason are required.' });
+    return res.status(400).json({ error: 'type, targetId, and reason are required.' });
   }
 
-  // Prevent users from reporting their own content or profile
+  // Self-report prevention
   if (resolvedReportedUserId && resolvedReportedUserId === reporterId) {
-    return res.status(400).json({ error: 'You cannot report your own content or profile.' });
+    return res.status(400).json({ error: 'You cannot report yourself or your own content.' });
   }
 
-  // Prevent duplicate pending reports from the same reporter
-  const existingPendingReport = db.prepare(`
+  // Duplicate pending report check
+  const existingPending = db.prepare(`
     SELECT id FROM reports
     WHERE reporter_id = ? AND target_id = ? AND status = 'pending'
   `).get(reporterId, targetId);
-  if (existingPendingReport) {
-    return res.status(400).json({ error: 'You already have a pending report for this item.' });
+
+  if (existingPending) {
+    return res.status(400).json({ error: 'You have already submitted a pending report for this item.' });
   }
 
-  const determinedScope = scope || (resolvedType === 'post' || resolvedType === 'comment' ? 'community' : 'public_records');
-  const id = `rep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const id = `rep_${Date.now()}`;
+  const resolvedDetails = notes || details || '';
 
   db.prepare(`
-    INSERT INTO reports (
-      id, type, scope, target_id, target_title, target_content, reported_user_id, 
-      reporter_id, community_id, reason, details, status, action_taken
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'none')
+    INSERT INTO reports (id, reporter_id, reported_user_id, community_id, type, scope, target_id, target_title, target_content, reason, details, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
   `).run(
     id,
-    resolvedType,
-    determinedScope,
-    targetId,
-    targetTitle,
-    targetContent,
-    resolvedReportedUserId,
     reporterId,
-    communityId,
+    resolvedReportedUserId || null,
+    communityId || null,
+    resolvedType,
+    scope || 'community',
+    targetId,
+    targetTitle || null,
+    targetContent || null,
     reason,
-    details
+    resolvedDetails
   );
 
   const created = formatReport(db.prepare('SELECT * FROM reports WHERE id = ?').get(id));
@@ -184,7 +190,10 @@ router.post('/', optionalAuth, (req, res) => {
 
 // PATCH /api/reports/:id
 router.patch('/:id', optionalAuth, (req, res) => {
-  const moderatorId = req.user ? req.user.id : (req.body.moderatorId || 'usr_me');
+  const moderatorId = req.user?.id || req.body?.moderatorId;
+  if (!moderatorId) {
+    return res.status(401).json({ error: 'Authentication required to resolve reports.' });
+  }
   const report = db.prepare('SELECT * FROM reports WHERE id = ?').get(req.params.id);
 
   if (!report) {

@@ -80,10 +80,17 @@ export const AdminGovernanceView = () => {
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(true);
 
   const isPlatformAdmin = Boolean(
-    currentUser?.id === 'usr_me' ||
+    currentUser?.email === 'caleb.zothansanga@gmail.com' ||
     currentUser?.isAdmin ||
     (currentUser?.role && currentUser.role.toLowerCase().includes('admin'))
   );
+
+  const isSystemAdmin = Boolean(
+    currentUser?.email === 'caleb.zothansanga@gmail.com' ||
+    currentUser?.role === 'System Administrator'
+  );
+
+  const [isTogglingMod, setIsTogglingMod] = useState(false);
 
   // Fetch Dashboard Stats
   const fetchStats = useCallback(async () => {
@@ -163,6 +170,38 @@ export const AdminGovernanceView = () => {
       showToast(err.message || 'Failed to unrestrict user account', 'error');
     } finally {
       setIsRestricting(false);
+    }
+  };
+
+  // Toggle Public Moderator role (System Admin only)
+  const handleTogglePublicModerator = async (targetUser) => {
+    const isCurrentlyMod = Boolean(targetUser.isPublicModerator || targetUser.is_public_moderator);
+    const actionLabel = isCurrentlyMod ? 'Revoke Public Moderator' : 'Promote to Public Moderator';
+    const reason = window.prompt(
+      `Enter reason / audit note to ${actionLabel.toLowerCase()} for ${targetUser.name}:`,
+      isCurrentlyMod ? 'Moderation privileges concluded by system administrator' : 'Elevated to public community moderator'
+    );
+    if (reason === null) return;
+
+    setIsTogglingMod(true);
+    try {
+      await api.admin.togglePublicModerator(targetUser.id, {
+        isPublicModerator: !isCurrentlyMod,
+        reason: reason.trim() || undefined
+      });
+      showToast(
+        `User ${targetUser.name} is ${!isCurrentlyMod ? 'now elevated to Public Moderator' : 'reverted to regular member'}.`,
+        'success',
+        'Moderator Status Updated'
+      );
+      fetchUsers();
+      if (selectedUserDossier?.user?.id === targetUser.id) {
+        openUserDossier(targetUser.id);
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to update moderator role', 'error');
+    } finally {
+      setIsTogglingMod(false);
     }
   };
 
@@ -644,14 +683,30 @@ export const AdminGovernanceView = () => {
                             </span>
                           </td>
                           <td className="p-3 text-right">
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
-                              onClick={() => openUserDossier(usr.id)}
-                            >
-                              <Eye size={12} />
-                              <span>View Incident Dossier</span>
-                            </button>
+                            <div className="d-inline-flex align-center gap-1.5 justify-end">
+                              {isSystemAdmin && usr.email !== 'caleb.zothansanga@gmail.com' && (
+                                <button
+                                  type="button"
+                                  className={`btn btn-xs d-inline-flex align-center gap-1 ${
+                                    usr.isPublicModerator ? 'btn-ghost text-amber' : 'btn-secondary text-primary'
+                                  }`}
+                                  title={usr.isPublicModerator ? 'Revoke Public Moderator Privileges' : 'Promote to Public Moderator'}
+                                  onClick={() => handleTogglePublicModerator(usr)}
+                                  disabled={isTogglingMod}
+                                >
+                                  <ShieldCheck size={12} className={usr.isPublicModerator ? 'text-amber' : 'text-brand'} />
+                                  <span>{usr.isPublicModerator ? 'Revoke Mod' : 'Make Mod'}</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
+                                onClick={() => openUserDossier(usr.id)}
+                              >
+                                <Eye size={12} />
+                                <span>Dossier</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -797,6 +852,48 @@ export const AdminGovernanceView = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Public Moderator Role Elevation Control */}
+              {isSystemAdmin && selectedUserDossier.user?.email !== 'caleb.zothansanga@gmail.com' && (
+                <div className="card p-3 border" style={{ background: '#f8fafc' }}>
+                  <div className="d-flex align-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <span className="text-xs font-bold text-muted text-uppercase d-block mb-1" style={{ fontSize: '0.65rem' }}>
+                        Platform Moderation Authority
+                      </span>
+                      <div className="d-flex align-center gap-2">
+                        {selectedUserDossier.user?.isPublicModerator ? (
+                          <span className="badge font-bold" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+                            🛡️ Public Moderator Active
+                          </span>
+                        ) : (
+                          <span className="badge font-bold" style={{ background: '#f1f5f9', color: '#64748b' }}>
+                            Standard Community Member
+                          </span>
+                        )}
+                        <span className="text-xs text-muted">
+                          Can moderate public reports, triage flags, and audit community safety.
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        className={`btn btn-sm d-flex align-center gap-1.5 ${
+                          selectedUserDossier.user?.isPublicModerator ? 'btn-secondary text-rose' : 'btn-primary'
+                        }`}
+                        onClick={() => handleTogglePublicModerator(selectedUserDossier.user)}
+                        disabled={isTogglingMod}
+                      >
+                        <ShieldCheck size={14} />
+                        <span>
+                          {selectedUserDossier.user?.isPublicModerator ? 'Revoke Moderator Role' : 'Promote to Public Moderator'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Historical Reports Received */}
               <div>

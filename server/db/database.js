@@ -70,6 +70,12 @@ export function initDatabase() {
         db.prepare("ALTER TABLE users ADD COLUMN restricted_by_id TEXT").run();
       }
     }
+    if (tables.includes('readiness_checks')) {
+      const rcCols = db.prepare("PRAGMA table_info(readiness_checks)").all();
+      if (!rcCols.some(c => c.name === 'request_id')) {
+        db.prepare("ALTER TABLE readiness_checks ADD COLUMN request_id TEXT").run();
+      }
+    }
   } catch (err) {
     console.warn('Pre-migration warning:', err.message);
   }
@@ -126,6 +132,9 @@ export function initDatabase() {
     const rcCols = db.prepare("PRAGMA table_info(readiness_checks)").all();
     if (!rcCols.some(c => c.name === 'target_headcount')) {
       db.prepare("ALTER TABLE readiness_checks ADD COLUMN target_headcount INTEGER DEFAULT 5").run();
+    }
+    if (!rcCols.some(c => c.name === 'request_id')) {
+      db.prepare("ALTER TABLE readiness_checks ADD COLUMN request_id TEXT").run();
     }
     const raCols = db.prepare("PRAGMA table_info(resource_assignments)").all();
     if (!raCols.some(c => c.name === 'borrower_id')) {
@@ -199,6 +208,40 @@ export function initDatabase() {
     `);
   } catch (err) {
     console.warn('Migration warning for new columns:', err.message);
+  }
+
+  // Ensure Caleb Zothansanga System Administrator is seeded and elevated
+  try {
+    const caleb = db.prepare("SELECT * FROM users WHERE email = 'caleb.zothansanga@gmail.com' OR id = 'usr_caleb'").get();
+    if (!caleb) {
+      db.prepare(`
+        INSERT INTO users (
+          id, name, handle, email, password_hash, role, avatar, bio,
+          address, neighborhood, lat, lng, skills, badges,
+          privacy_settings, stats, is_public_moderator, status
+        ) VALUES (
+          'usr_caleb', 'Caleb Zothansanga', '@caleb_admin', 'caleb.zothansanga@gmail.com',
+          '$2b$10$aDKeZ1d74tnrk82S3WoqrOKst6JiHclT2DPl.1Kp4FL3gmFtxerfK',
+          'System Administrator',
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+          'Primary System Administrator for CareMesh Civic Resilience Network.',
+          'Eastside District, Maplewood', 'Maplewood Central', 37.7749, -122.4194,
+          '["System Administration","Platform Governance","Crisis Dispatch","Network Engineering"]',
+          '["System Administrator","Platform Governance","Verified Lead"]',
+          '{"showExactLocation":true,"allowDirectMessages":true,"publicContributionHistory":true}',
+          '{"contributions":150,"resourcesShared":25,"plansJoined":12,"requestsFulfilled":45}',
+          1, 'active'
+        )
+      `).run();
+    } else {
+      db.prepare(`
+        UPDATE users 
+        SET is_public_moderator = 1, role = 'System Administrator', email = 'caleb.zothansanga@gmail.com'
+        WHERE id = ? OR email = 'caleb.zothansanga@gmail.com'
+      `).run(caleb.id);
+    }
+  } catch (err) {
+    console.warn('Caleb system admin sync warning:', err.message);
   }
 
   return db;

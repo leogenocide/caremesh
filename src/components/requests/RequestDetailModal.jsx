@@ -17,7 +17,9 @@ import {
   Trash2,
   X,
   Lock,
-  Globe
+  Globe,
+  UserCheck,
+  Activity
 } from 'lucide-react';
 
 export const RequestDetailModal = ({ isOpen, onClose, request }) => {
@@ -30,7 +32,12 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
     updateRequest,
     deleteRequest,
     canUserManage,
-    communities
+    communities,
+    readinessChecks,
+    createReadinessCheck,
+    submitReadinessResponse,
+    openReadinessModal,
+    showToast
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'volunteers' | 'matcher'
@@ -38,6 +45,8 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
   const [customNote, setCustomNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState('');
+  const [isStartingRollCall, setIsStartingRollCall] = useState(false);
+  const [isQuickResponding, setIsQuickResponding] = useState(false);
 
   // Owner Edit State
   const PRESET_REQUEST_CATEGORIES = ['labor', 'supplies', 'transport', 'equipment', 'skills', 'general', 'environmental', 'food_security'];
@@ -66,6 +75,55 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
     mf.requestId === request.id || 
     mf.requestTitle === request.title
   );
+
+  // Linked Member Readiness Check
+  const linkedCheck = request?.id
+    ? (readinessChecks || []).find(rc => rc.requestId === request.id || rc.request_id === request.id)
+    : null;
+
+  const myReadinessResp = linkedCheck?.responses?.find(r => r.userId === currentUser?.id);
+
+  const handleStartReadinessRollCall = async () => {
+    if (!currentUser || currentUser.id === 'usr_guest') {
+      showToast?.('Please sign in to initiate a volunteer readiness check.', 'warning');
+      return;
+    }
+    setIsStartingRollCall(true);
+    try {
+      const newCheck = await createReadinessCheck({
+        title: `Volunteer Roll Call: ${request.title}`,
+        requestId: request.id,
+        communityId: request.communityId || 'com_01',
+        targetHeadcount: Number(request.peopleNeeded) || (request.responses?.length) || 3,
+        shiftTime: request.urgency === 'immediate' ? 'Immediate Response Window' : 'Scheduled Shift',
+        notes: `Operational readiness roll-call for committed volunteers on request "${request.title}". Please confirm your available hours and gear preparedness.`
+      });
+      if (newCheck) {
+        showToast?.('Volunteer readiness check initiated! Committed volunteers notified.', 'success', 'Roll Call Launched');
+      }
+    } catch (err) {
+      showToast?.(err.message || 'Failed to start readiness check', 'error');
+    } finally {
+      setIsStartingRollCall(false);
+    }
+  };
+
+  const handleQuickReadinessResponse = async (status) => {
+    if (!linkedCheck) return;
+    setIsQuickResponding(true);
+    try {
+      await submitReadinessResponse(linkedCheck.id, {
+        status,
+        hoursAvailable: 4,
+        gearNotes: `Confirmed for ${request.title}`
+      });
+      showToast?.(`Marked your readiness as "${status}".`, 'success', 'Status Confirmed');
+    } catch (err) {
+      showToast?.(err.message || 'Failed to update readiness', 'error');
+    } finally {
+      setIsQuickResponding(false);
+    }
+  };
 
   const handleStartEditing = () => {
     const isCustom = request.category && !PRESET_REQUEST_CATEGORIES.includes(request.category);
@@ -591,6 +649,103 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               </div>
             )}
 
+            {/* Volunteer Readiness Roll Call Panel */}
+            {linkedCheck ? (
+              <div className="card p-3 border" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                <div className="d-flex align-center justify-between gap-2 flex-wrap mb-2">
+                  <div className="d-flex align-center gap-2">
+                    <UserCheck size={18} className="text-emerald" />
+                    <div>
+                      <span className="font-bold text-xs text-primary d-block">
+                        Volunteer Readiness Roll Call Active
+                      </span>
+                      <span className="text-xs text-muted" style={{ fontSize: '0.7rem' }}>
+                        {linkedCheck.readyCount || 0} of {linkedCheck.targetHeadcount || request.peopleNeeded || 1} volunteers confirmed ready ({linkedCheck.readyPercentage || 0}%)
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
+                    onClick={() => openReadinessModal(null, linkedCheck.id)}
+                  >
+                    <Activity size={12} />
+                    <span>Open Readiness Console</span>
+                  </button>
+                </div>
+
+                {/* Progress Bar */}
+                <div style={{ height: '6px', background: '#dcfce7', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div 
+                    style={{ 
+                      width: `${Math.min(100, linkedCheck.readyPercentage || 0)}%`, 
+                      height: '100%', 
+                      background: 'var(--brand)', 
+                      transition: 'width 0.3s ease' 
+                    }} 
+                  />
+                </div>
+
+                {/* Committed Volunteer 1-Click Status Confirmation */}
+                {isUserJoined && linkedCheck.status === 'active' && (
+                  <div className="mt-2.5 pt-2 border-top d-flex align-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-secondary">
+                      {myReadinessResp ? `Your Status: ${myReadinessResp.status.toUpperCase()}` : 'Confirm Your Readiness:'}
+                    </span>
+                    <div className="d-flex align-center gap-1.5">
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${myReadinessResp?.status === 'ready' ? 'btn-primary font-bold' : 'btn-ghost'}`}
+                        style={{ fontSize: '0.7rem', padding: '3px 8px' }}
+                        onClick={() => handleQuickReadinessResponse('ready')}
+                        disabled={isQuickResponding}
+                      >
+                        🟢 Ready
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${myReadinessResp?.status === 'standby' ? 'btn-primary font-bold' : 'btn-ghost'}`}
+                        style={{ fontSize: '0.7rem', padding: '3px 8px' }}
+                        onClick={() => handleQuickReadinessResponse('standby')}
+                        disabled={isQuickResponding}
+                      >
+                        🟡 Standby
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${myReadinessResp?.status === 'unavailable' ? 'btn-primary font-bold' : 'btn-ghost'}`}
+                        style={{ fontSize: '0.7rem', padding: '3px 8px' }}
+                        onClick={() => handleQuickReadinessResponse('unavailable')}
+                        disabled={isQuickResponding}
+                      >
+                        🔴 Unavailable
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (isOwner || canUserManage(request)) ? (
+              <div className="p-3 rounded border d-flex align-center justify-between gap-2" style={{ background: '#f8fafc' }}>
+                <div>
+                  <span className="font-bold text-xs text-primary d-block">
+                    Verify Volunteer Readiness
+                  </span>
+                  <span className="text-xs text-muted" style={{ fontSize: '0.7rem' }}>
+                    Initiate a roll call to confirm committed volunteers are ready with hours & gear.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs d-inline-flex align-center gap-1.5 flex-shrink-0"
+                  onClick={handleStartReadinessRollCall}
+                  disabled={isStartingRollCall}
+                >
+                  <UserCheck size={14} className="text-brand" />
+                  <span>{isStartingRollCall ? 'Launching...' : 'Verify Volunteer Readiness'}</span>
+                </button>
+              </div>
+            ) : null}
+
             {/* List of Committed Volunteers */}
             <div>
               <span className="font-bold text-xs text-secondary d-block mb-2">
@@ -598,29 +753,53 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               </span>
               {request.responses && request.responses.length > 0 ? (
                 <div className="d-flex flex-column gap-2">
-                  {request.responses.map((resp, idx) => (
-                    <div 
-                      key={idx}
-                      className="d-flex align-center justify-between p-2.5 rounded border bg-white"
-                    >
-                      <div className="d-flex align-center gap-2.5">
-                        <img
-                          src={resp.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                          alt={resp.user?.name || 'Volunteer'}
-                          style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-                        />
-                        <div>
-                          <span className="font-bold text-xs text-primary d-block">{resp.user?.name || 'Neighbor'}</span>
-                          <span className="text-xs text-brand font-semibold d-block">{resp.user?.handle || '@neighbor'}</span>
+                  {request.responses.map((resp, idx) => {
+                    const volunteerResp = linkedCheck?.responses?.find(r => r.userId === resp.userId || r.userId === resp.user?.id);
+                    return (
+                      <div 
+                        key={idx}
+                        className="d-flex align-center justify-between p-2.5 rounded border bg-white"
+                      >
+                        <div className="d-flex align-center gap-2.5">
+                          <img
+                            src={resp.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                            alt={resp.user?.name || 'Volunteer'}
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                          <div>
+                            <span className="font-bold text-xs text-primary d-block">{resp.user?.name || 'Neighbor'}</span>
+                            <span className="text-xs text-brand font-semibold d-block">{resp.user?.handle || '@neighbor'}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="badge badge-primary text-xs font-semibold d-block mb-0.5">{resp.role || 'Volunteer'}</span>
+                          <span className="text-xs text-muted d-block" style={{ fontSize: '0.68rem' }}>{resp.time || 'Recently'}</span>
+                          {linkedCheck && (
+                            <div className="mt-1">
+                              {volunteerResp?.status === 'ready' ? (
+                                <span className="badge" style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.65rem' }}>
+                                  🟢 Ready {volunteerResp.hoursAvailable ? `(${volunteerResp.hoursAvailable}h)` : ''}
+                                </span>
+                              ) : volunteerResp?.status === 'standby' ? (
+                                <span className="badge" style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.65rem' }}>
+                                  🟡 Standby
+                                </span>
+                              ) : volunteerResp?.status === 'unavailable' ? (
+                                <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '0.65rem' }}>
+                                  🔴 Unavailable
+                                </span>
+                              ) : (
+                                <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', fontSize: '0.65rem' }}>
+                                  ⏳ Awaiting
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
-
-                      <div className="text-right">
-                        <span className="badge badge-primary text-xs font-semibold d-block mb-0.5">{resp.role || 'Volunteer'}</span>
-                        <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>{resp.time || 'Recently'}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-4 rounded text-center border text-muted text-xs" style={{ background: 'var(--bg-subtle)' }}>

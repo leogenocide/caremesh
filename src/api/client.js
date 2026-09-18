@@ -94,13 +94,8 @@ class ApiClient {
       return res;
     },
     me: async () => this.request('/auth/me'),
-    switchUser: async (userId) => {
-      const res = await this.request('/auth/switch-user', {
-        method: 'POST',
-        body: JSON.stringify({ userId })
-      });
-      if (res.token) this.setToken(res.token);
-      return res;
+    switchUser: async () => {
+      throw new Error('Account switching is disabled in production. Please sign in with your account credentials.');
     },
     googleLogin: async (googleData) => {
       const res = await this.request('/auth/google', {
@@ -449,7 +444,10 @@ class ApiClient {
 
   // Member Readiness & Availability Checker
   readiness = {
-    getAll: async (communityId) => this.request(`/readiness${communityId ? `?communityId=${communityId}` : ''}`),
+    getAll: async (params = {}) => {
+      if (typeof params === 'string') return this.request(`/readiness?communityId=${params}`);
+      return this.request(`/readiness${buildQuery(params)}`);
+    },
     getById: async (id) => this.request(`/readiness/${id}`),
     create: async (data) => this.request('/readiness', {
       method: 'POST',
@@ -471,7 +469,7 @@ class ApiClient {
     markAllRead: async () => this.request('/notifications/read-all', { method: 'POST' })
   };
 
-  // Conversations
+  // Conversations & Direct Messages
   conversations = {
     getAll: async () => this.request('/conversations'),
     getById: async (id) => this.request(`/conversations/${id}`),
@@ -486,6 +484,10 @@ class ApiClient {
     getStats: async () => this.request('/admin/stats'),
     getUsers: async (params = {}) => this.request(`/admin/users${buildQuery(params)}`),
     getUserReports: async (userId) => this.request(`/admin/users/${userId}/reports`),
+    togglePublicModerator: async (userId, data = {}) => this.request(`/admin/users/${userId}/toggle-public-moderator`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
     getAuditLogs: async (params = {}) => this.request(`/admin/audit-logs${buildQuery(params)}`),
     getVault: async (params = {}) => this.request(`/admin/vault${buildQuery(params)}`),
     restoreVaultPost: async (postId, data = {}) => this.request(`/admin/vault/${postId}/restore`, {
