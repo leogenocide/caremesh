@@ -113,63 +113,27 @@ export const ReadinessCheckerModal = () => {
 
   return (
     <div 
-      className="modal-overlay" 
+      className="readiness-modal-overlay animate-fade-in" 
       onClick={closeReadinessModal}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.7)',
-        backdropFilter: 'blur(5px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem'
-      }}
     >
       <div 
-        className="modal-content card p-0 animate-scale-in" 
+        className="readiness-modal-dialog animate-scale-in" 
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: '820px',
-          maxHeight: 'min(90vh, 90dvh)',
-          borderRadius: 'var(--radius-xl)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: 'var(--shadow-xl)',
-          border: '1px solid var(--border-light)'
-        }}
       >
         {/* Header */}
-        <div 
-          className="p-4 d-flex align-center justify-between border-bottom flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)', color: '#ffffff' }}
-        >
+        <div className="readiness-modal-header border-bottom">
           <div className="d-flex align-center gap-3">
-            <div 
-              style={{ 
-                width: '42px', 
-                height: '42px', 
-                borderRadius: 'var(--radius-lg)', 
-                background: 'rgba(255, 255, 255, 0.15)', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                color: '#6ee7b7'
-              }}
-            >
-              <UserCheck size={24} />
+            <div className="readiness-header-icon">
+              <UserCheck size={22} />
             </div>
             <div>
               <div className="d-flex align-center gap-2">
                 <h3 className="font-bold text-md text-white mb-0">Member Readiness Checker</h3>
-                <span className="badge" style={{ background: 'rgba(255,255,255,0.2)', color: '#ffffff', fontSize: '0.68rem' }}>
+                <span className="badge readiness-header-badge" style={{ background: 'rgba(255,255,255,0.2)', color: '#ffffff', fontSize: '0.68rem' }}>
                   Creator & Dispatch Tool
                 </span>
               </div>
-              <p className="text-xs text-emerald-100 mb-0" style={{ opacity: 0.9, fontSize: '0.78rem' }}>
+              <p className="text-xs text-emerald-100 mb-0 readiness-header-desc" style={{ opacity: 0.9, fontSize: '0.78rem' }}>
                 Verify volunteer availability, standby capacity, and equipment preparedness before scheduling workdays.
               </p>
             </div>
@@ -189,6 +153,7 @@ export const ReadinessCheckerModal = () => {
               type="button" 
               className="btn btn-ghost btn-sm btn-icon text-white" 
               onClick={closeReadinessModal}
+              aria-label="Close readiness modal"
             >
               <X size={20} />
             </button>
@@ -196,21 +161,14 @@ export const ReadinessCheckerModal = () => {
         </div>
 
         {/* Modal Body */}
-        <div className="d-flex flex-column flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        <div className="readiness-modal-body">
           {isCreatingNew ? (
             /* Create New Readiness Check Form */
             <form 
               onSubmit={handleCreateCheck} 
-              className="p-4 overflow-y-auto d-flex flex-column gap-3 flex-1"
-              style={{ 
-                overflowY: 'auto', 
-                flex: 1, 
-                minHeight: 0, 
-                maxHeight: 'calc(90vh - 90px)',
-                WebkitOverflowScrolling: 'touch' 
-              }}
+              className="readiness-form-container"
             >
-              <div className="d-flex align-center justify-between pb-2 border-bottom">
+              <div className="d-flex align-center justify-between pb-2 border-bottom flex-wrap gap-1">
                 <h4 className="font-bold text-sm text-primary mb-0">Initiate Member Readiness Check</h4>
                 <span className="text-xs text-muted">Check neighbor availability for upcoming operations</span>
               </div>
@@ -229,7 +187,7 @@ export const ReadinessCheckerModal = () => {
                 />
               </div>
 
-              <div className="grid-2 gap-3">
+              <div className="readiness-form-grid">
                 <div>
                   <label className="form-label text-xs font-bold text-secondary mb-1 d-block">
                     Target Community Circle
@@ -287,7 +245,7 @@ export const ReadinessCheckerModal = () => {
                 />
               </div>
 
-              <div className="d-flex align-center justify-end gap-2 pt-2 border-top">
+              <div className="d-flex align-center justify-end gap-2 pt-2 border-top mt-auto">
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
@@ -307,26 +265,16 @@ export const ReadinessCheckerModal = () => {
             </form>
           ) : (
             /* Active Readiness Checks Viewer & Responder */
-            <div className="d-flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-              {/* Left Column: Checks List */}
-              <div 
-                className="d-flex flex-column border-right overflow-y-auto"
-                style={{ 
-                  width: '260px', 
-                  flexShrink: 0, 
-                  background: 'var(--bg-subtle)', 
-                  overflowY: 'auto', 
-                  minHeight: 0,
-                  WebkitOverflowScrolling: 'touch' 
-                }}
-              >
+            <div className="d-flex flex-1 overflow-hidden" style={{ minHeight: 0, width: '100%' }}>
+              {/* Left Column: Checks List (Desktop >= 768px) */}
+              <div className="readiness-sidebar d-flex flex-column">
                 <div className="p-3 border-bottom font-bold text-xs text-muted text-uppercase" style={{ fontSize: '0.68rem' }}>
                   Readiness Checks ({filteredChecks.length})
                 </div>
 
                 {filteredChecks.length === 0 ? (
                   <div className="p-4 text-center text-xs text-muted">
-                    No active readiness checks. Click "New Check" above to launch one.
+                    No active readiness checks. Click &quot;New Check&quot; above to launch one.
                   </div>
                 ) : (
                   filteredChecks.map(check => {
@@ -363,24 +311,44 @@ export const ReadinessCheckerModal = () => {
                 )}
               </div>
 
-              {/* Right Column: Selected Check Details & Responder */}
-              <div 
-                className="flex-1 overflow-y-auto p-4 d-flex flex-column gap-4" 
-                style={{ 
-                  minWidth: 0, 
-                  overflowY: 'auto', 
-                  flex: 1, 
-                  minHeight: 0,
-                  WebkitOverflowScrolling: 'touch' 
-                }}
-              >
+              {/* Right Column: Selected Check Details & Responder (100% width on mobile) */}
+              <div className="readiness-detail-pane">
+                {/* Mobile Check Selector: Shown only on mobile screens (< 768px) when multiple checks exist */}
+                {filteredChecks.length > 1 && (
+                  <div className="readiness-mobile-switcher card p-2.5 mb-1" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+                    <div className="d-flex align-center justify-between gap-2 mb-1.5">
+                      <span className="text-xs font-bold text-muted text-uppercase" style={{ fontSize: '0.68rem' }}>
+                        Select Check ({filteredChecks.length} available)
+                      </span>
+                      {currentActiveCheck && (
+                        <span className={`badge text-xs ${currentActiveCheck.status === 'active' ? 'badge-primary' : 'badge-gray'}`} style={{ fontSize: '0.65rem' }}>
+                          {currentActiveCheck.readyPercentage || 0}% Ready
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      className="form-input text-xs font-semibold"
+                      style={{ background: '#ffffff' }}
+                      value={currentActiveCheck?.id || ''}
+                      onChange={(e) => setSelectedCheckId(e.target.value)}
+                      aria-label="Select active readiness check"
+                    >
+                      {filteredChecks.map(check => (
+                        <option key={check.id} value={check.id}>
+                          {check.title} ({check.readyCount || 0}/{check.targetHeadcount || 5} Ready · {check.status === 'active' ? 'Active' : 'Closed'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {currentActiveCheck ? (
                   <>
                     {/* Header & Status Gauge */}
                     <div className="card p-3 d-flex flex-column gap-3" style={{ background: 'var(--bg-subtle)' }}>
                       <div className="d-flex align-center justify-between gap-2 flex-wrap">
                         <div>
-                          <div className="d-flex align-center gap-2">
+                          <div className="d-flex align-center gap-2 flex-wrap">
                             <h4 className="font-bold text-sm text-primary mb-0">{currentActiveCheck.title}</h4>
                             <span className={`badge text-xs ${currentActiveCheck.status === 'active' ? 'badge-primary' : 'badge-gray'}`}>
                               {currentActiveCheck.status === 'active' ? 'Poll Open' : 'Closed'}
@@ -445,7 +413,7 @@ export const ReadinessCheckerModal = () => {
                     {/* Member Quick Response Card */}
                     {currentActiveCheck.status === 'active' && (
                       <div className="card p-3 border" style={{ borderColor: 'var(--primary-200)', background: '#f8fafc' }}>
-                        <div className="d-flex align-center justify-between mb-2 pb-1 border-bottom">
+                        <div className="d-flex align-center justify-between mb-2 pb-1 border-bottom flex-wrap gap-1">
                           <span className="font-bold text-xs text-primary d-flex align-center gap-1.5">
                             <Sparkles size={14} className="text-brand" />
                             <span>Your Readiness Response</span>
@@ -458,7 +426,7 @@ export const ReadinessCheckerModal = () => {
                         </div>
 
                         <form onSubmit={handleSubmitResponse} className="d-flex flex-column gap-2.5">
-                          <div className="grid-3 gap-2">
+                          <div className="readiness-status-options">
                             <button
                               type="button"
                               className={`btn btn-xs p-2 d-flex flex-column align-center gap-1 ${responseStatus === 'ready' ? 'btn-primary font-bold' : 'btn-secondary'}`}
@@ -490,7 +458,7 @@ export const ReadinessCheckerModal = () => {
                             </button>
                           </div>
 
-                          <div className="grid-2 gap-2">
+                          <div className="readiness-inputs-row">
                             <div>
                               <label className="form-label text-xs text-muted mb-1 d-block" style={{ fontSize: '0.7rem' }}>
                                 Hours Available
@@ -600,8 +568,21 @@ export const ReadinessCheckerModal = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="p-5 text-center text-muted my-auto">
-                    Select a readiness check from the left to view details and member responses.
+                  <div className="p-4 text-center text-muted my-auto card" style={{ background: 'var(--bg-subtle)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📋</div>
+                    <h4 className="font-bold text-sm text-primary mb-1">No Active Readiness Checks</h4>
+                    <p className="text-xs text-muted mb-3">
+                      There are currently no active volunteer readiness polls for this community circle.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      style={{ background: 'var(--brand)', borderColor: 'var(--brand)' }}
+                      onClick={() => setIsCreatingNew(true)}
+                    >
+                      <Plus size={14} className="mr-1" />
+                      Create New Readiness Check
+                    </button>
                   </div>
                 )}
               </div>

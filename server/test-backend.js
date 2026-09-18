@@ -1028,62 +1028,70 @@ async function runTests() {
 
   console.log('   ✓ Group-only request creation, strict access shielding, and community linking verified.\n');
 
-  // 16. Google OAuth & Gmail Login & Account Provisioning
-  console.log('16. Testing Google OAuth & Gmail Login...');
+  // 16. Google OAuth & Gmail Login - Mandatory Password Authentication
+  console.log('16. Testing Google OAuth & Gmail Login (Mandatory Password Authentication)...');
   db.prepare("DELETE FROM users WHERE email = 'maya@example.com'").run();
 
-  // A. Existing user login by email matching
-  const googleLoginExistingRes = await fetch(`${BASE_URL}/auth/google`, {
+  // A. Reject passwordless attempt to access admin account via /api/auth/google -> 401
+  const adminBypassRes = await fetch(`${BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com'
+    })
+  });
+  assert.strictEqual(adminBypassRes.status, 401, 'Passwordless login attempt to admin account must return 401');
+  const adminBypassData = await adminBypassRes.json();
+  assert.ok(adminBypassData.error.includes('Password authentication required'));
+
+  // B. Reject incorrect password for Gmail login -> 401
+  const wrongPassRes = await fetch(`${BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com',
+      password: 'wrong_password_attempt'
+    })
+  });
+  assert.strictEqual(wrongPassRes.status, 401, 'Incorrect password for Gmail account must return 401');
+
+  // C. Successful Gmail login with valid password -> 200
+  const validGmailLoginRes = await fetch(`${BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com',
+      password: 'password123'
+    })
+  });
+  assert.strictEqual(validGmailLoginRes.status, 200, 'Gmail login with valid password must succeed with 200');
+  const validGmailData = await validGmailLoginRes.json();
+  assert.strictEqual(validGmailData.user.email, 'caleb.zothansanga@gmail.com');
+  assert.strictEqual(validGmailData.user.role, 'System Administrator');
+  assert(validGmailData.token, 'Token must be issued upon valid password authentication');
+
+  // D. General member Gmail login with valid password -> 200
+  const memberGmailRes = await fetch(`${BASE_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: 'maya@caremesh.org',
-      name: 'Maya Lin',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      googleId: 'g_sub_maya_test_123'
+      password: 'password123'
     })
   });
-  assert.strictEqual(googleLoginExistingRes.status, 200);
-  const existingLoginData = await googleLoginExistingRes.json();
-  assert.strictEqual(existingLoginData.user.id, 'usr_me');
-  assert.strictEqual(existingLoginData.user.email, 'maya@caremesh.org');
-  assert.strictEqual(existingLoginData.user.authProvider, 'google');
-  assert.strictEqual(existingLoginData.user.googleId, 'g_sub_maya_test_123');
-  assert(existingLoginData.token, 'Token must be provided');
+  assert.strictEqual(memberGmailRes.status, 200);
+  const memberGmailData = await memberGmailRes.json();
+  assert.strictEqual(memberGmailData.user.id, 'usr_me');
 
   // Verify the issued token works against /api/auth/me
   const meVerifyRes = await fetch(`${BASE_URL}/auth/me`, {
-    headers: { Authorization: `Bearer ${existingLoginData.token}` }
+    headers: { Authorization: `Bearer ${memberGmailData.token}` }
   });
   assert.strictEqual(meVerifyRes.status, 200);
   const meData = await meVerifyRes.json();
   assert.strictEqual(meData.user.id, 'usr_me');
 
-  // B. New Gmail user auto-provisioning
-  const testGmail = `test.resident.${Date.now()}@gmail.com`;
-  const googleRegisterRes = await fetch(`${BASE_URL}/auth/google`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: testGmail,
-      name: 'Jordan Woods',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      googleId: `g_sub_jordan_${Date.now()}`
-    })
-  });
-  assert.strictEqual(googleRegisterRes.status, 201);
-  const newGmailUserData = await googleRegisterRes.json();
-  assert.strictEqual(newGmailUserData.isNewUser, true);
-  assert.strictEqual(newGmailUserData.user.email, testGmail);
-  assert.strictEqual(newGmailUserData.user.name, 'Jordan Woods');
-  assert.strictEqual(newGmailUserData.user.authProvider, 'google');
-  assert(newGmailUserData.user.handle.startsWith('@test_resident_'), 'Generated handle should be derived from email');
-  assert(newGmailUserData.token, 'JWT Token must be returned for new Google user');
-
-  // Clean up created test user
-  db.prepare('DELETE FROM users WHERE id = ?').run(newGmailUserData.user.id);
-
-  console.log('   ✓ Google account email matching & new Gmail user auto-provisioning verified.\n');
+  console.log('   ✓ Mandatory password authentication for all Gmail logins & rejection of passwordless admin bypass verified.\n');
 
   // 17. Custom Category Creation, Persistence, and Editing
   console.log('17. Testing Custom Categories Across Requests, Observations, and Group Feed Posts...');
