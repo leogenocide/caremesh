@@ -16,9 +16,7 @@ import {
   Sparkles,
   User,
   Tag,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight
+  ChevronDown
 } from 'lucide-react';
 
 // Text escape helper to prevent unsanitized HTML insertion into map markers/tooltips
@@ -97,8 +95,6 @@ const STANDARD_CATEGORIES = new Set([
 export const CareMeshMap = ({
   onSelectEntity,
   selectedEntity = null,
-  selectedGroup = null,
-  onSelectGroup = null,
   categoryFilter = 'all',
   onCategoryFilterChange = null,
   filterQuery = '',
@@ -106,7 +102,8 @@ export const CareMeshMap = ({
   height = '560px',
   initialWorldView = false,
   customPinFilter = null,
-  onCustomPinFilterChange = null
+  onCustomPinFilterChange = null,
+  onOpenDetails = null
 }) => {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -115,6 +112,12 @@ export const CareMeshMap = ({
   const tempPinMarkerRef = useRef(null);
   const markerMapRef = useRef(new Map());
   const clusterIndexRef = useRef(null);
+  const lastMapClickEntityIdRef = useRef(null);
+  const selectedEntityIdRef = useRef(selectedEntity?.item?.id);
+
+  useEffect(() => {
+    selectedEntityIdRef.current = selectedEntity?.item?.id;
+  }, [selectedEntity?.item?.id]);
 
   const {
     observations,
@@ -124,8 +127,26 @@ export const CareMeshMap = ({
     currentUser,
     isRequestVisibleToUser,
     openCreateModal,
-    inspectEntity
+    inspectEntity,
+    openEntityDetails
   } = useCareMesh();
+
+  const hasProvenance = useCallback((item, type) => {
+    const t = (type || item?.entityType || '').toLowerCase();
+    if (t === 'observation' || t === 'claim' || t === 'evidence') return true;
+    if (t === 'safety' && (item?.evidenceIds?.length || item?.provenanceChain?.length || item?.disputeIds?.length)) return true;
+    return Boolean(item?.evidenceIds?.length || item?.provenanceChain?.length || item?.disputeIds?.length);
+  }, []);
+
+  const handleOpenDetails = useCallback((item, type) => {
+    if (onOpenDetails) {
+      onOpenDetails(item, type);
+    } else if (openEntityDetails) {
+      openEntityDetails(item, type);
+    } else if (inspectEntity) {
+      inspectEntity(item, type);
+    }
+  }, [onOpenDetails, openEntityDetails, inspectEntity]);
 
   const [internalFilter, setInternalFilter] = useState('all');
   const activeFilter = onCategoryFilterChange ? categoryFilter : internalFilter;
@@ -143,45 +164,7 @@ export const CareMeshMap = ({
   const [isBasemapMenuOpen, setIsBasemapMenuOpen] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(initialWorldView ? 2 : 13);
 
-  // Selected Group State (Cluster Group or Co-located Pin Group)
-  const [internalSelectedGroup, setInternalSelectedGroup] = useState(null);
-  const activeGroup = onSelectGroup && selectedGroup !== undefined ? selectedGroup : internalSelectedGroup;
-  const setActiveGroup = useCallback((grp) => {
-    if (onSelectGroup) {
-      onSelectGroup(grp);
-    } else {
-      setInternalSelectedGroup(grp);
-    }
-  }, [onSelectGroup]);
 
-  // Stepper index for cycling stacked activities in active group
-  const currentGroupIndex = useMemo(() => {
-    if (!activeGroup?.items?.length || !selectedEntity?.item?.id) return 0;
-    const idx = activeGroup.items.findIndex(x => x.item?.id === selectedEntity.item.id);
-    return idx >= 0 ? idx : 0;
-  }, [activeGroup, selectedEntity]);
-
-  const handleNextInGroup = useCallback(() => {
-    if (!activeGroup?.items?.length) return;
-    const nextIdx = (currentGroupIndex + 1) % activeGroup.items.length;
-    const target = activeGroup.items[nextIdx];
-    if (target && onSelectEntity) {
-      onSelectEntity(target.item, target.type, activeGroup);
-    } else if (target) {
-      inspectEntity(target.item, target.type);
-    }
-  }, [activeGroup, currentGroupIndex, onSelectEntity, inspectEntity]);
-
-  const handlePrevInGroup = useCallback(() => {
-    if (!activeGroup?.items?.length) return;
-    const prevIdx = (currentGroupIndex - 1 + activeGroup.items.length) % activeGroup.items.length;
-    const target = activeGroup.items[prevIdx];
-    if (target && onSelectEntity) {
-      onSelectEntity(target.item, target.type, activeGroup);
-    } else if (target) {
-      inspectEntity(target.item, target.type);
-    }
-  }, [activeGroup, currentGroupIndex, onSelectEntity, inspectEntity]);
 
   // Custom Pin Shower State & Dropdown Management
   const [internalCustomPinMode, setInternalCustomPinMode] = useState('none');
@@ -711,7 +694,7 @@ export const CareMeshMap = ({
     markersLayerRef.current.clearLayers();
     markerMapRef.current.clear();
 
-    const selectedId = selectedEntity?.item?.id;
+    const selectedId = selectedEntityIdRef.current;
 
     // Separate clusters and individual items
     const clusterFeatures = [];
@@ -748,41 +731,8 @@ export const CareMeshMap = ({
         const targetZoom = Math.min(Math.max(zoom + 2, expansionZoom), 18);
         map.flyTo([lat, lng], targetZoom, {
           animate: true,
-          duration: 0.7
+          duration: 0.5
         });
-
-        // Retrieve all leaves in this cluster
-        let leaves;
-        try {
-          leaves = clusterIndexRef.current.getLeaves(cluster_id, Infinity);
-        } catch {
-          leaves = [];
-        }
-
-        const clusterItems = leaves.map(leaf => ({
-          item: leaf.properties.rawItem,
-          type: leaf.properties.type
-        })).filter(x => x.item);
-
-        const groupData = {
-          id: `cluster_${cluster_id}`,
-          groupType: 'cluster',
-          title: `Cluster: ${point_count} Mutual Aid Activities`,
-          coordinate: [lat, lng],
-          hasHazard,
-          hazardCount,
-          items: clusterItems
-        };
-
-        setActiveGroup(groupData);
-
-        if (clusterItems.length > 0) {
-          if (onSelectEntity) {
-            onSelectEntity(clusterItems[0].item, clusterItems[0].type, groupData);
-          } else {
-            inspectEntity(clusterItems[0].item, clusterItems[0].type);
-          }
-        }
       });
 
       markersLayerRef.current.addLayer(clusterMarker);
@@ -824,6 +774,71 @@ export const CareMeshMap = ({
       event: '📅 Action Event'
     };
 
+    const buildPinPopupElement = (item, entityType, extraNotice = '') => {
+      const container = document.createElement('div');
+      container.className = 'caremesh-map-pin-popup-card';
+      container.style.cssText = 'min-width: 220px; max-width: 280px; padding: 2px; font-family: inherit; font-size: 12px;';
+
+      const type = (entityType || item.entityType || '').toLowerCase();
+      const badgeColor = type === 'safety' ? '#e11d48' : type === 'request' ? '#d97706' : type === 'resource' ? '#059669' : '#0284c7';
+      const badgeBg = type === 'safety' ? '#ffe4e6' : type === 'request' ? '#fef3c7' : type === 'resource' ? '#ecfdf5' : '#e0f2fe';
+      const typeLabel = typeLabels[type] || (type ? type.toUpperCase() : 'ACTIVITY');
+
+      const safeTitle = escapeHtml(item.title || 'Untitled Activity');
+      const rawDesc = item.description || '';
+      const safeDesc = escapeHtml(rawDesc.length > 95 ? rawDesc.slice(0, 95) + '…' : rawDesc);
+      const safeAddress = escapeHtml(item.location?.address || item.address || 'Site coordinate');
+      const extraMeta = item.severity || item.urgency || item.status;
+      const canInspect = hasProvenance(item, type);
+
+      container.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px;">
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: ${badgeColor}; background: ${badgeBg}; padding: 2px 7px; border-radius: 9999px; letter-spacing: 0.02em;">
+            ${escapeHtml(typeLabel)}
+          </span>
+          ${extraMeta ? `<span style="font-size: 10px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; text-transform: capitalize;">${escapeHtml(extraMeta.replace(/_/g, ' '))}</span>` : ''}
+        </div>
+        <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 4px; line-height: 1.35;">
+          ${safeTitle}
+        </div>
+        ${safeDesc ? `<div style="font-size: 11px; color: #475569; margin-bottom: 8px; line-height: 1.4;">${safeDesc}</div>` : ''}
+        <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <span>📍</span>
+          <span style="overflow: hidden; text-overflow: ellipsis;">${safeAddress}</span>
+        </div>
+        ${extraNotice ? `<div style="font-size: 10.5px; color: #0284c7; font-weight: 600; margin-bottom: 8px;">${extraNotice}</div>` : ''}
+        <div style="display: flex; gap: 6px; margin-top: 6px;">
+          <button type="button" class="btn-popup-open-details" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; background: #0284c7; color: #ffffff; border: none; padding: 7px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: background 0.15s ease; box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);">
+            <span>Open Details Page</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </button>
+          ${canInspect ? `
+            <button type="button" class="btn-popup-inspect-prov" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 7px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+              Provenance
+            </button>
+          ` : ''}
+        </div>
+      `;
+
+      const openBtn = container.querySelector('.btn-popup-open-details');
+      if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleOpenDetails(item, type);
+        });
+      }
+
+      const provBtn = container.querySelector('.btn-popup-inspect-prov');
+      if (provBtn) {
+        provBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          inspectEntity(item, type);
+        });
+      }
+
+      return container;
+    };
+
     locationGroups.forEach(group => {
       const count = group.items.length;
 
@@ -855,10 +870,29 @@ export const CareMeshMap = ({
           offset: [0, -10]
         });
 
+        marker.bindPopup(() => buildPinPopupElement(rawItem, type), {
+          direction: 'top',
+          offset: [0, -10],
+          className: 'caremesh-leaflet-custom-popup',
+          maxWidth: 300,
+          minWidth: 230,
+          autoPan: false
+        });
+
+        marker.on('popupopen', () => {
+          marker.closeTooltip?.();
+        });
+
         marker.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
+          lastMapClickEntityIdRef.current = id;
+          marker.openPopup();
           if (onSelectEntity) onSelectEntity(rawItem, type);
-          else inspectEntity(rawItem, type);
+        });
+
+        marker.on('dblclick', (e) => {
+          L.DomEvent.stopPropagation(e);
+          handleOpenDetails(rawItem, type);
         });
 
         markersLayerRef.current.addLayer(marker);
@@ -872,15 +906,6 @@ export const CareMeshMap = ({
         }));
         const firstItem = group.items[0]?.properties?.rawItem;
         const siteAddress = firstItem?.location?.address || firstItem?.address || 'Site Coordinate';
-
-        const groupData = {
-          id: `colocated_${group.latLng[0] || group.latLng.lat}_${group.latLng[1] || group.latLng.lng}`,
-          groupType: 'co_located',
-          title: `Co-located Site (${count} Activities)`,
-          address: siteAddress,
-          coordinate: [group.latLng.lat || group.latLng[0], group.latLng.lng || group.latLng[1]],
-          items: coLocatedItems
-        };
 
         // Interactive ground hub icon with count badge
         const centerIcon = L.divIcon({
@@ -907,13 +932,65 @@ export const CareMeshMap = ({
           offset: [0, 10]
         });
 
+        centerPin.bindPopup(() => {
+          const container = document.createElement('div');
+          container.className = 'caremesh-map-hub-popup';
+          container.style.cssText = 'min-width: 240px; max-width: 310px; padding: 2px; font-family: inherit; font-size: 12px;';
+
+          container.innerHTML = `
+            <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 3px;">
+              📍 Co-located Site (${count} Activities)
+            </div>
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${escapeHtml(siteAddress)}
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 5px; max-height: 170px; overflow-y: auto; padding-right: 2px;">
+              ${coLocatedItems.map((entry, idx) => `
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                  <div style="flex: 1; overflow: hidden;">
+                    <div style="font-size: 11px; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                      ${escapeHtml(entry.item.title || 'Activity')}
+                    </div>
+                    <div style="font-size: 9.5px; color: #64748b; text-transform: uppercase; font-weight: 700;">
+                      ${escapeHtml(entry.type)}
+                    </div>
+                  </div>
+                  <button type="button" class="btn-hub-item-action" data-index="${idx}" style="background: #0284c7; color: #fff; border: none; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                    Open Details
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          `;
+
+          container.querySelectorAll('.btn-hub-item-action').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const idx = parseInt(btn.getAttribute('data-index'), 10);
+              const target = coLocatedItems[idx];
+              if (target) {
+                handleOpenDetails(target.item, target.type);
+              }
+            });
+          });
+
+          return container;
+        }, {
+          direction: 'bottom',
+          offset: [0, 10],
+          className: 'caremesh-leaflet-custom-popup',
+          maxWidth: 330,
+          minWidth: 250,
+          autoPan: false
+        });
+
+        centerPin.on('popupopen', () => {
+          centerPin.closeTooltip?.();
+        });
+
         centerPin.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
-          setActiveGroup(groupData);
-          if (coLocatedItems.length > 0) {
-            if (onSelectEntity) onSelectEntity(coLocatedItems[0].item, coLocatedItems[0].type, groupData);
-            else inspectEntity(coLocatedItems[0].item, coLocatedItems[0].type);
-          }
+          centerPin.openPopup();
         });
 
         markersLayerRef.current.addLayer(centerPin);
@@ -970,11 +1047,29 @@ export const CareMeshMap = ({
             offset: [0, -10]
           });
 
+          marker.bindPopup(() => buildPinPopupElement(rawItem, type, `📍 Co-located (${index + 1} of ${count} at site)`), {
+            direction: 'top',
+            offset: [0, -10],
+            className: 'caremesh-leaflet-custom-popup',
+            maxWidth: 300,
+            minWidth: 230,
+            autoPan: false
+          });
+
+          marker.on('popupopen', () => {
+            marker.closeTooltip?.();
+          });
+
           marker.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
-            setActiveGroup(groupData);
-            if (onSelectEntity) onSelectEntity(rawItem, type, groupData);
-            else inspectEntity(rawItem, type);
+            lastMapClickEntityIdRef.current = id;
+            marker.openPopup();
+            if (onSelectEntity) onSelectEntity(rawItem, type);
+          });
+
+          marker.on('dblclick', (e) => {
+            L.DomEvent.stopPropagation(e);
+            handleOpenDetails(rawItem, type);
           });
 
           markersLayerRef.current.addLayer(marker);
@@ -983,7 +1078,7 @@ export const CareMeshMap = ({
         });
       }
     });
-  }, [selectedEntity?.item?.id, createClusterIcon, createCustomIcon, onSelectEntity, inspectEntity, setActiveGroup]);
+  }, [createClusterIcon, createCustomIcon, onSelectEntity, handleOpenDetails, hasProvenance, inspectEntity]);
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -1115,20 +1210,81 @@ export const CareMeshMap = ({
     }
   }, [clickedLocation]);
 
-  // Center map on selected entity when clicked from list or drawer
+  // Update marker selection styling in-place without rebuilding layers
+  const prevSelectedIdRef = useRef(null);
+  useEffect(() => {
+    const newId = selectedEntity?.item?.id;
+    const prevId = prevSelectedIdRef.current;
+
+    if (prevId && prevId !== newId) {
+      const prevMarker = markerMapRef.current.get(prevId);
+      if (prevMarker && prevMarker.getElement?.()) {
+        const el = prevMarker.getElement();
+        const wrapper = el?.querySelector('.custom-leaflet-marker-wrapper');
+        if (wrapper) wrapper.style.transform = 'scale(1)';
+        prevMarker.setZIndexOffset(150);
+      }
+    }
+
+    if (newId) {
+      const newMarker = markerMapRef.current.get(newId);
+      if (newMarker && newMarker.getElement?.()) {
+        const el = newMarker.getElement();
+        const wrapper = el?.querySelector('.custom-leaflet-marker-wrapper');
+        if (wrapper) wrapper.style.transform = 'scale(1.18)';
+        newMarker.setZIndexOffset(2500);
+      }
+    }
+
+    prevSelectedIdRef.current = newId;
+  }, [selectedEntity?.item?.id]);
+
+  // Center map on selected entity when clicked from list or drawer without zooming out
   useEffect(() => {
     if (!mapInstanceRef.current || !selectedEntity?.item?.location) return;
     const { lat, lng } = selectedEntity.item.location;
-    if (lat && lng) {
-      mapInstanceRef.current.flyTo([lat, lng], 15, {
-        animate: true,
-        duration: 0.6
-      });
-      const key = selectedEntity.type ? `${selectedEntity.type}_${selectedEntity.item.id}` : selectedEntity.item.id;
-      const marker = markerMapRef.current.get(key) || markerMapRef.current.get(selectedEntity.item.id);
-      if (marker && marker.openTooltip) {
-        marker.openTooltip();
+    if (!lat || !lng) return;
+
+    const entityId = selectedEntity.item.id;
+
+    // If selection was triggered by clicking directly on the map marker itself,
+    // do NOT move or zoom the map (preserves user's current zoom and viewport)
+    if (lastMapClickEntityIdRef.current === entityId) {
+      lastMapClickEntityIdRef.current = null;
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const currentZoom = map.getZoom();
+
+    // Check if pin is already visible inside current map viewport
+    const isAlreadyVisible = (() => {
+      try {
+        return map.getBounds().contains([lat, lng]);
+      } catch {
+        return false;
       }
+    })();
+
+    // NEVER zoom out when selecting an entity!
+    // If current zoom is >= 14, keep currentZoom.
+    // Only if zoomed far out (< 14), gently zoom in to 15.
+    const targetZoom = Math.max(currentZoom, 15);
+
+    if (isAlreadyVisible) {
+      if (currentZoom < 14) {
+        map.flyTo([lat, lng], targetZoom, { animate: true, duration: 0.5 });
+      } else {
+        map.panTo([lat, lng], { animate: true, duration: 0.3 });
+      }
+    } else {
+      map.flyTo([lat, lng], targetZoom, { animate: true, duration: 0.6 });
+    }
+
+    const key = selectedEntity.type ? `${selectedEntity.type}_${selectedEntity.item.id}` : selectedEntity.item.id;
+    const marker = markerMapRef.current.get(key) || markerMapRef.current.get(selectedEntity.item.id);
+    if (marker && marker.openPopup && !marker.isPopupOpen?.()) {
+      marker.openPopup();
     }
   }, [selectedEntity]);
 
@@ -1584,78 +1740,6 @@ export const CareMeshMap = ({
           </div>
         </div>
 
-        {/* Interactive Co-Located / Cluster Stepper Toolbar */}
-        {activeGroup && activeGroup.items?.length > 1 && !clickedLocation && (
-          <div 
-            className="animate-fade-in" 
-            style={{ 
-              position: 'absolute', 
-              bottom: '18px', 
-              left: '50%', 
-              transform: 'translateX(-50%)', 
-              zIndex: 1002, 
-              background: 'rgba(15, 23, 42, 0.92)', 
-              backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '24px',
-              padding: '6px 14px',
-              color: '#ffffff',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-              fontSize: '0.78rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}
-          >
-            <div className="d-flex align-center gap-1.5 font-bold">
-              <span>📍</span>
-              <span className="text-truncate" style={{ maxWidth: '170px' }}>
-                {activeGroup.groupType === 'cluster' ? 'Cluster Group' : 'Co-located Site'}:
-              </span>
-            </div>
-
-            <span className="badge badge-brand text-xs" style={{ background: '#2563eb', color: '#fff', padding: '2px 8px', borderRadius: '12px' }}>
-              {currentGroupIndex + 1} of {activeGroup.items.length}
-            </span>
-
-            <span className="text-truncate d-none d-sm-inline" style={{ maxWidth: '160px', color: '#93c5fd', fontWeight: 600 }}>
-              {activeGroup.items[currentGroupIndex]?.item?.title}
-            </span>
-
-            <div className="d-flex align-center gap-1">
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs text-white"
-                style={{ padding: '3px 8px', background: 'rgba(255,255,255,0.16)', borderRadius: '12px', fontSize: '0.74rem' }}
-                onClick={handlePrevInGroup}
-                title="Browse to previous pin in this group"
-              >
-                <ChevronLeft size={13} style={{ marginRight: '2px' }} />
-                <span>Prev</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs text-white"
-                style={{ padding: '3px 8px', background: 'rgba(255,255,255,0.16)', borderRadius: '12px', fontSize: '0.74rem' }}
-                onClick={handleNextInGroup}
-                title="Browse to next pin in this group"
-              >
-                <span>Next</span>
-                <ChevronRight size={13} style={{ marginLeft: '2px' }} />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs text-muted ml-1"
-              style={{ color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: '2px 6px', fontSize: '0.7rem' }}
-              onClick={() => setActiveGroup(null)}
-              title="Close stacked pin browser"
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         {/* Temporary Pin Quick Action Banner */}
         {clickedLocation && (

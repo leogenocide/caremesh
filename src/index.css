@@ -1618,8 +1618,45 @@ select {
 }
 
 .custom-leaflet-cluster-wrapper:hover .caremesh-cluster-inner {
-  transform: scale(1.18);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* CareMesh Leaflet Custom Popup Styling */
+.caremesh-leaflet-custom-popup .leaflet-popup-content-wrapper {
+  background: var(--bg-surface, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.2), 0 6px 10px -4px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-light, #e2e8f0);
+  padding: 6px;
+}
+
+.caremesh-leaflet-custom-popup .leaflet-popup-content {
+  margin: 6px 8px;
+  line-height: 1.4;
+  color: var(--text-primary, #0f172a);
+}
+
+.caremesh-leaflet-custom-popup .leaflet-popup-tip-container {
+  overflow: visible;
+}
+
+.caremesh-leaflet-custom-popup .leaflet-popup-tip {
+  background: var(--bg-surface, #ffffff);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.caremesh-leaflet-custom-popup a.leaflet-popup-close-button {
+  top: 8px;
+  right: 8px;
+  color: #94a3b8;
+  font-size: 16px;
+  padding: 2px 6px;
+}
+
+.caremesh-leaflet-custom-popup a.leaflet-popup-close-button:hover {
+  color: #0f172a;
+  background: transparent;
 }
 
 .cluster-pulse {

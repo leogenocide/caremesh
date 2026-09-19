@@ -592,8 +592,15 @@ export const CareMeshProvider = ({ children }) => {
       viewUserProfile(entity);
       return;
     }
+    if (resolvedType === 'event') {
+      setSelectedEventChat(entity);
+      return;
+    }
     setInspectedEntity({ entity, type: resolvedType || 'observation' });
-  }, [viewEvidenceDetail, viewRequestDetail, viewResourceDetail, viewSafetyDetail, viewPlanDetail, viewUserProfile]);
+  }, [viewEvidenceDetail, viewRequestDetail, viewResourceDetail, viewSafetyDetail, viewPlanDetail, viewUserProfile, setSelectedEventChat]);
+
+  // Alias openEntityDetails to inspectEntity for intuitive semantic naming
+  const openEntityDetails = inspectEntity;
 
   const startDirectMessage = useCallback((targetUser) => {
     if (!targetUser) return;
@@ -3860,6 +3867,7 @@ export const CareMeshProvider = ({ children }) => {
       // Inspectors & Plan Modals
       inspectedEntity,
       inspectEntity,
+      openEntityDetails,
       closeInspector,
 
       selectedPlanDetail,
