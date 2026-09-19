@@ -1399,7 +1399,78 @@ export const mockMatchingFactors = [
   }
 ];
 
-export const mockEvents = [];
+export const mockEvents = [
+  {
+    id: 'evt_01',
+    title: 'Willow Creek Riparian Tree Planting & Silt Cleanup Work Party',
+    eventType: 'work_party',
+    description: 'Community riparian restoration session to plant 80 native willow saplings and clear storm sediment basins before heavy rains.',
+    location: {
+      address: 'Willow Creek Trailhead, Maplewood',
+      lat: 37.7798,
+      lng: -122.4285
+    },
+    date: 'Saturday, Oct 24',
+    time: '9:00 AM - 1:00 PM',
+    organizer: mockUsers[0],
+    participants: [mockUsers[0], mockUsers[1], mockUsers[4]],
+    maxParticipants: 25,
+    status: 'upcoming',
+    relatedRequestIds: ['req_01'],
+    relatedResourceIds: ['res_01'],
+    relatedPlanIds: ['plan_01'],
+    chatMessages: [
+      { id: 'm_01', sender: mockUsers[0], text: 'Bring sturdy waterproof boots and work gloves. Shovels and saplings are staged on site!', time: 'Yesterday' },
+      { id: 'm_02', sender: mockUsers[1], text: 'I am bringing the wheelbarrow and 4 extra spade shovels.', time: '3 hours ago' }
+    ]
+  },
+  {
+    id: 'evt_02',
+    title: 'Emergency Sandbagging Operation at Elm Street Crossing',
+    eventType: 'assistance_operation',
+    description: 'Pre-emptive flood barrier staging along low-lying river bank to protect residential culverts during forecast precipitation.',
+    location: {
+      address: 'River Road & Elm St Culvert Depository, Maplewood',
+      lat: 37.7810,
+      lng: -122.4262
+    },
+    date: 'Today, 2:00 PM',
+    time: '2:00 PM - 5:30 PM',
+    organizer: mockUsers[1],
+    participants: [mockUsers[1], mockUsers[2]],
+    maxParticipants: 15,
+    status: 'upcoming',
+    relatedRequestIds: ['req_02'],
+    relatedResourceIds: [],
+    relatedPlanIds: [],
+    chatMessages: [
+      { id: 'm_03', sender: mockUsers[1], text: 'Two pallets of empty burlap bags have arrived. Need volunteer shovel rotations.', time: '1 hour ago' }
+    ]
+  },
+  {
+    id: 'evt_03',
+    title: 'Community Solar Microgrid & Water Telemetry Workshop',
+    eventType: 'workshop',
+    description: 'Hands-on practical session teaching neighbors how to build and maintain open-source IoT water conductivity sensors and off-grid battery monitors.',
+    location: {
+      address: 'Maplewood Community Center, Workshop Room B',
+      lat: 37.7749,
+      lng: -122.4194
+    },
+    date: 'Sunday, Oct 25',
+    time: '11:00 AM - 2:00 PM',
+    organizer: mockUsers[4],
+    participants: [mockUsers[4], mockUsers[3]],
+    maxParticipants: 20,
+    status: 'upcoming',
+    relatedRequestIds: [],
+    relatedResourceIds: ['res_02'],
+    relatedPlanIds: ['plan_01'],
+    chatMessages: [
+      { id: 'm_04', sender: mockUsers[4], text: 'We have 10 breadboard sensor kits ready for assembly. Open to all skill levels!', time: '2 days ago' }
+    ]
+  }
+];
 
 export const mockPlans = [
   {

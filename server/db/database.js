@@ -75,6 +75,9 @@ export function initDatabase() {
       if (!rcCols.some(c => c.name === 'request_id')) {
         db.prepare("ALTER TABLE readiness_checks ADD COLUMN request_id TEXT").run();
       }
+      if (!rcCols.some(c => c.name === 'event_id')) {
+        db.prepare("ALTER TABLE readiness_checks ADD COLUMN event_id TEXT").run();
+      }
     }
   } catch (err) {
     console.warn('Pre-migration warning:', err.message);
@@ -135,6 +138,9 @@ export function initDatabase() {
     }
     if (!rcCols.some(c => c.name === 'request_id')) {
       db.prepare("ALTER TABLE readiness_checks ADD COLUMN request_id TEXT").run();
+    }
+    if (!rcCols.some(c => c.name === 'event_id')) {
+      db.prepare("ALTER TABLE readiness_checks ADD COLUMN event_id TEXT").run();
     }
     const raCols = db.prepare("PRAGMA table_info(resource_assignments)").all();
     if (!raCols.some(c => c.name === 'borrower_id')) {

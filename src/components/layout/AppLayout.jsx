@@ -122,6 +122,7 @@ export const AppLayout = ({ children }) => {
       {/* 2. Global Evidence & Provenance Inspector (Tier 2: z-index 1050) */}
       {inspectedEntity && (
         <EvidenceInspectorModal
+          key={`inspector_${inspectedEntity.type}_${inspectedEntity.entity?.id}`}
           isOpen={Boolean(inspectedEntity)}
           onClose={closeInspector}
           targetClaim={inspectedEntity.type === 'claim' ? inspectedEntity.entity : null}

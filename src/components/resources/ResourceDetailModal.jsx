@@ -13,7 +13,8 @@ import {
   X,
   Check,
   Package,
-  RotateCcw
+  RotateCcw,
+  Share2
 } from 'lucide-react';
 
 export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
@@ -27,7 +28,8 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
     deleteResource,
     canUserManage,
     openRequestResourceModal,
-    updateLoanAssignmentStatus
+    updateLoanAssignmentStatus,
+    openShareSocialModal
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'loans' | 'matching' | 'contact'
@@ -150,6 +152,15 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
               )}
 
               <span className="badge badge-gray text-xs">{resource.category}</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs d-inline-flex align-center gap-1 ml-auto"
+                onClick={() => openShareSocialModal(resource, 'resource')}
+                title="Share this resource"
+              >
+                <Share2 size={12} />
+                <span>Share</span>
+              </button>
             </div>
 
             <div className="d-flex align-center gap-2 flex-wrap">
@@ -839,6 +850,15 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
                 <span>Edit Resource</span>
               </button>
             )}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm d-flex align-center gap-1"
+              onClick={() => openShareSocialModal(resource, 'resource')}
+              title="Share this resource"
+            >
+              <Share2 size={13} />
+              <span>Share</span>
+            </button>
             <button
               type="button"
               className="btn btn-secondary btn-sm"

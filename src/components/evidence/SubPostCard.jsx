@@ -18,7 +18,8 @@ export const SubPostCard = ({
     inspectEntity, 
     openObservationRelationModal,
     deleteObservation,
-    canUserManage
+    canUserManage,
+    closeEvidenceDetailModal
   } = useCareMesh();
 
   if (!subPost) return null;
@@ -33,6 +34,9 @@ export const SubPostCard = ({
 
   const handleInspect = (e) => {
     if (e) e.stopPropagation();
+    if (closeEvidenceDetailModal) {
+      closeEvidenceDetailModal();
+    }
     if (inspectEntity) {
       inspectEntity(subPost, 'observation');
     }
@@ -78,7 +82,7 @@ export const SubPostCard = ({
               {subPost.category.replace(/_/g, ' ')}
             </span>
           )}
-          <h6 className="font-bold text-sm text-primary m-0 truncate flex-1 min-w-0 hover:text-brand">
+          <h6 className="font-bold text-sm text-primary m-0 flex-1 min-w-0 hover:text-brand" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
             {subPost.title}
           </h6>
         </div>
@@ -151,7 +155,7 @@ export const SubPostCard = ({
       <div className="d-flex align-center justify-between pt-2 border-top mt-1 flex-wrap gap-2">
         <button
           type="button"
-          className="btn btn-primary btn-xs font-semibold d-flex align-center gap-1"
+          className="btn btn-primary btn-xs font-semibold d-flex align-center justify-center gap-1 w-100-mobile flex-1"
           onClick={handleInspect}
         >
           <Eye size={12} />
@@ -159,10 +163,10 @@ export const SubPostCard = ({
           <ChevronRight size={12} />
         </button>
 
-        <div className="d-flex align-center gap-1.5 flex-wrap">
+        <div className="d-flex align-center gap-1.5 flex-wrap w-100-mobile">
           <button
             type="button"
-            className="btn btn-secondary btn-xs d-flex align-center gap-1"
+            className="btn btn-secondary btn-xs d-flex align-center justify-center gap-1 flex-1"
             onClick={handleCorroborate}
             title={`Add corroborating sub-post to "${subPost.title}"`}
           >
@@ -171,7 +175,7 @@ export const SubPostCard = ({
           </button>
           <button
             type="button"
-            className="btn btn-xs text-rose d-flex align-center gap-1"
+            className="btn btn-xs text-rose d-flex align-center justify-center gap-1 flex-1"
             style={{ background: 'var(--rose-50)', border: '1px solid var(--rose-200)' }}
             onClick={handleContradict}
             title={`File counter-contradiction challenging "${subPost.title}"`}
@@ -182,7 +186,7 @@ export const SubPostCard = ({
           {canUserManage(subPost) && (
             <button
               type="button"
-              className="btn btn-ghost btn-xs text-rose d-flex align-center gap-1"
+              className="btn btn-ghost btn-xs text-rose d-flex align-center justify-center gap-1"
               onClick={(e) => {
                 e.stopPropagation();
                 if (window.confirm(`Are you sure you want to permanently delete this sub-post "${subPost.title}"? This action cannot be undone.`)) {

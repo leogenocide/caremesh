@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCareMesh } from '../../context/useCareMesh';
 import { 
   Users, 
@@ -7,8 +7,409 @@ import {
   Plus, 
   UserCheck, 
   UserMinus, 
-  Sparkles
+  Sparkles,
+  HandHeart,
+  Calendar,
+  Search,
+  ChevronDown,
+  Check
 } from 'lucide-react';
+
+// Pure formatting and search helpers for activity picker
+const formatRequestItem = (r, isParticipating, currentUserId) => {
+  const isOwner = r.requester?.id === currentUserId || r.requesterId === currentUserId || r.requester_id === currentUserId;
+  return {
+    key: `request:${r.id}`,
+    type: 'request',
+    raw: r,
+    title: r.title,
+    isParticipating,
+    role: isOwner ? 'Your Request' : (isParticipating ? 'Volunteer' : 'Community Request'),
+    roleBadgeClass: isOwner ? 'badge-warning' : (isParticipating ? 'badge-success' : 'badge-secondary'),
+    subtext: `${r.peopleNeeded || 1} needed • ${r.urgency || 'medium'} urgency`,
+    location: r.location?.address || ''
+  };
+};
+
+const formatEventItem = (e, isParticipating, currentUserId) => {
+  const isOrganizer = e.organizer?.id === currentUserId || e.organizerId === currentUserId || e.organizer_id === currentUserId;
+  return {
+    key: `event:${e.id}`,
+    type: 'event',
+    raw: e,
+    title: e.title,
+    isParticipating,
+    role: isOrganizer ? 'Organizer' : (isParticipating ? 'Attending' : 'Community Event'),
+    roleBadgeClass: isOrganizer ? 'badge-primary' : (isParticipating ? 'badge-info' : 'badge-secondary'),
+    subtext: `${e.date || 'TBD'}${e.time ? ' • ' + e.time : ''}`,
+    location: e.location?.address || ''
+  };
+};
+
+const matchesActivityQuery = (item, query) => {
+  if (!query) return true;
+  return (
+    item.title.toLowerCase().includes(query) ||
+    item.role.toLowerCase().includes(query) ||
+    item.subtext.toLowerCase().includes(query) ||
+    item.location.toLowerCase().includes(query)
+  );
+};
+
+const SearchableActivityPicker = ({
+  selectedActivityKey,
+  onSelectActivity,
+  participatingRequests = [],
+  participatingEvents = [],
+  otherRequests = [],
+  otherEvents = [],
+  currentUser
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'requests' | 'events'
+  const [showOther, setShowOther] = useState(false);
+  const containerRef = useRef(null);
+  const currentUserId = currentUser?.id;
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  // Find currently selected item
+  const selectedItem = useMemo(() => {
+    if (!selectedActivityKey) return null;
+    if (selectedActivityKey.startsWith('request:')) {
+      const id = selectedActivityKey.replace('request:', '');
+      const part = participatingRequests.find(r => r.id === id);
+      if (part) return formatRequestItem(part, true, currentUserId);
+      const other = otherRequests.find(r => r.id === id);
+      if (other) return formatRequestItem(other, false, currentUserId);
+    } else if (selectedActivityKey.startsWith('event:')) {
+      const id = selectedActivityKey.replace('event:', '');
+      const part = participatingEvents.find(e => e.id === id);
+      if (part) return formatEventItem(part, true, currentUserId);
+      const other = otherEvents.find(e => e.id === id);
+      if (other) return formatEventItem(other, false, currentUserId);
+    }
+    return null;
+  }, [selectedActivityKey, participatingRequests, otherRequests, participatingEvents, otherEvents, currentUserId]);
+
+  const q = searchQuery.toLowerCase().trim();
+
+  const formattedParticipating = useMemo(() => {
+    const reqs = participatingRequests.map(r => formatRequestItem(r, true, currentUserId));
+    const evts = participatingEvents.map(e => formatEventItem(e, true, currentUserId));
+    return [...reqs, ...evts];
+  }, [participatingRequests, participatingEvents, currentUserId]);
+
+  const formattedOther = useMemo(() => {
+    const reqs = otherRequests.map(r => formatRequestItem(r, false, currentUserId));
+    const evts = otherEvents.map(e => formatEventItem(e, false, currentUserId));
+    return [...reqs, ...evts];
+  }, [otherRequests, otherEvents, currentUserId]);
+
+  // Apply tab filters and search filters
+  const filteredParticipating = useMemo(() => {
+    return formattedParticipating.filter(item => {
+      if (activeTab === 'requests' && item.type !== 'request') return false;
+      if (activeTab === 'events' && item.type !== 'event') return false;
+      return matchesActivityQuery(item, q);
+    });
+  }, [formattedParticipating, activeTab, q]);
+
+  const filteredOther = useMemo(() => {
+    return formattedOther.filter(item => {
+      if (activeTab === 'requests' && item.type !== 'request') return false;
+      if (activeTab === 'events' && item.type !== 'event') return false;
+      return matchesActivityQuery(item, q);
+    });
+  }, [formattedOther, activeTab, q]);
+
+  const totalOtherCount = formattedOther.length;
+  // If there's an active query, automatically reveal other matching operations
+  const shouldShowOther = showOther || q.length > 0;
+
+  return (
+    <div className="position-relative w-100" ref={containerRef}>
+      {/* Trigger Button */}
+      <button
+        type="button"
+        className="form-input text-xs w-100 d-flex align-center justify-between gap-1.5"
+        style={{
+          cursor: 'pointer',
+          textAlign: 'left',
+          minHeight: '38px',
+          background: 'var(--input-bg, #ffffff)',
+          borderColor: isOpen ? 'var(--color-primary, #3b82f6)' : 'var(--border-color, #cbd5e1)',
+          boxShadow: isOpen ? '0 0 0 2px rgba(59, 130, 246, 0.2)' : 'none'
+        }}
+        onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <div className="d-flex align-center gap-1.5 min-w-0 flex-1">
+          {selectedItem ? (
+            <>
+              {selectedItem.type === 'request' ? (
+                <HandHeart size={14} className="text-amber flex-shrink-0" />
+              ) : (
+                <Calendar size={14} className="text-brand flex-shrink-0" />
+              )}
+              <span className="text-truncate font-semibold text-primary" style={{ fontSize: '0.78rem' }}>
+                {selectedItem.title}
+              </span>
+              <span 
+                className={`badge ${selectedItem.roleBadgeClass} text-xs flex-shrink-0`}
+                style={{ fontSize: '0.62rem', padding: '0.1rem 0.35rem' }}
+              >
+                {selectedItem.role}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+              Select participating request or civic event...
+            </span>
+          )}
+        </div>
+        <ChevronDown 
+          size={14} 
+          className="text-muted flex-shrink-0 transition-transform" 
+          style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
+        />
+      </button>
+
+      {/* Popover Dropdown */}
+      {isOpen && (
+        <div
+          className="position-absolute w-100 rounded-md border shadow-lg"
+          style={{
+            top: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 120,
+            background: 'var(--card-bg, #ffffff)',
+            borderColor: 'var(--border-color, #e2e8f0)',
+            boxShadow: '0 12px 28px -4px rgba(0,0,0,0.18), 0 8px 12px -4px rgba(0,0,0,0.08)',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Search Bar */}
+          <div className="p-2 border-bottom" style={{ background: 'var(--surface-color, #f8fafc)' }}>
+            <div className="position-relative d-flex align-center">
+              <Search size={13} className="position-absolute text-muted" style={{ left: '8px' }} />
+              <input
+                type="text"
+                autoFocus
+                className="form-input text-xs w-100"
+                style={{ paddingLeft: '28px', paddingRight: q ? '26px' : '8px', height: '30px', fontSize: '0.75rem' }}
+                placeholder="Search activities, roles, dates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="btn-icon position-absolute"
+                  style={{ right: '4px', width: '20px', height: '20px', padding: 0 }}
+                  title="Clear search"
+                >
+                  <X size={12} className="text-muted" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Pills */}
+            <div className="d-flex align-center gap-1 mt-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              <button
+                type="button"
+                className={`btn btn-xs ${activeTab === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.66rem', padding: '0.15rem 0.5rem', borderRadius: '12px' }}
+                onClick={() => setActiveTab('all')}
+              >
+                All ({formattedParticipating.length + (shouldShowOther ? formattedOther.length : 0)})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs ${activeTab === 'requests' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.66rem', padding: '0.15rem 0.5rem', borderRadius: '12px' }}
+                onClick={() => setActiveTab('requests')}
+              >
+                🤝 Requests
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs ${activeTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.66rem', padding: '0.15rem 0.5rem', borderRadius: '12px' }}
+                onClick={() => setActiveTab('events')}
+              >
+                📅 Events
+              </button>
+            </div>
+          </div>
+
+          {/* Activity Scroll List */}
+          <div 
+            style={{ 
+              maxHeight: '230px', 
+              overflowY: 'auto', 
+              padding: '0.4rem', 
+              overscrollBehavior: 'contain' 
+            }}
+          >
+            {/* Section 1: Currently Participating */}
+            {filteredParticipating.length > 0 && (
+              <div className="mb-2">
+                <div 
+                  className="px-2 py-1 text-muted font-bold text-uppercase d-flex align-center justify-between"
+                  style={{ fontSize: '0.65rem', letterSpacing: '0.04em' }}
+                >
+                  <span>Active Participations</span>
+                  <span className="badge badge-success text-xs" style={{ fontSize: '0.6rem', padding: '0.05rem 0.3rem' }}>
+                    {filteredParticipating.length}
+                  </span>
+                </div>
+                {filteredParticipating.map(item => {
+                  const isSelected = item.key === selectedActivityKey;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className="w-100 text-left p-2 rounded transition-all d-flex align-center justify-between gap-1.5"
+                      style={{
+                        background: isSelected ? 'var(--primary-50, #eff6ff)' : 'transparent',
+                        border: isSelected ? '1px solid var(--primary-200, #bfdbfe)' : '1px solid transparent',
+                        cursor: 'pointer',
+                        marginBottom: '2px'
+                      }}
+                      onClick={() => {
+                        onSelectActivity(item.key);
+                        setIsOpen(false);
+                      }}
+                    >
+                      <div className="d-flex align-center gap-1.5 min-w-0 flex-1">
+                        {item.type === 'request' ? (
+                          <HandHeart size={14} className="text-amber flex-shrink-0" />
+                        ) : (
+                          <Calendar size={14} className="text-brand flex-shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="d-flex align-center gap-1">
+                            <span className="text-truncate font-semibold text-primary" style={{ fontSize: '0.76rem' }}>
+                              {item.title}
+                            </span>
+                            <span 
+                              className={`badge ${item.roleBadgeClass} text-xs flex-shrink-0`}
+                              style={{ fontSize: '0.6rem', padding: '0.05rem 0.3rem' }}
+                            >
+                              {item.role}
+                            </span>
+                          </div>
+                          <div className="text-muted text-truncate" style={{ fontSize: '0.68rem', marginTop: '1px' }}>
+                            {item.subtext} {item.location ? `• ${item.location}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      {isSelected && <Check size={14} className="text-brand flex-shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Section 2: Other Community Operations */}
+            {shouldShowOther ? (
+              filteredOther.length > 0 && (
+                <div>
+                  <div 
+                    className="px-2 py-1 text-muted font-bold text-uppercase d-flex align-center justify-between"
+                    style={{ fontSize: '0.65rem', letterSpacing: '0.04em' }}
+                  >
+                    <span>Other Community Operations</span>
+                    <span className="badge badge-secondary text-xs" style={{ fontSize: '0.6rem', padding: '0.05rem 0.3rem' }}>
+                      {filteredOther.length}
+                    </span>
+                  </div>
+                  {filteredOther.map(item => {
+                    const isSelected = item.key === selectedActivityKey;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className="w-100 text-left p-2 rounded transition-all d-flex align-center justify-between gap-1.5"
+                        style={{
+                          background: isSelected ? 'var(--primary-50, #eff6ff)' : 'transparent',
+                          border: isSelected ? '1px solid var(--primary-200, #bfdbfe)' : '1px solid transparent',
+                          cursor: 'pointer',
+                          marginBottom: '2px'
+                        }}
+                        onClick={() => {
+                          onSelectActivity(item.key);
+                          setIsOpen(false);
+                        }}
+                      >
+                        <div className="d-flex align-center gap-1.5 min-w-0 flex-1">
+                          {item.type === 'request' ? (
+                            <HandHeart size={14} className="text-amber flex-shrink-0" />
+                          ) : (
+                            <Calendar size={14} className="text-brand flex-shrink-0" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="d-flex align-center gap-1">
+                              <span className="text-truncate font-semibold text-primary" style={{ fontSize: '0.76rem' }}>
+                                {item.title}
+                              </span>
+                            </div>
+                            <div className="text-muted text-truncate" style={{ fontSize: '0.68rem', marginTop: '1px' }}>
+                              {item.subtext} {item.location ? `• ${item.location}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected && <Check size={14} className="text-brand flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : totalOtherCount > 0 ? (
+              <div className="p-1 pt-2 border-top text-center">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs w-100 text-muted"
+                  style={{ fontSize: '0.7rem', padding: '0.35rem 0.5rem' }}
+                  onClick={() => setShowOther(true)}
+                >
+                  + Show {totalOtherCount} Other Community Activities
+                </button>
+              </div>
+            ) : null}
+
+            {/* Empty Search State */}
+            {filteredParticipating.length === 0 && (!shouldShowOther || filteredOther.length === 0) && (
+              <div className="p-3 text-center text-muted" style={{ fontSize: '0.75rem' }}>
+                {q ? (
+                  <>No activities match &ldquo;<span className="font-semibold">{q}</span>&rdquo;</>
+                ) : (
+                  <>No participating activities found</>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const ReadinessCheckerModal = () => {
   const {
@@ -16,23 +417,140 @@ export const ReadinessCheckerModal = () => {
     closeReadinessModal,
     readinessModalCommunity,
     readinessModalCheckId,
+    readinessModalRequestId,
+    readinessModalEventId,
     currentUser,
     readinessChecks,
     createReadinessCheck,
     submitReadinessResponse,
     closeReadinessCheck,
-    communities
+    requests = [],
+    events = [],
+    showToast
   } = useCareMesh();
 
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [selectedCheckId, setSelectedCheckId] = useState(null);
 
-  // New check form state
-  const [title, setTitle] = useState('');
-  const [communityId, setCommunityId] = useState(readinessModalCommunity?.id || 'com_01');
-  const [targetHeadcount, setTargetHeadcount] = useState(5);
-  const [shiftTime, setShiftTime] = useState('Tomorrow, 8:00 AM - 12:00 PM');
-  const [notes, setNotes] = useState('');
+  // Participating Requests: where currentUser is requester or volunteer
+  const participatingRequests = useMemo(() => {
+    if (!currentUser?.id || currentUser.id === 'usr_guest') return [];
+    return (requests || []).filter(r => {
+      const isOwner = r.requester?.id === currentUser.id || r.requesterId === currentUser.id || r.requester_id === currentUser.id;
+      const isVolunteer = r.responses?.some(resp => resp.userId === currentUser.id || resp.user?.id === currentUser.id || resp.user_id === currentUser.id);
+      return isOwner || isVolunteer;
+    });
+  }, [requests, currentUser]);
+
+  // Participating Events: where currentUser is organizer or participant
+  const participatingEvents = useMemo(() => {
+    if (!currentUser?.id || currentUser.id === 'usr_guest') return [];
+    return (events || []).filter(e => {
+      const isOrganizer = e.organizer?.id === currentUser.id || e.organizerId === currentUser.id || e.organizer_id === currentUser.id;
+      const isParticipant = e.participants?.some(p => p.id === currentUser.id);
+      return isOrganizer || isParticipant;
+    });
+  }, [events, currentUser]);
+
+  // Other active requests & events in case user wants to target any community operation
+  const otherRequests = useMemo(() => {
+    const participatingIds = new Set(participatingRequests.map(r => r.id));
+    return (requests || []).filter(r => !participatingIds.has(r.id) && r.status !== 'fulfilled');
+  }, [requests, participatingRequests]);
+
+  const otherEvents = useMemo(() => {
+    const participatingIds = new Set(participatingEvents.map(e => e.id));
+    return (events || []).filter(e => !participatingIds.has(e.id) && e.status !== 'cancelled' && e.status !== 'completed');
+  }, [events, participatingEvents]);
+
+  const defaultActivityKey = useMemo(() => {
+    if (readinessModalRequestId) return `request:${readinessModalRequestId}`;
+    if (readinessModalEventId) return `event:${readinessModalEventId}`;
+    if (participatingRequests.length > 0) return `request:${participatingRequests[0].id}`;
+    if (participatingEvents.length > 0) return `event:${participatingEvents[0].id}`;
+    if (otherRequests.length > 0) return `request:${otherRequests[0].id}`;
+    if (otherEvents.length > 0) return `event:${otherEvents[0].id}`;
+    return '';
+  }, [readinessModalRequestId, readinessModalEventId, participatingRequests, participatingEvents, otherRequests, otherEvents]);
+
+  const [userSelectedActivityKey, setUserSelectedActivityKey] = useState(null);
+  const selectedActivityKey = userSelectedActivityKey ?? defaultActivityKey;
+
+  const targetActivityReq = useMemo(() => {
+    if (!selectedActivityKey?.startsWith('request:')) return null;
+    const reqId = selectedActivityKey.replace('request:', '');
+    return requests.find(r => r.id === reqId) || null;
+  }, [selectedActivityKey, requests]);
+
+  const targetActivityEvt = useMemo(() => {
+    if (!selectedActivityKey?.startsWith('event:')) return null;
+    const evtId = selectedActivityKey.replace('event:', '');
+    return events.find(e => e.id === evtId) || null;
+  }, [selectedActivityKey, events]);
+
+  const defaultTitle = targetActivityReq 
+    ? `Volunteer Roll Call: ${targetActivityReq.title}` 
+    : targetActivityEvt 
+      ? `Readiness Check: ${targetActivityEvt.title}` 
+      : '';
+
+  const defaultHeadcount = targetActivityReq 
+    ? (Number(targetActivityReq.peopleNeeded) || 4)
+    : targetActivityEvt 
+      ? (Number(targetActivityEvt.maxParticipants) || 12)
+      : 5;
+
+  const defaultShiftTime = targetActivityReq 
+    ? (targetActivityReq.urgency === 'immediate' ? 'Immediate Response Window' : 'Scheduled Shift (Next 24-48 Hours)')
+    : targetActivityEvt 
+      ? `${targetActivityEvt.date} • ${targetActivityEvt.time}`
+      : 'Tomorrow, 8:00 AM - 12:00 PM';
+
+  const defaultNotes = targetActivityReq 
+    ? `Operational readiness check for help request "${targetActivityReq.title}". Please confirm your available hours and required equipment.`
+    : targetActivityEvt 
+      ? `Readiness roll-call for civic event "${targetActivityEvt.title}". Please confirm attendance, arrival tools, and availability.`
+      : '';
+
+  const [userTitle, setUserTitle] = useState(null);
+  const [userHeadcount, setUserHeadcount] = useState(null);
+  const [userShiftTime, setUserShiftTime] = useState(null);
+  const [userNotes, setUserNotes] = useState(null);
+
+  const title = userTitle ?? defaultTitle;
+  const targetHeadcount = userHeadcount ?? defaultHeadcount;
+  const shiftTime = userShiftTime ?? defaultShiftTime;
+  const notes = userNotes ?? defaultNotes;
+
+  const handleSelectActivity = (key) => {
+    setUserSelectedActivityKey(key);
+    setUserTitle(null);
+    setUserHeadcount(null);
+    setUserShiftTime(null);
+    setUserNotes(null);
+  };
+
+  const selectedActivitySummary = useMemo(() => {
+    if (targetActivityReq) {
+      const isOwner = targetActivityReq.requester?.id === currentUser?.id || targetActivityReq.requesterId === currentUser?.id || targetActivityReq.requester_id === currentUser?.id;
+      return {
+        type: 'request',
+        title: targetActivityReq.title,
+        meta: isOwner ? 'Your Help Request' : 'Committed Volunteer',
+        details: `${targetActivityReq.peopleNeeded || 1} Needed • ${targetActivityReq.urgency ? targetActivityReq.urgency.toUpperCase() : 'MEDIUM'} Urgency`
+      };
+    }
+    if (targetActivityEvt) {
+      const isOrganizer = targetActivityEvt.organizer?.id === currentUser?.id || targetActivityEvt.organizerId === currentUser?.id || targetActivityEvt.organizer_id === currentUser?.id;
+      return {
+        type: 'event',
+        title: targetActivityEvt.title,
+        meta: isOrganizer ? 'Organizer / Host' : 'Attending Member',
+        details: `${targetActivityEvt.date} • Max: ${targetActivityEvt.maxParticipants || 20}`
+      };
+    }
+    return null;
+  }, [targetActivityReq, targetActivityEvt, currentUser]);
 
   // Response form state
   const [responseStatus, setResponseStatus] = useState('ready'); // 'ready' | 'standby' | 'unavailable'
@@ -56,13 +574,25 @@ export const ReadinessCheckerModal = () => {
     };
   }, [isReadinessModalOpen, closeReadinessModal]);
 
-  if (!isReadinessModalOpen) return null;
+  // Filter checks for current community or request/event if specified, otherwise show all
+  const filteredChecks = useMemo(() => {
+    if (readinessModalCheckId) {
+      const target = readinessChecks.find(rc => rc.id === readinessModalCheckId);
+      if (target) return [target, ...readinessChecks.filter(rc => rc.id !== readinessModalCheckId)];
+    }
+    if (readinessModalRequestId) {
+      return readinessChecks.filter(rc => rc.requestId === readinessModalRequestId || rc.request_id === readinessModalRequestId);
+    }
+    if (readinessModalEventId) {
+      return readinessChecks.filter(rc => rc.eventId === readinessModalEventId || rc.event_id === readinessModalEventId);
+    }
+    if (readinessModalCommunity?.id) {
+      return readinessChecks.filter(rc => rc.communityId === readinessModalCommunity.id || !rc.communityId);
+    }
+    return readinessChecks;
+  }, [readinessChecks, readinessModalCheckId, readinessModalRequestId, readinessModalEventId, readinessModalCommunity]);
 
-  // Filter checks for current community if specified, otherwise show all
-  const activeCommunityId = readinessModalCommunity?.id;
-  const filteredChecks = activeCommunityId 
-    ? readinessChecks.filter(rc => rc.communityId === activeCommunityId || !rc.communityId || rc.id === readinessModalCheckId)
-    : readinessChecks;
+  if (!isReadinessModalOpen) return null;
 
   const effectiveCheckId = selectedCheckId || readinessModalCheckId;
   const currentActiveCheck = effectiveCheckId 
@@ -76,16 +606,41 @@ export const ReadinessCheckerModal = () => {
     e.preventDefault();
     if (!title.trim()) return;
 
+    let reqId = null;
+    let evtId = null;
+    let resolvedCommunityId = null;
+
+    if (selectedActivityKey) {
+      const [type, id] = selectedActivityKey.split(':');
+      if (type === 'request') {
+        reqId = id;
+        const req = (requests || []).find(r => r.id === id);
+        resolvedCommunityId = req?.communityId || null;
+      } else if (type === 'event') {
+        evtId = id;
+        const evt = (events || []).find(e => e.id === id);
+        resolvedCommunityId = evt?.communityId || null;
+      }
+    }
+
     const newCheck = await createReadinessCheck({
       title: title.trim(),
-      communityId,
+      requestId: reqId,
+      eventId: evtId,
+      communityId: resolvedCommunityId || readinessModalCommunity?.id || null,
       targetHeadcount: Number(targetHeadcount) || 5,
       shiftTime: shiftTime.trim(),
       notes: notes.trim()
     });
 
-    setTitle('');
-    setNotes('');
+    if (showToast) {
+      showToast('Member readiness check launched successfully!', 'success');
+    }
+    setUserTitle(null);
+    setUserHeadcount(null);
+    setUserShiftTime(null);
+    setUserNotes(null);
+    setUserSelectedActivityKey(null);
     setIsCreatingNew(false);
     if (newCheck?.id) setSelectedCheckId(newCheck.id);
   };
@@ -182,25 +737,54 @@ export const ReadinessCheckerModal = () => {
                   className="form-input text-xs"
                   placeholder="e.g. Saturday Watershed Restoration Crew Readiness"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => setUserTitle(e.target.value)}
                   required
                 />
               </div>
 
               <div className="readiness-form-grid">
                 <div>
-                  <label className="form-label text-xs font-bold text-secondary mb-1 d-block">
-                    Target Community Circle
+                  <label className="form-label text-xs font-bold text-secondary mb-1 d-flex align-center justify-between">
+                    <span>Participating Request or Event <span className="text-rose">*</span></span>
+                    {(participatingRequests.length > 0 || participatingEvents.length > 0) && (
+                      <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', padding: '0.1rem 0.35rem' }}>
+                        {participatingRequests.length + participatingEvents.length} Active
+                      </span>
+                    )}
                   </label>
-                  <select
-                    className="form-input text-xs"
-                    value={communityId}
-                    onChange={(e) => setCommunityId(e.target.value)}
-                  >
-                    {communities.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <SearchableActivityPicker
+                    selectedActivityKey={selectedActivityKey}
+                    onSelectActivity={handleSelectActivity}
+                    participatingRequests={participatingRequests}
+                    participatingEvents={participatingEvents}
+                    otherRequests={otherRequests}
+                    otherEvents={otherEvents}
+                    currentUser={currentUser}
+                  />
+
+                  {selectedActivitySummary && (
+                    <div 
+                      className="p-1.5 rounded mt-1.5 text-xs d-flex align-center justify-between gap-1"
+                      style={{ 
+                        background: selectedActivitySummary.type === 'request' ? 'var(--amber-50)' : 'var(--primary-50)', 
+                        border: `1px solid ${selectedActivitySummary.type === 'request' ? 'var(--amber-200)' : 'var(--primary-200)'}` 
+                      }}
+                    >
+                      <div className="d-flex align-center gap-1.5 min-w-0">
+                        {selectedActivitySummary.type === 'request' ? (
+                          <HandHeart size={13} className="text-amber flex-shrink-0" />
+                        ) : (
+                          <Calendar size={13} className="text-brand flex-shrink-0" />
+                        )}
+                        <span className="text-truncate font-semibold text-primary" style={{ fontSize: '0.72rem' }}>
+                          {selectedActivitySummary.title}
+                        </span>
+                      </div>
+                      <span className="badge badge-secondary text-xs flex-shrink-0" style={{ fontSize: '0.62rem' }}>
+                        {selectedActivitySummary.meta}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -213,9 +797,14 @@ export const ReadinessCheckerModal = () => {
                     max="50"
                     className="form-input text-xs"
                     value={targetHeadcount}
-                    onChange={(e) => setTargetHeadcount(e.target.value)}
+                    onChange={(e) => setUserHeadcount(e.target.value)}
                     required
                   />
+                  {selectedActivitySummary && (
+                    <span className="text-xs text-muted d-block mt-1" style={{ fontSize: '0.7rem' }}>
+                      {selectedActivitySummary.details}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -228,7 +817,7 @@ export const ReadinessCheckerModal = () => {
                   className="form-input text-xs"
                   placeholder="e.g. Saturday Oct 14, 9:00 AM - 1:00 PM"
                   value={shiftTime}
-                  onChange={(e) => setShiftTime(e.target.value)}
+                  onChange={(e) => setUserShiftTime(e.target.value)}
                 />
               </div>
 
@@ -241,7 +830,7 @@ export const ReadinessCheckerModal = () => {
                   className="form-input text-xs"
                   placeholder="Mention needed skills, tools (work gloves, rain boots, hand trucks), or meeting coordinates..."
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={(e) => setUserNotes(e.target.value)}
                 />
               </div>
 
@@ -249,17 +838,33 @@ export const ReadinessCheckerModal = () => {
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  onClick={() => setIsCreatingNew(false)}
+                  onClick={() => {
+                    setUserTitle(null);
+                    setUserHeadcount(null);
+                    setUserShiftTime(null);
+                    setUserNotes(null);
+                    setUserSelectedActivityKey(null);
+                    setIsCreatingNew(false);
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary btn-sm"
-                  style={{ background: 'var(--brand)', borderColor: 'var(--brand)' }}
+                  className="btn btn-primary btn-sm d-inline-flex align-center gap-1.5 font-bold"
+                  style={{
+                    background: !title.trim() ? '#cbd5e1' : 'var(--primary-600, #059669)',
+                    borderColor: !title.trim() ? '#cbd5e1' : 'var(--primary-600, #059669)',
+                    color: !title.trim() ? '#64748b' : '#ffffff',
+                    cursor: !title.trim() ? 'not-allowed' : 'pointer',
+                    boxShadow: !title.trim() ? 'none' : '0 2px 4px rgba(5, 150, 105, 0.25)',
+                    padding: '0.45rem 1.1rem'
+                  }}
                   disabled={!title.trim()}
+                  title={!title.trim() ? 'Provide a title to launch' : 'Launch Ready Check'}
                 >
-                  Launch Readiness Check
+                  <UserCheck size={15} />
+                  <span>Launch Ready Check</span>
                 </button>
               </div>
             </form>
@@ -301,9 +906,17 @@ export const ReadinessCheckerModal = () => {
                         <span className="font-bold text-xs text-primary d-block text-truncate mb-1">
                           {check.title}
                         </span>
-                        <div className="d-flex align-center gap-1 text-muted" style={{ fontSize: '0.68rem' }}>
-                          <Users size={11} />
-                          <span>{check.readyCount || 0} / {check.targetHeadcount || 5} Ready</span>
+                        <div className="d-flex align-center justify-between gap-1 text-muted" style={{ fontSize: '0.68rem' }}>
+                          <div className="d-flex align-center gap-1">
+                            <Users size={11} />
+                            <span>{check.readyCount || 0} / {check.targetHeadcount || 5} Ready</span>
+                          </div>
+                          {(check.requestId || check.request_id) && (
+                            <span className="badge badge-emerald" style={{ fontSize: '0.58rem', padding: '0.05rem 0.3rem' }}>Request</span>
+                          )}
+                          {(check.eventId || check.event_id) && (
+                            <span className="badge badge-purple" style={{ fontSize: '0.58rem', padding: '0.05rem 0.3rem' }}>Event</span>
+                          )}
                         </div>
                       </div>
                     );
@@ -354,8 +967,13 @@ export const ReadinessCheckerModal = () => {
                               {currentActiveCheck.status === 'active' ? 'Poll Open' : 'Closed'}
                             </span>
                             {(currentActiveCheck.requestId || currentActiveCheck.request_id) && (
-                              <span className="badge badge-emerald text-xs font-semibold">
-                                🤝 Volunteer Roll Call
+                              <span className="badge badge-emerald text-xs font-semibold d-inline-flex align-center gap-1">
+                                <HandHeart size={11} /> Help Request Roll Call
+                              </span>
+                            )}
+                            {(currentActiveCheck.eventId || currentActiveCheck.event_id) && (
+                              <span className="badge badge-purple text-xs font-semibold d-inline-flex align-center gap-1">
+                                <Calendar size={11} /> Civic Event Roll Call
                               </span>
                             )}
                           </div>
@@ -576,8 +1194,8 @@ export const ReadinessCheckerModal = () => {
                     </p>
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
-                      style={{ background: 'var(--brand)', borderColor: 'var(--brand)' }}
+                      className="btn btn-primary btn-sm d-inline-flex align-center gap-1.5"
+                      style={{ background: 'var(--primary-600, #059669)', borderColor: 'var(--primary-600, #059669)', color: '#ffffff' }}
                       onClick={() => setIsCreatingNew(true)}
                     >
                       <Plus size={14} className="mr-1" />

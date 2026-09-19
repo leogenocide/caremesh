@@ -13,11 +13,12 @@ import {
   AlertTriangle, 
   Lightbulb, 
   MessageSquare, 
-  History 
+  History,
+  Share2 
 } from 'lucide-react';
 
 export const PlansView = () => {
-  const { plans, viewPlanDetail, openCreateModal } = useCareMesh();
+  const { plans, viewPlanDetail, openCreateModal, openShareSocialModal } = useCareMesh();
   const [searchQuery, setSearchQuery] = useState('');
   const [stageTab, setStageTab] = useState('all'); // 'all' | 'review' | 'active' | 'completed'
 
@@ -272,15 +273,29 @@ export const PlansView = () => {
                   </span>
                 </div>
 
-                <button
-                  className="btn btn-ghost btn-sm text-brand font-semibold p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    viewPlanDetail(plan);
-                  }}
-                >
-                  Inspect Proposal, Critique & History →
-                </button>
+                <div className="d-flex align-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openShareSocialModal(plan, 'plan');
+                    }}
+                    title="Share this resilience plan"
+                  >
+                    <Share2 size={12} />
+                    <span>Share</span>
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm text-brand font-semibold p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      viewPlanDetail(plan);
+                    }}
+                  >
+                    Inspect Proposal, Critique & History →
+                  </button>
+                </div>
               </div>
             </div>
           );

@@ -27,7 +27,8 @@ import {
   Lightbulb,
   FileCheck,
   Eye,
-  Trash2
+  Trash2,
+  Share2
 } from 'lucide-react';
 
 export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
@@ -45,7 +46,8 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
     viewRequestDetail,
     requests, 
     observations,
-    currentUser 
+    currentUser,
+    openShareSocialModal 
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('proposal'); // 'proposal' | 'critique' | 'revisions' | 'milestones' | 'decisions' | 'outcomes'
@@ -108,6 +110,15 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
               <span className="badge badge-primary font-bold text-xs">Version {plan.currentVersion || 'v1.0'}</span>
               <LifecycleBadge stage={plan.lifecycleStage} />
               <PlanStatusBadge status={plan.overallStatus || 'planning'} />
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
+                onClick={() => openShareSocialModal(plan, 'plan')}
+                title="Share this resilience plan"
+              >
+                <Share2 size={12} />
+                <span>Share</span>
+              </button>
             </div>
 
             {/* Stage Progression CTAs for Author / Coordinators */}
@@ -975,6 +986,26 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
             </p>
           </div>
         )}
+
+        {/* Footer */}
+        <div className="d-flex align-center justify-between gap-2 pt-2 border-top">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm d-flex align-center gap-1"
+            onClick={() => openShareSocialModal(plan, 'plan')}
+            title="Share this resilience plan"
+          >
+            <Share2 size={13} />
+            <span>Share Plan</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
       </div>
     </Modal>
   );

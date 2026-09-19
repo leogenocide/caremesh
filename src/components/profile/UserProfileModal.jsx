@@ -15,7 +15,8 @@ import {
   ExternalLink,
   Award,
   Sparkles,
-  Share2
+  Share2,
+  Calendar
 } from 'lucide-react';
 import { PlanStatusBadge, UrgencyBadge } from '../common/Badge';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +30,8 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
     observations, 
     plans, 
     posts, 
+    events = [],
+    setSelectedEventChat,
     startDirectMessage,
     openReportModal,
     viewPlanDetail,
@@ -38,7 +41,7 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
     mockUsers
   } = useCareMesh();
 
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'resources' | 'requests' | 'observations' | 'plans' | 'posts'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'resources' | 'requests' | 'events' | 'observations' | 'plans' | 'posts'
 
   // Merge provided user with full user record from mockUsers/currentUser
   const profileUser = useMemo(() => {
@@ -54,12 +57,14 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
   // Linked items
   const userResources = profileUser ? resources.filter(r => r.provider?.id === profileUser.id || r.providerId === profileUser.id) : [];
   const userRequests = profileUser ? requests.filter(r => r.requester?.id === profileUser.id || r.authorId === profileUser.id) : [];
+  const userEvents = profileUser ? (events || []).filter(e => e.organizer?.id === profileUser.id || e.organizerId === profileUser.id || e.participants?.some(p => p.id === profileUser.id)) : [];
   const userObservations = profileUser ? observations.filter(o => o.author?.id === profileUser.id || o.authorId === profileUser.id || o.author_id === profileUser.id) : [];
   const userPlans = profileUser ? plans.filter(p => p.proposer?.id === profileUser.id || p.participants?.some(part => part.user?.id === profileUser.id)) : [];
   const userPosts = profileUser ? posts.filter(p => p.author?.id === profileUser.id || p.authorId === profileUser.id || p.author_id === profileUser.id) : [];
 
   const resourcesPagination = usePagination(userResources, 4);
   const requestsPagination = usePagination(userRequests, 4);
+  const eventsPagination = usePagination(userEvents, 4);
   const observationsPagination = usePagination(userObservations, 4);
   const plansPagination = usePagination(userPlans, 4);
   const postsPagination = usePagination(userPosts, 4);
@@ -278,7 +283,14 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
         </div>
 
         {/* Quick Stats Grid */}
-        <div className="profile-stats-grid mb-2">
+        <div 
+          className="mb-2" 
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))', 
+            gap: '0.5rem' 
+          }}
+        >
           <div className="card p-2 text-center" style={{ background: 'var(--bg-subtle)' }}>
             <span className="font-bold text-md text-primary d-block">{userResources.length}</span>
             <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>Shared Resources</span>
@@ -286,6 +298,10 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
           <div className="card p-2 text-center" style={{ background: 'var(--bg-subtle)' }}>
             <span className="font-bold text-md text-primary d-block">{userRequests.length}</span>
             <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>Help Requests</span>
+          </div>
+          <div className="card p-2 text-center" style={{ background: 'var(--bg-subtle)' }}>
+            <span className="font-bold text-md text-purple d-block">{userEvents.length}</span>
+            <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>Civic Events</span>
           </div>
           <div className="card p-2 text-center" style={{ background: 'var(--bg-subtle)' }}>
             <span className="font-bold text-md text-primary d-block">{userObservations.length}</span>
@@ -298,7 +314,7 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
         </div>
 
         {/* Content Tabs */}
-        <div className="touch-tab-nav border-bottom pb-2">
+        <div className="touch-tab-nav border-bottom pb-2 d-flex gap-1 flex-wrap">
           <button
             type="button"
             className={`btn btn-xs ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}
@@ -321,6 +337,14 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
           >
             <HandHeart size={12} />
             <span>Requests ({userRequests.length})</span>
+          </button>
+          <button
+            type="button"
+            className={`btn btn-xs ${activeTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setActiveTab('events')}
+          >
+            <Calendar size={12} />
+            <span>Events ({userEvents.length})</span>
           </button>
           <button
             type="button"
@@ -466,6 +490,75 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
               <div className="card p-4 text-center text-muted">
                 <HandHeart size={28} className="mx-auto mb-2 opacity-50" />
                 <p className="text-xs mb-0">No active help requests posted by {profileUser.name}.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab: Events */}
+        {activeTab === 'events' && (
+          <div className="d-flex flex-column gap-2">
+            {userEvents.length > 0 ? (
+              <>
+                {eventsPagination.paginatedItems.map(evt => {
+                  const isOrganizer = evt.organizer?.id === profileUser.id || evt.organizerId === profileUser.id;
+                  return (
+                    <div 
+                      key={evt.id} 
+                      className="card p-3 card-interactive cursor-pointer d-flex align-center justify-between gap-2"
+                      onClick={() => {
+                        onClose();
+                        if (setSelectedEventChat) setSelectedEventChat(evt);
+                      }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
+                          <span className="badge badge-purple text-xs text-uppercase font-semibold">
+                            {evt.eventType?.replace('_', ' ') || 'Event'}
+                          </span>
+                          <span className={`badge ${isOrganizer ? 'badge-primary' : 'badge-emerald'} text-xs`}>
+                            {isOrganizer ? 'Host' : 'Attending'}
+                          </span>
+                          <span className="badge badge-secondary text-xs">
+                            {evt.participants?.length || 0} / {evt.maxParticipants || 20}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-xs text-primary mb-0.5">{evt.title}</h5>
+                        <span className="text-xs text-muted d-block line-clamp-1">
+                          {evt.date} • {evt.time} • {evt.location?.address}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-xs flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClose();
+                          if (setSelectedEventChat) setSelectedEventChat(evt);
+                        }}
+                      >
+                        Details
+                      </button>
+                    </div>
+                  );
+                })}
+                <Pagination
+                  compact={true}
+                  currentPage={eventsPagination.currentPage}
+                  totalPages={eventsPagination.totalPages}
+                  totalItems={eventsPagination.totalItems}
+                  startIndex={eventsPagination.startIndex}
+                  endIndex={eventsPagination.endIndex}
+                  onPageChange={eventsPagination.setPage}
+                  pageSize={eventsPagination.pageSize}
+                  onPageSizeChange={eventsPagination.handlePageSizeChange}
+                  itemName="events"
+                />
+              </>
+            ) : (
+              <div className="card p-4 text-center text-muted">
+                <Calendar size={28} className="mx-auto mb-2 opacity-50 text-purple" />
+                <p className="text-xs mb-0">No civic events or work parties organized or joined by {profileUser.name}.</p>
               </div>
             )}
           </div>

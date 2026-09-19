@@ -8,7 +8,8 @@ import {
   CheckCircle2, 
   Plus, 
   Eye,
-  Trash2
+  Trash2,
+  Share2
 } from 'lucide-react';
 
 export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
@@ -18,7 +19,8 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
     evidence, 
     inspectEntity,
     deleteSafetyReport,
-    canUserManage
+    canUserManage,
+    openShareSocialModal
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'timeline' | 'mitigation'
@@ -67,6 +69,15 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
             <div className="d-flex align-center gap-2 flex-wrap">
               <SeverityBadge severity={report.severity} />
               <span className="badge badge-gray text-xs text-uppercase font-semibold">{report.status || 'Active Hazard'}</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs d-inline-flex align-center gap-1 ml-auto"
+                onClick={() => openShareSocialModal(report, 'safety')}
+                title="Share this safety report"
+              >
+                <Share2 size={12} />
+                <span>Share Alert</span>
+              </button>
             </div>
             <h3 className="font-bold text-lg text-primary mb-0">{report.title}</h3>
             <div className="d-flex align-center gap-3 text-xs text-muted flex-wrap">
@@ -293,13 +304,24 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
               </button>
             )}
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onClose}
-          >
-            Close
-          </button>
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm d-flex align-center gap-1"
+              onClick={() => openShareSocialModal(report, 'safety')}
+              title="Share this safety report"
+            >
+              <Share2 size={13} />
+              <span>Share Alert</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </Modal>

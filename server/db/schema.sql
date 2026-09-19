@@ -589,6 +589,7 @@ CREATE TABLE IF NOT EXISTS readiness_checks (
   creator_id TEXT NOT NULL,
   community_id TEXT,
   request_id TEXT,
+  event_id TEXT,
   title TEXT NOT NULL,
   description TEXT,
   target_date TEXT,
@@ -645,6 +646,7 @@ CREATE INDEX IF NOT EXISTS idx_reports_comm ON reports(community_id);
 CREATE INDEX IF NOT EXISTS idx_elections_comm ON moderator_elections(community_id);
 CREATE INDEX IF NOT EXISTS idx_readiness_comm ON readiness_checks(community_id);
 CREATE INDEX IF NOT EXISTS idx_readiness_req ON readiness_checks(request_id);
+CREATE INDEX IF NOT EXISTS idx_readiness_evt ON readiness_checks(event_id);
 CREATE INDEX IF NOT EXISTS idx_res_assignments_res ON resource_assignments(resource_id);
 CREATE INDEX IF NOT EXISTS idx_audit_mod ON moderation_audit_logs(moderator_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON moderation_audit_logs(target_id);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Modal } from '../common/Modal';
 import { UrgencyBadge } from '../common/Badge';
 import { useCareMesh } from '../../context/useCareMesh';
@@ -12,14 +12,16 @@ import {
   Sparkles, 
   Check, 
   CheckCircle2, 
-  GitMerge,
-  Pencil,
-  Trash2,
-  X,
-  Lock,
-  Globe,
-  UserCheck,
-  Activity
+  GitMerge, 
+  Pencil, 
+  Trash2, 
+  X, 
+  Lock, 
+  Globe, 
+  UserCheck, 
+  Activity, 
+  Share2,
+  Search
 } from 'lucide-react';
 
 export const RequestDetailModal = ({ isOpen, onClose, request }) => {
@@ -37,6 +39,8 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
     createReadinessCheck,
     submitReadinessResponse,
     openReadinessModal,
+    viewUserProfile,
+    openShareSocialModal,
     showToast
   } = useCareMesh();
 
@@ -47,6 +51,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
   const [feedbackNotice, setFeedbackNotice] = useState('');
   const [isStartingRollCall, setIsStartingRollCall] = useState(false);
   const [isQuickResponding, setIsQuickResponding] = useState(false);
+  const [volunteerSearch, setVolunteerSearch] = useState('');
 
   // Owner Edit State
   const PRESET_REQUEST_CATEGORIES = ['labor', 'supplies', 'transport', 'equipment', 'skills', 'general', 'environmental', 'food_security'];
@@ -62,10 +67,27 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
   const [editCommunityId, setEditCommunityId] = useState(request?.communityId || '');
   const [editVisibility, setEditVisibility] = useState(request?.visibility || 'public');
 
+  const filteredResponses = useMemo(() => {
+    const list = request?.responses || [];
+    if (!volunteerSearch.trim()) return list;
+    const q = volunteerSearch.toLowerCase().trim();
+    return list.filter(r => 
+      r.user?.name?.toLowerCase().includes(q) || 
+      r.user?.handle?.toLowerCase().includes(q) ||
+      r.role?.toLowerCase().includes(q)
+    );
+  }, [request?.responses, volunteerSearch]);
+
   if (!request) return null;
 
   const affiliatedCommunity = communities?.find(c => c.id === request.communityId);
-  const isOwner = request.requester?.id === currentUser?.id || request.requester_id === currentUser?.id;
+  const requesterUser = request.requester || (request.requester_id || request.requesterId ? {
+    id: request.requester_id || request.requesterId,
+    name: request.requesterName || 'Help Requester',
+    avatar: request.requesterAvatar,
+    handle: request.requesterHandle
+  } : null);
+  const isOwner = requesterUser?.id === currentUser?.id || request.requester_id === currentUser?.id;
   const canDelete = isOwner || canUserManage(request, affiliatedCommunity);
   const isUserJoined = Boolean(currentUser?.id && request.responses?.some(resp => resp.user?.id === currentUser.id));
   const hasQuickActions = request.quickActions && request.quickActions.length > 0;
@@ -197,13 +219,14 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Help Request Details & Mutual Aid Coordination"
+      title="Help Request Details"
+      subtitle="Mutual Aid Coordination & Volunteer Roster"
       maxWidth="680px"
     >
       <div className="d-flex flex-column gap-3.5">
         {/* Header Ribbon */}
-        <div className="d-flex align-start justify-between flex-wrap gap-2 p-3 rounded" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
-          <div className="d-flex flex-column gap-1.5 min-w-0">
+        <div className="request-detail-header">
+          <div className="d-flex flex-column gap-1.5 min-w-0 flex-1">
             <div className="d-flex align-center gap-2 flex-wrap">
               <UrgencyBadge urgency={request.urgency} />
               <span className="badge badge-gray text-xs text-uppercase font-semibold">{request.category}</span>
@@ -228,6 +251,15 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                   </span>
                 )
               )}
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
+                onClick={() => openShareSocialModal(request, 'request')}
+                title="Share this help request across platforms or feed"
+              >
+                <Share2 size={12} />
+                <span>Share</span>
+              </button>
             </div>
             <h3 className="font-bold text-lg text-primary mb-0">{request.title}</h3>
             <div className="d-flex align-center gap-3 text-xs text-muted flex-wrap">
@@ -241,16 +273,35 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
           </div>
 
           {/* Requester Avatar Card */}
-          {request.requester && (
-            <div className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0">
+          {requesterUser && (
+            <div 
+              className="request-detail-requester cursor-pointer card-interactive"
+              onClick={() => viewUserProfile(requesterUser)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  viewUserProfile(requesterUser);
+                }
+              }}
+              title={`View ${requesterUser.name}'s profile`}
+            >
               <img
-                src={request.requester.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                alt={request.requester.name}
-                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                src={requesterUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                alt={requesterUser.name}
+                style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }}
               />
-              <div className="min-w-0">
-                <span className="text-xs font-bold text-primary d-block text-truncate" style={{ maxWidth: '120px' }}>{request.requester.name}</span>
-                <span className="text-xs text-brand font-semibold d-block">{request.requester.handle || '@requester'}</span>
+              <div className="min-w-0 flex-1">
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-primary text-truncate" style={{ textDecoration: 'underline' }}>
+                    {requesterUser.name}
+                  </span>
+                  <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>
+                    Creator
+                  </span>
+                </div>
+                <span className="text-xs text-brand font-semibold d-block">{requesterUser.handle || '@requester'}</span>
               </div>
             </div>
           )}
@@ -261,6 +312,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('overview')}
           >
             Overview & Needs
@@ -268,6 +320,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'volunteers' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('volunteers')}
           >
             Volunteers ({request.peopleJoined || 0}/{request.peopleNeeded || 1})
@@ -275,6 +328,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'matcher' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('matcher')}
           >
             Compatible Resources ({relevantMatches.length})
@@ -320,7 +374,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                   />
                 </div>
 
-                <div className="grid-3 gap-2">
+                <div className="request-detail-grid-3">
                   <div className="form-group">
                     <div className="d-flex align-center justify-between mb-1">
                       <label className="form-label text-xs mb-0 font-semibold">Category</label>
@@ -419,7 +473,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                   />
                 </div>
 
-                <div className="grid-2 gap-2">
+                <div className="request-detail-grid-2">
                   <div className="form-group">
                     <label className="form-label text-xs mb-1 font-semibold">Community Affiliation</label>
                     <select
@@ -500,7 +554,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
             </div>
 
             {/* Required Skills & Equipment Grid */}
-            <div className="grid-2 gap-3">
+            <div className="request-detail-skills-grid">
               {/* Required Skills */}
               <div className="p-3 rounded border">
                 <span className="font-bold text-xs text-secondary d-flex align-center gap-1.5 mb-2">
@@ -550,10 +604,10 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                   {request.quickActions.map(qa => (
                     <div 
                       key={qa.id}
-                      className="d-flex align-center justify-between gap-2 p-2.5 rounded bg-white border"
+                      className="request-detail-quick-action"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="d-flex align-center gap-2 mb-1">
+                        <div className="d-flex align-center gap-2 mb-1 flex-wrap">
                           <span className="badge badge-amber text-xs font-semibold d-inline-flex align-center gap-1">
                             <Clock size={11} /> {qa.timeEstimate}
                           </span>
@@ -602,7 +656,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                   <HandHeart size={14} className="text-brand" />
                   <span>Join as Volunteer / Coordinator</span>
                 </span>
-                <div className="d-flex gap-2 flex-wrap">
+                <div className="d-flex gap-2 request-detail-join-form-row flex-wrap">
                   <div className="form-group flex-1" style={{ minWidth: '160px' }}>
                     <label className="form-label text-xs text-secondary mb-1">How You Can Help:</label>
                     <select
@@ -628,7 +682,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                     />
                   </div>
                 </div>
-                <div className="d-flex justify-end">
+                <div className="d-flex justify-end request-detail-join-form-submit">
                   <button
                     type="submit"
                     className="btn btn-primary btn-sm d-flex align-center gap-1.5"
@@ -651,10 +705,10 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
 
             {/* Volunteer Readiness Roll Call Panel */}
             {linkedCheck ? (
-              <div className="card p-3 border" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>
-                <div className="d-flex align-center justify-between gap-2 flex-wrap mb-2">
+              <div className="request-detail-rollcall-card">
+                <div className="request-detail-rollcall-header">
                   <div className="d-flex align-center gap-2">
-                    <UserCheck size={18} className="text-emerald" />
+                    <UserCheck size={18} className="text-emerald flex-shrink-0" />
                     <div>
                       <span className="font-bold text-xs text-primary d-block">
                         Volunteer Readiness Roll Call Active
@@ -678,7 +732,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                 <div style={{ height: '6px', background: '#dcfce7', borderRadius: '4px', overflow: 'hidden' }}>
                   <div 
                     style={{ 
-                      width: `${Math.min(100, linkedCheck.readyPercentage || 0)}%`, 
+                       width: `${Math.min(100, linkedCheck.readyPercentage || 0)}%`, 
                       height: '100%', 
                       background: 'var(--brand)', 
                       transition: 'width 0.3s ease' 
@@ -688,11 +742,11 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
 
                 {/* Committed Volunteer 1-Click Status Confirmation */}
                 {isUserJoined && linkedCheck.status === 'active' && (
-                  <div className="mt-2.5 pt-2 border-top d-flex align-center justify-between gap-2 flex-wrap">
+                  <div className="request-detail-quick-status-row">
                     <span className="text-xs font-bold text-secondary">
                       {myReadinessResp ? `Your Status: ${myReadinessResp.status.toUpperCase()}` : 'Confirm Your Readiness:'}
                     </span>
-                    <div className="d-flex align-center gap-1.5">
+                    <div className="request-detail-status-btn-group">
                       <button
                         type="button"
                         className={`btn btn-xs ${myReadinessResp?.status === 'ready' ? 'btn-primary font-bold' : 'btn-ghost'}`}
@@ -725,7 +779,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                 )}
               </div>
             ) : (isOwner || canUserManage(request)) ? (
-              <div className="p-3 rounded border d-flex align-center justify-between gap-2" style={{ background: '#f8fafc' }}>
+              <div className="request-detail-verify-banner">
                 <div>
                   <span className="font-bold text-xs text-primary d-block">
                     Verify Volunteer Readiness
@@ -746,60 +800,103 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               </div>
             ) : null}
 
-            {/* List of Committed Volunteers */}
+            {/* List of Committed Volunteers (Scalable for High Volume) */}
             <div>
-              <span className="font-bold text-xs text-secondary d-block mb-2">
-                Committed Neighbors ({request.responses?.length || 0})
-              </span>
+              <div className="d-flex align-center justify-between gap-2 mb-2 flex-wrap">
+                <span className="font-bold text-xs text-secondary">
+                  Committed Neighbors ({request.responses?.length || 0})
+                </span>
+                {(request.responses?.length || 0) > 5 && (
+                  <div className="position-relative d-flex align-center" style={{ minWidth: '150px' }}>
+                    <Search size={11} className="position-absolute text-muted" style={{ left: '6px' }} />
+                    <input
+                      type="text"
+                      className="form-input text-xs"
+                      style={{ paddingLeft: '22px', height: '24px', fontSize: '0.68rem' }}
+                      placeholder="Filter volunteers..."
+                      value={volunteerSearch}
+                      onChange={(e) => setVolunteerSearch(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
               {request.responses && request.responses.length > 0 ? (
-                <div className="d-flex flex-column gap-2">
-                  {request.responses.map((resp, idx) => {
-                    const volunteerResp = linkedCheck?.responses?.find(r => r.userId === resp.userId || r.userId === resp.user?.id);
-                    return (
-                      <div 
-                        key={idx}
-                        className="d-flex align-center justify-between p-2.5 rounded border bg-white"
-                      >
-                        <div className="d-flex align-center gap-2.5">
-                          <img
-                            src={resp.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                            alt={resp.user?.name || 'Volunteer'}
-                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-                          />
-                          <div>
-                            <span className="font-bold text-xs text-primary d-block">{resp.user?.name || 'Neighbor'}</span>
-                            <span className="text-xs text-brand font-semibold d-block">{resp.user?.handle || '@neighbor'}</span>
+                <div 
+                  className="d-flex flex-column gap-2"
+                  style={{ 
+                    maxHeight: '280px', 
+                    overflowY: 'auto', 
+                    paddingRight: '4px' 
+                  }}
+                >
+                  {filteredResponses.length > 0 ? (
+                    filteredResponses.map((resp, idx) => {
+                      const volunteerResp = linkedCheck?.responses?.find(r => r.userId === resp.userId || r.userId === resp.user?.id);
+                      return (
+                        <div 
+                          key={idx}
+                          className="request-detail-volunteer-card"
+                        >
+                          <div 
+                            className="d-flex align-center gap-2.5 cursor-pointer"
+                            onClick={() => resp.user && viewUserProfile(resp.user)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if ((e.key === 'Enter' || e.key === ' ') && resp.user) {
+                                e.preventDefault();
+                                viewUserProfile(resp.user);
+                              }
+                            }}
+                            title={`View ${resp.user?.name || 'Volunteer'}'s profile`}
+                          >
+                            <img
+                              src={resp.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                              alt={resp.user?.name || 'Volunteer'}
+                              style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                            <div>
+                              <span className="font-bold text-xs text-primary d-block hover-underline" style={{ textDecoration: 'underline' }}>
+                                {resp.user?.name || 'Neighbor'}
+                              </span>
+                              <span className="text-xs text-brand font-semibold d-block">{resp.user?.handle || '@neighbor'}</span>
+                            </div>
+                          </div>
+
+                          <div className="request-detail-volunteer-meta">
+                            <span className="badge badge-primary text-xs font-semibold d-inline-block mb-0.5">{resp.role || 'Volunteer'}</span>
+                            <span className="text-xs text-muted d-inline-block" style={{ fontSize: '0.68rem' }}>{resp.time || 'Recently'}</span>
+                            {linkedCheck && (
+                              <div className="mt-1">
+                                {volunteerResp?.status === 'ready' ? (
+                                  <span className="badge" style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.65rem' }}>
+                                    🟢 Ready {volunteerResp.hoursAvailable ? `(${volunteerResp.hoursAvailable}h)` : ''}
+                                  </span>
+                                ) : volunteerResp?.status === 'standby' ? (
+                                  <span className="badge" style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.65rem' }}>
+                                    🟡 Standby
+                                  </span>
+                                ) : volunteerResp?.status === 'unavailable' ? (
+                                  <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '0.65rem' }}>
+                                    🔴 Unavailable
+                                  </span>
+                                ) : (
+                                  <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', fontSize: '0.65rem' }}>
+                                    ⏳ Awaiting
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-
-                        <div className="text-right">
-                          <span className="badge badge-primary text-xs font-semibold d-block mb-0.5">{resp.role || 'Volunteer'}</span>
-                          <span className="text-xs text-muted d-block" style={{ fontSize: '0.68rem' }}>{resp.time || 'Recently'}</span>
-                          {linkedCheck && (
-                            <div className="mt-1">
-                              {volunteerResp?.status === 'ready' ? (
-                                <span className="badge" style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.65rem' }}>
-                                  🟢 Ready {volunteerResp.hoursAvailable ? `(${volunteerResp.hoursAvailable}h)` : ''}
-                                </span>
-                              ) : volunteerResp?.status === 'standby' ? (
-                                <span className="badge" style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.65rem' }}>
-                                  🟡 Standby
-                                </span>
-                              ) : volunteerResp?.status === 'unavailable' ? (
-                                <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '0.65rem' }}>
-                                  🔴 Unavailable
-                                </span>
-                              ) : (
-                                <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', fontSize: '0.65rem' }}>
-                                  ⏳ Awaiting
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    <div className="p-3 rounded text-center border text-muted text-xs" style={{ background: 'var(--bg-subtle)' }}>
+                      No volunteers match &ldquo;{volunteerSearch}&rdquo;.
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-4 rounded text-center border text-muted text-xs" style={{ background: 'var(--bg-subtle)' }}>
@@ -824,7 +921,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               <div className="d-flex flex-column gap-2.5">
                 {relevantMatches.map(match => (
                   <div key={match.id} className="p-3 rounded border bg-white">
-                    <div className="d-flex align-start justify-between gap-2 mb-2">
+                    <div className="d-flex align-start justify-between gap-2 mb-2 flex-wrap">
                       <div>
                         <span className="font-bold text-xs text-primary d-block">{match.resourceTitle}</span>
                         <span className="text-xs text-muted">Provided by <strong>{match.provider?.name}</strong> ({match.provider?.location || 'Maplewood'})</span>
@@ -886,7 +983,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
         )}
 
         {/* Footer */}
-        <div className="d-flex align-center justify-between gap-2 pt-2 border-top">
+        <div className="request-detail-footer">
           <div>
             {canDelete && (
               <button
@@ -910,6 +1007,15 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                 <span>Edit Request</span>
               </button>
             )}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm d-flex align-center gap-1"
+              onClick={() => openShareSocialModal(request, 'request')}
+              title="Share this help request across platforms or feed"
+            >
+              <Share2 size={13} />
+              <span>Share</span>
+            </button>
             <button
               type="button"
               className="btn btn-secondary btn-sm"

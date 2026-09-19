@@ -1383,16 +1383,15 @@ export const ExploreView = () => {
                     <span>Inspect Provenance & Context</span>
                     <ChevronRight size={13} />
                   </button>
-                  {selectedEntity.type === 'observation' && (
-                    <button
-                      className="btn btn-secondary btn-xs"
-                      style={{ fontSize: '0.74rem', padding: '4px 8px' }}
-                      onClick={() => openShareSocialModal(selectedEntity.item, 'observation')}
-                    >
-                      <Share2 size={12} />
-                      <span>Share</span>
-                    </button>
-                  )}
+                  <button
+                    className="btn btn-secondary btn-xs"
+                    style={{ fontSize: '0.74rem', padding: '4px 8px' }}
+                    onClick={() => openShareSocialModal(selectedEntity.item, selectedEntity.type)}
+                    title={`Share this ${selectedEntity.type || 'record'}`}
+                  >
+                    <Share2 size={12} />
+                    <span>Share</span>
+                  </button>
                 </div>
 
                 {/* Co-located Activities list: When multiple activities share exact coordinates AND group drawer is not already open */}
@@ -1573,16 +1572,31 @@ export const ExploreView = () => {
                       <span className="d-flex align-center gap-1 text-truncate" style={{ maxWidth: '200px' }}>
                         <MapPin size={10} /> <span className="text-truncate">{item.location?.address}</span>
                       </span>
-                      <button
-                        className="btn btn-ghost btn-xs text-brand text-xs font-semibold p-0"
-                        style={{ fontSize: '0.7rem' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          inspectEntity(item, item.entityType);
-                        }}
-                      >
-                        Inspect Context →
-                      </button>
+                      <div className="d-flex align-center gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-muted p-0 d-inline-flex align-center gap-0.5"
+                          style={{ fontSize: '0.7rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openShareSocialModal(item, item.entityType);
+                          }}
+                          title={`Share this ${item.entityType || 'record'}`}
+                        >
+                          <Share2 size={11} />
+                          <span>Share</span>
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-xs text-brand text-xs font-semibold p-0"
+                          style={{ fontSize: '0.7rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            inspectEntity(item, item.entityType);
+                          }}
+                        >
+                          Inspect Context →
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
