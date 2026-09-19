@@ -14,6 +14,7 @@ import {
   ChevronRight, 
   ChevronLeft,
   ChevronDown,
+  ExternalLink,
   X, 
   Eye, 
   Share2, 
@@ -52,6 +53,7 @@ export const ExploreView = () => {
     openCreateModal,
     openShareSocialModal,
     inspectEntity,
+    openEntityDetails,
     highlightedEntityId
   } = useCareMesh();
 
@@ -375,6 +377,13 @@ export const ExploreView = () => {
     }
   };
 
+  const hasProvenance = useCallback((item, type) => {
+    const t = (type || item?.entityType || '').toLowerCase();
+    if (t === 'observation' || t === 'claim' || t === 'evidence') return true;
+    if (t === 'safety' && (item?.evidenceIds?.length || item?.provenanceChain?.length || item?.disputeIds?.length)) return true;
+    return Boolean(item?.evidenceIds?.length || item?.provenanceChain?.length || item?.disputeIds?.length);
+  }, []);
+
   const [mobileTab, setMobileTab] = useState('map'); // 'map' | 'list'
 
   return (
@@ -454,19 +463,22 @@ export const ExploreView = () => {
       <div className="explore-layout-grid">
         {/* Map Column (Hidden on mobile if user switched to List tab) */}
         {viewMode !== 'list_only' && (
-          <div className={`explore-map-column d-flex flex-column gap-2 ${mobileTab === 'list' ? 'd-none d-md-flex' : ''}`}>
+          <div 
+            className={`explore-map-column d-flex flex-column gap-2 ${mobileTab === 'list' ? 'd-none d-md-flex' : ''}`}
+            style={{ position: 'relative' }}
+          >
             <CareMeshMap 
               selectedEntity={selectedEntity}
               onSelectEntity={handleSelectFromMap}
-              selectedGroup={selectedGroup}
-              onSelectGroup={handleSelectGroup}
               categoryFilter={categoryFilter}
               onCategoryFilterChange={setCategoryFilter}
               filterQuery={filterQuery}
               filterPredicate={matchesItemFilter}
               initialWorldView={isWorldView}
               height={viewMode === 'map_only' ? '750px' : '600px'}
+              onOpenDetails={openEntityDetails}
             />
+
           </div>
         )}
 
@@ -1297,15 +1309,15 @@ export const ExploreView = () => {
                           )}
                           <button
                             type="button"
-                            className="btn btn-secondary btn-xs"
-                            style={{ fontSize: '0.68rem', padding: '2px 5px' }}
+                            className="btn btn-primary btn-xs font-semibold"
+                            style={{ fontSize: '0.68rem', padding: '2px 7px' }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              inspectEntity(item, type);
+                              openEntityDetails(item, type);
                             }}
-                            title="Inspect details"
+                            title="Open details page"
                           >
-                            Inspect
+                            Open Details
                           </button>
                         </div>
                       </div>
@@ -1376,16 +1388,29 @@ export const ExploreView = () => {
 
                 <div className="d-flex gap-2">
                   <button
-                    className="btn btn-primary btn-xs flex-1"
-                    style={{ fontSize: '0.74rem', padding: '4px 10px' }}
-                    onClick={() => inspectEntity(selectedEntity.item, selectedEntity.type)}
+                    type="button"
+                    className="btn btn-primary btn-xs flex-1 d-flex align-center justify-center gap-1.5 font-bold"
+                    style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                    onClick={() => openEntityDetails(selectedEntity.item, selectedEntity.type)}
                   >
-                    <span>Inspect Provenance & Context</span>
-                    <ChevronRight size={13} />
+                    <span>Open Details Page</span>
+                    <ExternalLink size={13} />
                   </button>
+                  {hasProvenance(selectedEntity.item, selectedEntity.type) && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs font-semibold"
+                      style={{ fontSize: '0.74rem', padding: '5px 8px' }}
+                      onClick={() => inspectEntity(selectedEntity.item, selectedEntity.type)}
+                      title="Inspect provenance and evidence trail"
+                    >
+                      <span>Provenance</span>
+                    </button>
+                  )}
                   <button
+                    type="button"
                     className="btn btn-secondary btn-xs"
-                    style={{ fontSize: '0.74rem', padding: '4px 8px' }}
+                    style={{ fontSize: '0.74rem', padding: '5px 8px' }}
                     onClick={() => openShareSocialModal(selectedEntity.item, selectedEntity.type)}
                     title={`Share this ${selectedEntity.type || 'record'}`}
                   >
@@ -1454,11 +1479,12 @@ export const ExploreView = () => {
                             </button>
                             <button
                               type="button"
-                              className="btn btn-secondary btn-xs"
-                              style={{ fontSize: '0.68rem', padding: '1px 5px' }}
-                              onClick={() => inspectEntity(coItem, coItem.entityType)}
+                              className="btn btn-primary btn-xs font-semibold"
+                              style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                              onClick={() => openEntityDetails(coItem, coItem.entityType)}
+                              title="Open details page"
                             >
-                              Inspect
+                              Details
                             </button>
                           </div>
                         </div>
@@ -1587,15 +1613,31 @@ export const ExploreView = () => {
                           <span>Share</span>
                         </button>
                         <button
-                          className="btn btn-ghost btn-xs text-brand text-xs font-semibold p-0"
-                          style={{ fontSize: '0.7rem' }}
+                          type="button"
+                          className="btn btn-primary btn-xs font-semibold d-inline-flex align-center gap-1"
+                          style={{ fontSize: '0.72rem', padding: '3px 8px' }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            inspectEntity(item, item.entityType);
+                            openEntityDetails(item, item.entityType);
                           }}
                         >
-                          Inspect Context →
+                          <span>Open Details</span>
+                          <ExternalLink size={11} />
                         </button>
+                        {hasProvenance(item, item.entityType) && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs text-brand text-xs font-semibold p-0"
+                            style={{ fontSize: '0.7rem' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              inspectEntity(item, item.entityType);
+                            }}
+                            title="Inspect provenance & evidence chain"
+                          >
+                            Provenance →
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -28,6 +28,8 @@ export const currentUser = {
     twitter: 'https://x.com/mayalin_eco',
     linkedin: 'https://linkedin.com/in/mayalin-civic',
     github: 'https://github.com/mayalin',
+    facebook: 'https://facebook.com/mayalin.resilience',
+    whatsapp: '+1 (555) 234-5678',
     website: 'https://mayalin.eco'
   },
   stats: {
@@ -52,6 +54,7 @@ export const mockUsers = [
     socialLinks: {
       twitter: 'https://x.com/dave_m_contracting',
       linkedin: 'https://linkedin.com/in/dave-martinez-civil',
+      whatsapp: '+1 (555) 432-8765',
       website: 'https://martinez-civil.org'
     }
   },
@@ -117,6 +120,8 @@ export const mockUsers = [
       twitter: 'https://x.com/caleb_zothan',
       linkedin: 'https://linkedin.com/in/caleb-zothansanga',
       github: 'https://github.com/caleb-zothansanga',
+      facebook: 'https://facebook.com/caleb.civicops',
+      whatsapp: '+1 (555) 987-6543',
       website: 'https://caremesh.org'
     },
     privacySettings: { showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true },
