@@ -85,9 +85,17 @@ const DisputeResponseThread = ({ responses = [], disp, canUserManage, deleteDisp
 
             <div className="d-flex align-center justify-between text-xs text-muted">
               <span 
-                className="user-profile-trigger"
+                className="user-profile-trigger cursor-pointer"
                 onClick={() => resp.author && viewUserProfile(resp.author)}
                 title={`View ${resp.author?.name || 'Author'}'s profile`}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    resp.author && viewUserProfile(resp.author);
+                  }
+                }}
               >
                 By: <strong className="user-profile-name">{resp.author?.name}</strong> ({resp.author?.role || 'Contributor'})
               </span>
@@ -167,6 +175,15 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
     assessmentNotes: 'Community observation record. Open for peer context, additional measurements, or challenges.',
     lastUpdated: observation.timestamp || 'Recently'
   } : null);
+
+  const observationAuthor = (typeof observation?.author === 'object' && observation?.author !== null)
+    ? observation.author
+    : (observation?.author || observation?.authorId || observation?.author_id ? {
+        id: observation?.authorId || observation?.author_id || observation?.author,
+        name: typeof observation?.author === 'string' ? observation.author : (observation?.authorName || 'Field Observer'),
+        avatar: observation?.authorAvatar,
+        handle: observation?.authorHandle || '@observer'
+      } : null);
 
   // Evidence isolation for this specific observation/sub-post
   const supportingEvidence = observation?.evidenceIds?.length > 0
@@ -508,34 +525,52 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
               </div>
             )}
 
-            {observation?.location && (
-              <div className="d-flex align-center gap-4 text-xs text-muted mt-2 flex-wrap">
+            <div className="d-flex align-center gap-4 text-xs text-muted mt-2 flex-wrap">
+              {observation?.location?.address && (
                 <span className="d-flex align-center gap-1">
                   <MapPin size={13} />
                   <span>{observation.location.address}</span>
                 </span>
+              )}
+              {observationAuthor && (
                 <span 
-                  className="d-flex align-center gap-1 user-profile-trigger"
-                  onClick={() => observation.author && viewUserProfile(observation.author)}
-                  title={`View ${observation.author?.name || 'Member'}'s profile & contributions`}
+                  className="d-flex align-center gap-1.5 user-profile-trigger cursor-pointer"
+                  onClick={() => {
+                    if (viewUserProfile) {
+                      viewUserProfile(observationAuthor);
+                    }
+                  }}
+                  title={`View ${observationAuthor.name}'s profile & contributions`}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      observation.author && viewUserProfile(observation.author);
+                      if (viewUserProfile) {
+                        viewUserProfile(observationAuthor);
+                      }
                     }
                   }}
                 >
-                  <User size={13} />
-                  <span>Logged by <strong className="user-profile-name">{observation.author?.name || 'Community Member'}</strong></span>
+                  {observationAuthor.avatar ? (
+                    <img
+                      src={observationAuthor.avatar}
+                      alt={observationAuthor.name}
+                      style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <User size={14} className="text-muted" />
+                  )}
+                  <span>Logged by <strong className="user-profile-name">{observationAuthor.name}</strong></span>
                 </span>
+              )}
+              {observation?.timestamp && (
                 <span className="d-flex align-center gap-1">
                   <Calendar size={13} />
                   <span>{observation.timestamp}</span>
                 </span>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Action Ribbon: Challenge, Corroborate, Share, Edit, Delete */}
             <div className="d-flex align-center gap-2 mt-3 pt-3 border-top flex-wrap">

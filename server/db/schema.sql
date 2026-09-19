@@ -651,5 +651,17 @@ CREATE INDEX IF NOT EXISTS idx_readiness_evt ON readiness_checks(event_id);
 CREATE INDEX IF NOT EXISTS idx_res_assignments_res ON resource_assignments(resource_id);
 CREATE INDEX IF NOT EXISTS idx_audit_mod ON moderation_audit_logs(moderator_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON moderation_audit_logs(target_id);
-CREATE INDEX IF NOT EXISTS idx_audit_comm ON moderation_audit_logs(community_id);
 CREATE INDEX IF NOT EXISTS idx_posts_quarantined ON posts(is_quarantined);
+
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email);
+CREATE INDEX IF NOT EXISTS idx_reset_codes_user ON password_reset_codes(user_id);

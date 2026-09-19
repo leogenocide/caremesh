@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -203,6 +204,21 @@ export function initDatabase() {
       db.prepare("ALTER TABLE evidence ADD COLUMN parent_observation_id TEXT").run();
     }
 
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS password_reset_codes (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `).run();
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email)`).run();
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_reset_codes_user ON password_reset_codes(user_id)`).run();
+
     const obsCols = db.prepare("PRAGMA table_info(observations)").all();
     if (!obsCols.some(c => c.name === 'referenced_evidence_id')) {
       db.prepare("ALTER TABLE observations ADD COLUMN referenced_evidence_id TEXT").run();
@@ -242,8 +258,20 @@ export function initDatabase() {
     console.warn('Migration warning for new columns:', err.message);
   }
 
-  // Ensure Caleb Zothansanga System Administrator is seeded and elevated
+  // 1. Remove all demo accounts from public moderators (enforce only Caleb is initial public moderator)
   try {
+    db.prepare("UPDATE users SET is_public_moderator = 0 WHERE email != 'caleb.zothansanga@gmail.com' AND id != 'usr_caleb'").run();
+  } catch (err) {
+    console.warn('Demo accounts moderator demotion warning:', err.message);
+  }
+
+  // 2. Ensure Caleb Zothansanga System Administrator is seeded and elevated, with custom ADMIN_PASSWORD if provided
+  try {
+    const customAdminPassword = process.env.ADMIN_PASSWORD || process.env.SYSTEM_ADMIN_PASSWORD;
+    const adminPasswordHash = customAdminPassword
+      ? bcrypt.hashSync(customAdminPassword, 10)
+      : '$2b$10$aDKeZ1d74tnrk82S3WoqrOKst6JiHclT2DPl.1Kp4FL3gmFtxerfK';
+
     const caleb = db.prepare("SELECT * FROM users WHERE email = 'caleb.zothansanga@gmail.com' OR id = 'usr_caleb'").get();
     if (!caleb) {
       db.prepare(`
@@ -253,7 +281,7 @@ export function initDatabase() {
           privacy_settings, stats, is_public_moderator, status
         ) VALUES (
           'usr_caleb', 'Caleb Zothansanga', '@caleb_admin', 'caleb.zothansanga@gmail.com',
-          '$2b$10$aDKeZ1d74tnrk82S3WoqrOKst6JiHclT2DPl.1Kp4FL3gmFtxerfK',
+          ?,
           'System Administrator',
           'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
           'Primary System Administrator for CareMesh Civic Resilience Network.',
@@ -264,13 +292,21 @@ export function initDatabase() {
           '{"contributions":150,"resourcesShared":25,"plansJoined":12,"requestsFulfilled":45}',
           1, 'active'
         )
-      `).run();
+      `).run(adminPasswordHash);
     } else {
-      db.prepare(`
-        UPDATE users 
-        SET is_public_moderator = 1, role = 'System Administrator', email = 'caleb.zothansanga@gmail.com'
-        WHERE id = ? OR email = 'caleb.zothansanga@gmail.com'
-      `).run(caleb.id);
+      if (customAdminPassword) {
+        db.prepare(`
+          UPDATE users 
+          SET is_public_moderator = 1, role = 'System Administrator', email = 'caleb.zothansanga@gmail.com', password_hash = ?
+          WHERE id = ? OR email = 'caleb.zothansanga@gmail.com'
+        `).run(adminPasswordHash, caleb.id);
+      } else {
+        db.prepare(`
+          UPDATE users 
+          SET is_public_moderator = 1, role = 'System Administrator', email = 'caleb.zothansanga@gmail.com'
+          WHERE id = ? OR email = 'caleb.zothansanga@gmail.com'
+        `).run(caleb.id);
+      }
     }
   } catch (err) {
     console.warn('Caleb system admin sync warning:', err.message);

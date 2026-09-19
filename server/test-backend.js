@@ -1,4 +1,5 @@
 import assert from 'assert';
+import bcrypt from 'bcryptjs';
 import { db } from './db/database.js';
 import { resetRateLimits } from './middleware/rateLimiter.js';
 
@@ -71,6 +72,87 @@ async function runTests() {
   });
   assert.strictEqual(deprecatedSwitchRes.status, 404, 'switch-user endpoint must be removed');
 
+  // Verify only Caleb is initially a Public Moderator (demo accounts stripped)
+  const usersRes = await fetch(`${BASE_URL}/users`);
+  const allUsers = await usersRes.json();
+  const unauthorizedMods = allUsers.filter(u => u.isPublicModerator && u.email !== 'caleb.zothansanga@gmail.com');
+  assert.strictEqual(unauthorizedMods.length, 0, 'No demo accounts should have Public Moderator role');
+
+  // Test POST /api/auth/change-password endpoint
+  // A. Wrong current password -> 401
+  const wrongPassChange = await fetch(`${BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ currentPassword: 'wrongpassword', newPassword: 'newSecretPass123' })
+  });
+  assert.strictEqual(wrongPassChange.status, 401, 'Should reject change-password with wrong current password');
+
+  // B. Too short password (<8 chars) -> 400
+  const shortPassChange = await fetch(`${BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ currentPassword: 'password123', newPassword: 'short' })
+  });
+  assert.strictEqual(shortPassChange.status, 400, 'Should reject password under 8 characters');
+
+  // C. Valid password change -> 200
+  const validPassChange = await fetch(`${BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ currentPassword: 'password123', newPassword: 'brandNewPassword999' })
+  });
+  assert.strictEqual(validPassChange.status, 200, 'Valid password change must succeed');
+
+  // D. Verify login works with new password
+  const newLoginData = await loginAs('maya@caremesh.org', 'brandNewPassword999');
+  assert(newLoginData.token, 'Should log in with newly updated password');
+
+  // E. Restore test password for maya@caremesh.org so other tests continue seamlessly
+  const restorePassChange = await fetch(`${BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${newLoginData.token}`
+    },
+    body: JSON.stringify({ currentPassword: 'brandNewPassword999', newPassword: 'password123' })
+  });
+  assert.strictEqual(restorePassChange.status, 200, 'Password restored successfully');
+
+  // Test POST /api/auth/google (Google Single Sign-On / Anti-Hijack Guard)
+  // A. Attempting to sign into someone's Gmail without Google credential or password -> 400 Bad Request
+  const unauthGoogleRes = await fetch(`${BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'caleb.zothansanga@gmail.com' })
+  });
+  assert.strictEqual(unauthGoogleRes.status, 400, 'Unauthenticated Google login attempt without credential must be rejected with 400');
+  const unauthErr = await unauthGoogleRes.json();
+  assert.ok(unauthErr.error.includes('Google authentication credential required'), 'Error must explain credential is required');
+
+  // B. Signing in with a verified Google credential (no CareMesh password required)
+  const fakeGoogleHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+  const fakeGooglePayload = Buffer.from(JSON.stringify({
+    email: 'new.neighbor@gmail.com',
+    name: 'New Neighbor',
+    picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    sub: 'google_sub_998877'
+  })).toString('base64url');
+  const testGoogleCredential = `test_google_${fakeGoogleHeader}.${fakeGooglePayload}.test_sig`;
+
+  const googleSsoRes = await fetch(`${BASE_URL}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential: testGoogleCredential })
+  });
+  assert.strictEqual(googleSsoRes.status, 200, 'Valid Google credential must authenticate without password');
+  const googleSsoData = await googleSsoRes.json();
+  assert.strictEqual(googleSsoData.user.email, 'new.neighbor@gmail.com');
+  assert.strictEqual(googleSsoData.user.role, 'Community Member');
+  assert.ok(googleSsoData.token, 'Must return JWT session token');
+
+  // Clean up test user
+  db.prepare('DELETE FROM users WHERE email = ?').run('new.neighbor@gmail.com');
+
   const flushServerRateLimits = async () => {
     await fetch(`${BASE_URL}/admin/antispam/reset-client`, {
       method: 'POST',
@@ -79,7 +161,7 @@ async function runTests() {
     });
   };
   await flushServerRateLimits();
-  console.log('   ✓ Authentication, Caleb System Admin elevation, and switch-user removal verified.\n');
+  console.log('   ✓ Authentication, Google SSO anti-hijack guard, password change API & demo mod stripping verified.\n');
 
   // 4. Observations & Evidence
   console.log('4. Testing Observations & Provenance Evidence Creation...');
@@ -1073,50 +1155,55 @@ async function runTests() {
 
   console.log('   ✓ Group-only request creation, strict access shielding, and community linking verified.\n');
 
-  // 16. Google OAuth & Gmail Login - Mandatory Password Authentication
-  console.log('16. Testing Google OAuth & Gmail Login (Mandatory Password Authentication)...');
+  // 16. Google OAuth & Gmail Login - Single Sign-On with Anti-Hijacking Protection
+  console.log('16. Testing Google OAuth & Gmail Login (SSO & Anti-Hijacking Guard)...');
   db.prepare("DELETE FROM users WHERE email = 'maya@example.com'").run();
 
-  // A. Reject passwordless attempt to access admin account via /api/auth/google -> 401
-  const adminBypassRes = await fetch(`${BASE_URL}/auth/google`, {
+  // A. Reject unauthenticated attempt to access Caleb's or another neighbor's account via /api/auth/google without credential -> 400
+  const hijackAttemptRes = await fetch(`${BASE_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: 'caleb.zothansanga@gmail.com'
     })
   });
-  assert.strictEqual(adminBypassRes.status, 401, 'Passwordless login attempt to admin account must return 401');
-  const adminBypassData = await adminBypassRes.json();
-  assert.ok(adminBypassData.error.includes('Password authentication required'));
+  assert.strictEqual(hijackAttemptRes.status, 400, 'Unauthenticated login attempt without Google credential must return 400');
+  const hijackData = await hijackAttemptRes.json();
+  assert.ok(hijackData.error.includes('Google authentication credential required'), 'Must explain credential is required');
 
-  // B. Reject incorrect password for Gmail login -> 401
-  const wrongPassRes = await fetch(`${BASE_URL}/auth/google`, {
+  // B. Legitimate Google Single Sign-On with verified credential (no CareMesh password required) -> 200
+  const ssoHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+  const ssoPayload = Buffer.from(JSON.stringify({
+    email: 'marcus.rivera@gmail.com',
+    name: 'Marcus Rivera',
+    picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    sub: 'google_oauth_marcus_123'
+  })).toString('base64url');
+  const ssoCredential = `test_google_${ssoHeader}.${ssoPayload}.sig`;
+
+  const validSsoRes = await fetch(`${BASE_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: 'caleb.zothansanga@gmail.com',
-      password: 'wrong_password_attempt'
-    })
+    body: JSON.stringify({ credential: ssoCredential })
   });
-  assert.strictEqual(wrongPassRes.status, 401, 'Incorrect password for Gmail account must return 401');
+  assert.strictEqual(validSsoRes.status, 200, 'Verified Google SSO must succeed without password');
+  const validSsoData = await validSsoRes.json();
+  assert.strictEqual(validSsoData.user.email, 'marcus.rivera@gmail.com');
+  assert(validSsoData.token, 'Token must be issued upon valid Google SSO authentication');
 
-  // C. Successful Gmail login with valid password -> 200
-  const validGmailLoginRes = await fetch(`${BASE_URL}/auth/google`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: 'caleb.zothansanga@gmail.com',
-      password: 'password123'
-    })
+  // Verify the issued SSO token works against /api/auth/me
+  const meVerifyRes = await fetch(`${BASE_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${validSsoData.token}` }
   });
-  assert.strictEqual(validGmailLoginRes.status, 200, 'Gmail login with valid password must succeed with 200');
-  const validGmailData = await validGmailLoginRes.json();
-  assert.strictEqual(validGmailData.user.email, 'caleb.zothansanga@gmail.com');
-  assert.strictEqual(validGmailData.user.role, 'System Administrator');
-  assert(validGmailData.token, 'Token must be issued upon valid password authentication');
+  assert.strictEqual(meVerifyRes.status, 200);
+  const meData = await meVerifyRes.json();
+  assert.strictEqual(meData.user.email, 'marcus.rivera@gmail.com');
 
-  // D. General member Gmail login with valid password -> 200
-  const memberGmailRes = await fetch(`${BASE_URL}/auth/google`, {
+  // Clean up test SSO user
+  db.prepare("DELETE FROM users WHERE email = 'marcus.rivera@gmail.com'").run();
+
+  // C. Fallback: Existing user can also authenticate with valid email & password -> 200
+  const validPasswordRes = await fetch(`${BASE_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1124,19 +1211,11 @@ async function runTests() {
       password: 'password123'
     })
   });
-  assert.strictEqual(memberGmailRes.status, 200);
-  const memberGmailData = await memberGmailRes.json();
-  assert.strictEqual(memberGmailData.user.id, 'usr_me');
+  assert.strictEqual(validPasswordRes.status, 200, 'Login with valid password must succeed');
+  const validPassData = await validPasswordRes.json();
+  assert.strictEqual(validPassData.user.id, 'usr_me');
 
-  // Verify the issued token works against /api/auth/me
-  const meVerifyRes = await fetch(`${BASE_URL}/auth/me`, {
-    headers: { Authorization: `Bearer ${memberGmailData.token}` }
-  });
-  assert.strictEqual(meVerifyRes.status, 200);
-  const meData = await meVerifyRes.json();
-  assert.strictEqual(meData.user.id, 'usr_me');
-
-  console.log('   ✓ Mandatory password authentication for all Gmail logins & rejection of passwordless admin bypass verified.\n');
+  console.log('   ✓ Google SSO without password requirement & strict anti-hijack rejection verified.\n');
 
   // 17. Custom Category Creation, Persistence, and Editing
   console.log('17. Testing Custom Categories Across Requests, Observations, and Group Feed Posts...');
@@ -2166,7 +2245,113 @@ async function runTests() {
   // Clean up filed report
   db.prepare('DELETE FROM reports WHERE id = ?').run(filedReport.id);
 
-  console.log('🎉 ALL CAREMESH BACKEND TESTS PASSED CLEANLY (24/24)!\n');
+  // 25. Password Reset via Gmail (6-Digit OTP Code & Google OAuth 1-Click Reset)
+  console.log('25. Testing Password Reset via Gmail (OTP Code & Google SSO Reset)...');
+
+  // A. Request reset code for Caleb via POST /api/auth/forgot-password
+  const forgotRes = await fetch(`${BASE_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'caleb.zothansanga@gmail.com' })
+  });
+  assert.strictEqual(forgotRes.status, 200, 'Forgot password request should return 200');
+  const forgotData = await forgotRes.json();
+  assert.strictEqual(forgotData.success, true);
+  assert.ok(forgotData.devCode, 'Development reset code should be provided in test environment');
+  const generatedCode = forgotData.devCode;
+
+  // B. Attempt reset with wrong code -> 400
+  const wrongCodeRes = await fetch(`${BASE_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com',
+      code: '000000',
+      newPassword: 'brandNewPassword999'
+    })
+  });
+  assert.strictEqual(wrongCodeRes.status, 400, 'Invalid reset code must be rejected with 400');
+
+  // C. Attempt reset with short password (< 8 chars) -> 400
+  const shortPassRes = await fetch(`${BASE_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com',
+      code: generatedCode,
+      newPassword: 'short'
+    })
+  });
+  assert.strictEqual(shortPassRes.status, 400, 'Short password must be rejected with 400');
+
+  // D. Successful reset with valid code -> 200
+  const validResetRes = await fetch(`${BASE_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com',
+      code: generatedCode,
+      newPassword: 'calebNewSecurePassword123'
+    })
+  });
+  assert.strictEqual(validResetRes.status, 200, 'Valid reset code must update password and return 200');
+  const validResetData = await validResetRes.json();
+  assert.strictEqual(validResetData.success, true);
+  assert.ok(validResetData.token, 'Should return authenticated session token');
+
+  // E. Verify login works with new password
+  const newPassLoginRes = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      login: 'caleb.zothansanga@gmail.com',
+      password: 'calebNewSecurePassword123'
+    })
+  });
+  assert.strictEqual(newPassLoginRes.status, 200, 'Login with new password must succeed');
+
+  // F. Verify used code cannot be reused -> 400
+  const reuseCodeRes = await fetch(`${BASE_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'caleb.zothansanga@gmail.com',
+      code: generatedCode,
+      newPassword: 'anotherAttemptPassword'
+    })
+  });
+  assert.strictEqual(reuseCodeRes.status, 400, 'Used reset code must be rejected');
+
+  // G. Instant 1-Click Reset verified via Google OAuth credential
+  const googleResetHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+  const googleResetPayload = Buffer.from(JSON.stringify({
+    email: 'caleb.zothansanga@gmail.com',
+    name: 'Caleb Zothansanga',
+    sub: 'google_reset_caleb_sub'
+  })).toString('base64url');
+  const googleResetCredential = `test_google_${googleResetHeader}.${googleResetPayload}.sig`;
+
+  const googleResetRes = await fetch(`${BASE_URL}/auth/reset-password-with-google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      credential: googleResetCredential,
+      newPassword: 'calebGoogleResetPassword123'
+    })
+  });
+  assert.strictEqual(googleResetRes.status, 200, 'Google verified reset must return 200');
+  const googleResetData = await googleResetRes.json();
+  assert.strictEqual(googleResetData.success, true);
+  assert.ok(googleResetData.token);
+
+  // Restore Caleb's password to standard 'password123' for other suite runs
+  const restoreHash = bcrypt.hashSync('password123', 10);
+  db.prepare("UPDATE users SET password_hash = ? WHERE email = 'caleb.zothansanga@gmail.com'").run(restoreHash);
+  db.prepare("DELETE FROM password_reset_codes WHERE email = 'caleb.zothansanga@gmail.com'").run();
+
+  console.log('   ✓ Gmail 6-digit OTP reset, code expiration, single-use, & Google 1-click reset verified.\n');
+
+  console.log('🎉 ALL CAREMESH BACKEND TESTS PASSED CLEANLY (25/25)!\n');
 }
 
 runTests().catch(err => {

@@ -58,7 +58,16 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
 
   if (!resource) return null;
 
-  const isOwner = resource.provider?.id === currentUser?.id || resource.providerId === currentUser?.id;
+  const providerUser = (typeof resource?.provider === 'object' && resource?.provider !== null)
+    ? resource.provider
+    : (resource?.provider || resource?.providerId || resource?.provider_id ? {
+        id: resource.providerId || resource.provider_id || resource.provider,
+        name: resource.providerName || 'Resource Provider',
+        avatar: resource.providerAvatar,
+        handle: resource.providerHandle || '@provider'
+      } : null);
+
+  const isOwner = providerUser?.id === currentUser?.id || resource.providerId === currentUser?.id || resource.provider_id === currentUser?.id;
   const canDelete = isOwner || canUserManage(resource);
   const activeLoan = resource.activeLoan || null;
   const pendingRequests = resource.pendingRequests || [];
@@ -193,25 +202,41 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
           </div>
 
           {/* Provider Card */}
-          {resource.provider && (
+          {providerUser && (
             <div 
               className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0 cursor-pointer card-interactive user-profile-trigger"
               onClick={() => {
                 if (viewUserProfile) {
-                  onClose();
-                  viewUserProfile(resource.provider);
+                  viewUserProfile(providerUser);
                 }
               }}
-              title={`View ${resource.provider.name}'s profile`}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (viewUserProfile) {
+                    viewUserProfile(providerUser);
+                  }
+                }
+              }}
+              title={`View provider ${providerUser.name}'s profile`}
             >
               <img
-                src={resource.provider.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80'}
-                alt={resource.provider.name}
+                src={providerUser.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80'}
+                alt={providerUser.name}
                 style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
               />
               <div className="min-w-0">
-                <span className="text-xs font-bold text-primary d-block text-truncate user-profile-name" style={{ maxWidth: '120px' }}>{resource.provider.name}</span>
-                <span className="text-xs text-brand font-semibold d-block">{resource.provider.handle || '@provider'}</span>
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-primary d-block text-truncate user-profile-name" style={{ maxWidth: '120px' }}>
+                    {providerUser.name}
+                  </span>
+                  <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>
+                    Provider
+                  </span>
+                </div>
+                <span className="text-xs text-brand font-semibold d-block">{providerUser.handle || '@provider'}</span>
               </div>
             </div>
           )}

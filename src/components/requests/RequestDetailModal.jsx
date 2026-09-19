@@ -295,7 +295,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
           {/* Requester Avatar Card */}
           {requesterUser && (
             <div 
-              className="request-detail-requester cursor-pointer card-interactive"
+              className="request-detail-requester cursor-pointer card-interactive user-profile-trigger"
               onClick={() => viewUserProfile(requesterUser)}
               role="button"
               tabIndex={0}
@@ -314,7 +314,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               />
               <div className="min-w-0 flex-1">
                 <div className="d-flex align-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-bold text-primary text-truncate" style={{ textDecoration: 'underline' }}>
+                  <span className="text-xs font-bold text-primary text-truncate user-profile-name" style={{ textDecoration: 'underline' }}>
                     {requesterUser.name}
                   </span>
                   <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>
