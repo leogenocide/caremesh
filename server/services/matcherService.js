@@ -226,8 +226,17 @@ export function evaluateMatch(request, resource) {
     summaryExplanation += ` Note: ${warnLabels.join(', ')} require human review.`;
   }
 
+  const matchId = `match_${request.id}_${resource.id}`;
+  let endorsements;
+  try {
+    const endRows = db.prepare('SELECT user_id FROM match_endorsements WHERE match_id = ?').all(matchId);
+    endorsements = endRows.map(r => r.user_id);
+  } catch {
+    endorsements = [];
+  }
+
   return {
-    id: `match_${request.id}_${resource.id}`,
+    id: matchId,
     requestId: request.id,
     resourceId: resource.id,
     requestTitle: request.title,
@@ -237,7 +246,9 @@ export function evaluateMatch(request, resource) {
     warnCount,
     failCount,
     factors,
-    summaryExplanation
+    summaryExplanation,
+    endorsements,
+    endorsementCount: endorsements.length
   };
 }
 
@@ -271,6 +282,10 @@ export function recalculateAllMatches() {
     }
   }
 
-  // Sort by highest pass count & lowest warn count
-  return evaluations.sort((a, b) => b.passCount - a.passCount || a.warnCount - b.warnCount);
+  // Sort by highest endorsement count, then pass count & lowest warn count
+  return evaluations.sort((a, b) => 
+    b.endorsementCount - a.endorsementCount || 
+    b.passCount - a.passCount || 
+    a.warnCount - b.warnCount
+  );
 }

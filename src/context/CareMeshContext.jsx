@@ -2169,7 +2169,53 @@ export const CareMeshProvider = ({ children }) => {
     };
     setNotifications(prev => [newNotif, ...prev]);
 
-    api.matcher.createAssignment({ requestId, resourceId }).catch(err => console.warn('Backend matchResource error:', err));
+    api.matcher.createAssignment({ requestId, resourceId }).catch(err => {
+      console.warn('Backend matchResource error:', err);
+      if (err?.message?.includes('Permission denied') || err?.status === 403) {
+        showToast(err.message || 'Only Public Moderators, Admins, or direct parties may initiate match coordination.', 'error');
+      }
+    });
+  };
+
+  const endorseMatch = (matchId) => {
+    if (!currentUser?.id) {
+      showToast('Please sign in to endorse matches.', 'info');
+      return;
+    }
+
+    setMatchingFactors(prev => prev.map(m => {
+      if (m.id === matchId) {
+        const endorsements = m.endorsements || [];
+        const already = endorsements.includes(currentUser.id);
+        const updated = already
+          ? endorsements.filter(id => id !== currentUser.id)
+          : [...endorsements, currentUser.id];
+        return {
+          ...m,
+          endorsements: updated,
+          endorsementCount: updated.length
+        };
+      }
+      return m;
+    }));
+
+    api.matcher.endorseMatch(matchId).then(res => {
+      if (res?.success) {
+        setMatchingFactors(prev => prev.map(m => {
+          if (m.id === matchId) {
+            return {
+              ...m,
+              endorsements: res.endorsements,
+              endorsementCount: res.endorsementCount
+            };
+          }
+          return m;
+        }));
+        showToast(res.endorsed ? 'Community endorsement added! Thank you.' : 'Endorsement removed.', 'info');
+      }
+    }).catch(err => {
+      console.warn('Backend endorseMatch error:', err);
+    });
   };
 
   const toggleJoinCommunity = (communityId) => {
@@ -4050,6 +4096,7 @@ export const CareMeshProvider = ({ children }) => {
       logPlanOutcomeReport,
       markFeedbackStatus,
       matchResourceToRequest,
+      endorseMatch,
       toggleJoinCommunity,
       updateCommunity,
       uploadCommunityMedia,

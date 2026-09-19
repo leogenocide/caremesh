@@ -43,8 +43,46 @@ router.get('/assignments', (req, res) => {
   res.json(rows);
 });
 
+// POST /api/matcher/endorse
+// Toggle community endorsement on a candidate match
+router.post('/endorse', optionalAuth, (req, res) => {
+  const { matchId } = req.body;
+  if (!matchId) {
+    return res.status(400).json({ error: 'matchId is required.' });
+  }
+
+  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+  if (!userId) {
+    return res.status(401).json({ error: 'Authentication required to endorse matches.' });
+  }
+
+  const existing = db.prepare('SELECT id FROM match_endorsements WHERE match_id = ? AND user_id = ?').get(matchId, userId);
+  let endorsed;
+
+  if (existing) {
+    db.prepare('DELETE FROM match_endorsements WHERE id = ?').run(existing.id);
+    endorsed = false;
+  } else {
+    const id = `me_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    db.prepare('INSERT INTO match_endorsements (id, match_id, user_id) VALUES (?, ?, ?)').run(id, matchId, userId);
+    endorsed = true;
+  }
+
+  const endRows = db.prepare('SELECT user_id FROM match_endorsements WHERE match_id = ?').all(matchId);
+  const endorsements = endRows.map(r => r.user_id);
+
+  res.json({
+    success: true,
+    matchId,
+    endorsed,
+    endorsements,
+    endorsementCount: endorsements.length
+  });
+});
+
 // POST /api/matcher/assign
 // Persistent assignment action (separate from match calculation)
+// Gated to Public Moderators, System Administrators, Requester, or Provider
 router.post('/assign', optionalAuth, (req, res) => {
   const { requestId, projectId, resourceId, notes = '' } = req.body;
 
@@ -52,8 +90,29 @@ router.post('/assign', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'resourceId and either requestId or projectId are required.' });
   }
 
+  let requesterId = null;
+  if (requestId) {
+    const reqRow = db.prepare('SELECT requester_id FROM requests WHERE id = ?').get(requestId);
+    if (reqRow) requesterId = reqRow.requester_id;
+  }
+  const resRow = db.prepare('SELECT provider_id FROM resources WHERE id = ?').get(resourceId);
+  const providerId = resRow ? resRow.provider_id : null;
+
+  // Authorization check: Must be Public Moderator, System Admin, Requester, or Provider
+  const currentUserId = req.user ? req.user.id : (req.body.assignedById || 'usr_me');
+  const isSysAdmin = req.user?.role === 'System Administrator' || req.user?.email === 'caleb.zothansanga@gmail.com';
+  const isPubMod = req.user?.is_public_moderator === 1 || req.user?.is_public_moderator === true;
+  const isRequester = currentUserId && requesterId && currentUserId === requesterId;
+  const isProvider = currentUserId && providerId && currentUserId === providerId;
+
+  if (!isSysAdmin && !isPubMod && !isRequester && !isProvider) {
+    return res.status(403).json({
+      error: 'Permission denied. Only Public Moderators, System Administrators, or the direct Requester/Provider may initiate match coordination. Community members may endorse this match instead.'
+    });
+  }
+
   const id = `asgn_${Date.now()}`;
-  const assignedById = req.user ? req.user.id : (req.body.assignedById || 'usr_me');
+  const assignedById = currentUserId;
   const assignedByName = req.user ? req.user.name : 'Maya Lin';
 
   const tx = db.transaction(() => {
@@ -78,16 +137,8 @@ router.post('/assign', optionalAuth, (req, res) => {
       VALUES (?, ?, 'resource_match', 'Resource Assignment Confirmed', ?, 'Just now', 0, 'collaborate', 'matcher', ?)
     `);
 
-    let requesterId = null;
-    if (requestId) {
-      const reqRow = db.prepare('SELECT requester_id FROM requests WHERE id = ?').get(requestId);
-      if (reqRow) requesterId = reqRow.requester_id;
-    }
-    const resRow = db.prepare('SELECT provider_id FROM resources WHERE id = ?').get(resourceId);
-    const providerId = resRow ? resRow.provider_id : null;
-
     const notifUsers = new Set([requesterId, providerId].filter(Boolean));
-    if (notifUsers.size === 0) notifUsers.add('usr_me');
+    if (notifUsers.size === 0) notifUsers.add(assignedById);
 
     for (const uid of notifUsers) {
       notifInsert.run(`notif_${Date.now()}_${uid}`, uid, `Resource assigned to request by ${assignedByName}.`, requestId || resourceId);

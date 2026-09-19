@@ -301,13 +301,58 @@ async function runTests() {
   console.log(`     Factors: ${topMatch.factors.map(f => `[${f.status.toUpperCase()}] ${f.label}`).join(', ')}`);
   console.log(`     Explanation: "${topMatch.summaryExplanation}"\n`);
 
-  // 9. Match vs Persistent Assignment
-  console.log('9. Testing Persistent Resource Assignment...');
-  const origRequestRow = db.prepare('SELECT status, progress_percentage FROM requests WHERE id = ?').get(topMatch.requestId);
-
-  const assignRes = await fetch(`${BASE_URL}/matcher/assign`, {
+  // 8b. Testing Match Community Endorsements / Voting
+  console.log('8b. Testing Match Community Endorsements / Voting...');
+  const endorseRes1 = await fetch(`${BASE_URL}/matcher/endorse`, {
     method: 'POST',
     headers: authHeaders,
+    body: JSON.stringify({ matchId: topMatch.id })
+  });
+  assert.strictEqual(endorseRes1.status, 200);
+  const endorseData1 = await endorseRes1.json();
+  assert.strictEqual(endorseData1.success, true);
+  assert.strictEqual(endorseData1.endorsed, true);
+  assert(endorseData1.endorsements.includes(loginData.user.id));
+  console.log(`   ✓ Match endorsed by neighbor. New count: ${endorseData1.endorsementCount}`);
+
+  // Toggle off endorsement
+  const endorseRes2 = await fetch(`${BASE_URL}/matcher/endorse`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({ matchId: topMatch.id })
+  });
+  assert.strictEqual(endorseRes2.status, 200);
+  const endorseData2 = await endorseRes2.json();
+  assert.strictEqual(endorseData2.endorsed, false);
+  console.log('   ✓ Match endorsement toggle-off verified.\n');
+
+  // 9. Match vs Persistent Assignment with Moderator Gate
+  console.log('9. Testing Persistent Resource Assignment (Gated to Admin/Moderator/Owner)...');
+  const origRequestRow = db.prepare('SELECT status, progress_percentage, requester_id FROM requests WHERE id = ?').get(topMatch.requestId);
+
+  // Unprivileged user who is not requester, provider, or moderator should be rejected with 403
+  // Login as a test unprivileged neighbor (Marcus)
+  const unprivData = await loginAs('usr_marcus');
+  const unprivHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${unprivData.token}`
+  };
+  const unauthorizedAssignRes = await fetch(`${BASE_URL}/matcher/assign`, {
+    method: 'POST',
+    headers: unprivHeaders,
+    body: JSON.stringify({
+      requestId: topMatch.requestId,
+      resourceId: topMatch.resourceId,
+      notes: 'Unauthorized third party attempt'
+    })
+  });
+  assert.strictEqual(unauthorizedAssignRes.status, 403, 'Unauthorized third party must receive 403 Forbidden');
+  console.log('   ✓ Unauthorized third-party assign attempt correctly blocked with 403 Forbidden.');
+
+  // Authorized assignment by Caleb Zothansanga (System Administrator)
+  const assignRes = await fetch(`${BASE_URL}/matcher/assign`, {
+    method: 'POST',
+    headers: calebHeaders,
     body: JSON.stringify({
       requestId: topMatch.requestId,
       resourceId: topMatch.resourceId,
@@ -329,7 +374,7 @@ async function runTests() {
     );
   }
 
-  console.log('   ✓ Persistent resource assignment created distinct from calculation.\n');
+  console.log('   ✓ Persistent resource assignment authorized and created by System Administrator.\n');
 
   // 10. Social Circles & Polls
   console.log('10. Testing Communities, Posts & Poll Voting...');
