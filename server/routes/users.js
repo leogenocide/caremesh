@@ -34,7 +34,7 @@ router.patch('/:id', optionalAuth, (req, res) => {
     return res.status(403).json({ error: 'Access forbidden: you cannot modify another user’s profile.' });
   }
 
-  const { name, avatar, bio, location, skills, badges, privacySettings, isPublicModerator } = req.body;
+  const { name, avatar, bio, location, skills, badges, privacySettings, socialLinks, isPublicModerator } = req.body;
   const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
 
   if (!targetUser) {
@@ -51,11 +51,12 @@ router.patch('/:id', optionalAuth, (req, res) => {
   const updatedSkills = skills ? JSON.stringify(skills) : targetUser.skills;
   const updatedBadges = badges ? JSON.stringify(badges) : targetUser.badges;
   const updatedPrivacy = privacySettings ? JSON.stringify(privacySettings) : targetUser.privacy_settings;
+  const updatedSocial = socialLinks !== undefined ? JSON.stringify(socialLinks) : targetUser.social_links;
   const updatedMod = (isPublicModerator !== undefined && isPlatformAdmin) ? (isPublicModerator ? 1 : 0) : targetUser.is_public_moderator;
 
   db.prepare(`
     UPDATE users 
-    SET name = ?, avatar = ?, bio = ?, address = ?, neighborhood = ?, lat = ?, lng = ?, skills = ?, badges = ?, privacy_settings = ?, is_public_moderator = ?
+    SET name = ?, avatar = ?, bio = ?, address = ?, neighborhood = ?, lat = ?, lng = ?, skills = ?, badges = ?, privacy_settings = ?, social_links = ?, is_public_moderator = ?
     WHERE id = ?
   `).run(
     updatedName,
@@ -68,6 +69,7 @@ router.patch('/:id', optionalAuth, (req, res) => {
     updatedSkills,
     updatedBadges,
     updatedPrivacy,
+    updatedSocial,
     updatedMod,
     req.params.id
   );

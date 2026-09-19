@@ -128,6 +128,9 @@ export function initDatabase() {
     if (!userCols.some(c => c.name === 'auth_provider')) {
       db.prepare("ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'").run();
     }
+    if (!userCols.some(c => c.name === 'social_links')) {
+      db.prepare("ALTER TABLE users ADD COLUMN social_links TEXT DEFAULT '{}'").run();
+    }
     const reportCols = db.prepare("PRAGMA table_info(reports)").all();
     if (!reportCols.some(c => c.name === 'scope')) {
       db.prepare("ALTER TABLE reports ADD COLUMN scope TEXT DEFAULT 'community'").run();

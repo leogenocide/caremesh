@@ -260,6 +260,26 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
                 <Share2 size={12} />
                 <span>Share</span>
               </button>
+
+              {(isOwner || canUserManage(request)) && (
+                <button
+                  type="button"
+                  className={`btn btn-xs d-inline-flex align-center gap-1 font-semibold ${request.status === 'fulfilled' ? 'btn-secondary text-amber' : 'btn-primary'}`}
+                  style={request.status !== 'fulfilled' ? { background: 'var(--primary-600, #059669)', borderColor: 'var(--primary-600, #059669)', color: '#ffffff' } : {}}
+                  onClick={() => {
+                    const isNowFulfilled = request.status !== 'fulfilled';
+                    updateRequest(request.id, {
+                      status: isNowFulfilled ? 'fulfilled' : 'open',
+                      progressPercentage: isNowFulfilled ? 100 : Math.round(((request.peopleJoined || 0) / (request.peopleNeeded || 1)) * 100)
+                    });
+                    setFeedbackNotice(isNowFulfilled ? 'Request marked as Fulfilled! Archived to profiles history.' : 'Request reopened for community assistance.');
+                  }}
+                  title={request.status === 'fulfilled' ? 'Click to reopen this request' : 'Mark this request fulfilled and completed'}
+                >
+                  <CheckCircle2 size={12} />
+                  <span>{request.status === 'fulfilled' ? 'Reopen Request' : 'Mark Fulfilled'}</span>
+                </button>
+              )}
             </div>
             <h3 className="font-bold text-lg text-primary mb-0">{request.title}</h3>
             <div className="d-flex align-center gap-3 text-xs text-muted flex-wrap">
@@ -1005,6 +1025,24 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               >
                 <Pencil size={13} />
                 <span>Edit Request</span>
+              </button>
+            )}
+            {(isOwner || canUserManage(request)) && (
+              <button
+                type="button"
+                className={`btn btn-sm d-flex align-center gap-1.5 ${request.status === 'fulfilled' ? 'btn-secondary' : 'btn-primary font-bold'}`}
+                style={request.status !== 'fulfilled' ? { background: 'var(--primary-600, #059669)', borderColor: 'var(--primary-600, #059669)', color: '#ffffff' } : {}}
+                onClick={() => {
+                  const isNowFulfilled = request.status !== 'fulfilled';
+                  updateRequest(request.id, {
+                    status: isNowFulfilled ? 'fulfilled' : 'open',
+                    progressPercentage: isNowFulfilled ? 100 : Math.round(((request.peopleJoined || 0) / (request.peopleNeeded || 1)) * 100)
+                  });
+                  setFeedbackNotice(isNowFulfilled ? 'Request marked as Fulfilled! Archived to profiles history.' : 'Request reopened for community assistance.');
+                }}
+              >
+                <CheckCircle2 size={14} />
+                <span>{request.status === 'fulfilled' ? 'Reopen Request' : 'Mark as Fulfilled'}</span>
               </button>
             )}
             <button

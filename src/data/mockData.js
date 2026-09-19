@@ -24,6 +24,12 @@ export const currentUser = {
     allowDirectMessages: true,
     publicContributionHistory: true
   },
+  socialLinks: {
+    twitter: 'https://x.com/mayalin_eco',
+    linkedin: 'https://linkedin.com/in/mayalin-civic',
+    github: 'https://github.com/mayalin',
+    website: 'https://mayalin.eco'
+  },
   stats: {
     contributions: 42,
     resourcesShared: 6,
@@ -42,7 +48,12 @@ export const mockUsers = [
     bio: 'Civil contractor & volunteer flood response lead. Have heavy pump equipment and sandbag trailers.',
     skills: ['Heavy Equipment', 'Pump Operation', 'Flood Mitigation', 'Carpentry'],
     badges: ['Equipment Provider', 'Civil Contractor'],
-    location: { address: 'Willow Valley Rd, Maplewood', lat: 37.7833, lng: -122.4167 }
+    location: { address: 'Willow Valley Rd, Maplewood', lat: 37.7833, lng: -122.4167 },
+    socialLinks: {
+      twitter: 'https://x.com/dave_m_contracting',
+      linkedin: 'https://linkedin.com/in/dave-martinez-civil',
+      website: 'https://martinez-civil.org'
+    }
   },
   {
     id: 'usr_elena',
@@ -52,7 +63,12 @@ export const mockUsers = [
     bio: 'Registered nurse & senior care advocate. Helping isolated elderly neighbors stay warm and nourished.',
     skills: ['Nursing Care', 'Elderly Mobility', 'Medication Logistics', 'Russian Translation'],
     badges: ['Medical Volunteer', 'Registered Nurse'],
-    location: { address: 'Pine Crest Ave, Maplewood', lat: 37.7689, lng: -122.4285 }
+    location: { address: 'Pine Crest Ave, Maplewood', lat: 37.7689, lng: -122.4285 },
+    socialLinks: {
+      linkedin: 'https://linkedin.com/in/elena-rostova-rn',
+      twitter: 'https://x.com/elena_caremesh',
+      instagram: 'https://instagram.com/elena_communitycare'
+    }
   },
   {
     id: 'usr_marcus',
@@ -62,7 +78,13 @@ export const mockUsers = [
     bio: 'Urban farmer and educator. Managing the Highland Ridge Orchard and mutual food hub.',
     skills: ['Permaculture', 'Gleaning Logistics', 'Tool Sharpening', 'Solar Installation'],
     badges: ['Food Hub Lead', 'Urban Grower'],
-    location: { address: 'Highland Ridge Way, Maplewood', lat: 37.7912, lng: -122.4044 }
+    location: { address: 'Highland Ridge Way, Maplewood', lat: 37.7912, lng: -122.4044 },
+    socialLinks: {
+      twitter: 'https://x.com/marcus_grower',
+      instagram: 'https://instagram.com/highland_ridge_orchard',
+      github: 'https://github.com/marcus-thorne',
+      website: 'https://highlandridgefoodhub.org'
+    }
   },
   {
     id: 'usr_priya',
@@ -72,7 +94,33 @@ export const mockUsers = [
     bio: 'Environmental scientist specializing in urban stormwater management and water quality testing.',
     skills: ['Hydrology', 'Water Quality Testing', 'Environmental Impact Analysis', 'Drone Mapping'],
     badges: ['Science Contributor', 'Trained Hydrologist'],
-    location: { address: 'Elm St Creek Path, Maplewood', lat: 37.7815, lng: -122.4250 }
+    location: { address: 'Elm St Creek Path, Maplewood', lat: 37.7815, lng: -122.4250 },
+    socialLinks: {
+      twitter: 'https://x.com/priya_ecowatch',
+      linkedin: 'https://linkedin.com/in/priya-sharma-hydrology',
+      github: 'https://github.com/priya-sharma-eco',
+      website: 'https://willowcreek-watershed.org'
+    }
+  },
+  {
+    id: 'usr_caleb',
+    name: 'Caleb Zothansanga',
+    handle: '@caleb_admin',
+    email: 'caleb.zothansanga@gmail.com',
+    role: 'System Administrator',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    bio: 'Primary System Administrator for CareMesh Civic Resilience Network. Managing mutual aid infrastructure, dispatch pipelines, and platform integrity.',
+    skills: ['System Administration', 'Platform Security', 'Mutual Aid Governance', 'Emergency Dispatch', 'Field Radio'],
+    badges: ['System Administrator', 'Verified Administrator', 'Community Leader'],
+    location: { address: 'Maplewood Central Station, CA', neighborhood: 'Central Corridor', lat: 37.7749, lng: -122.4194 },
+    socialLinks: {
+      twitter: 'https://x.com/caleb_zothan',
+      linkedin: 'https://linkedin.com/in/caleb-zothansanga',
+      github: 'https://github.com/caleb-zothansanga',
+      website: 'https://caremesh.org'
+    },
+    privacySettings: { showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true },
+    stats: { contributions: 50, resourcesShared: 10, plansJoined: 5, requestsFulfilled: 12 }
   }
 ];
 
@@ -1169,6 +1217,100 @@ export const mockRequests = [
     matchedResourceIds: ['res_02'],
     quickActions: [],
     responses: []
+  },
+  {
+    id: 'req_caleb_01',
+    title: 'Emergency Mesh Radio Relay Installation at Highland Ridge',
+    description: 'Deploying a permanent solar-powered LoRa mesh radio repeater tower to ensure neighborhood communications survive regional grid outages.',
+    category: 'equipment',
+    location: {
+      address: 'Highland Ridge Lookout Tower, Maplewood',
+      lat: 37.7925,
+      lng: -122.4035
+    },
+    urgency: 'high',
+    requiredSkills: ['Radio Electronics', 'Tower Rigging', 'Solar Wiring'],
+    requiredResources: ['LoRa Repeater Kit', '100W Solar Panel', 'Mast Mounts'],
+    peopleNeeded: 3,
+    peopleJoined: 3,
+    progressPercentage: 100,
+    status: 'fulfilled',
+    communityId: 'com_01',
+    visibility: 'public',
+    requester: mockUsers[5], // Caleb Zothansanga
+    createdAt: '2 days ago',
+    scheduledDate: 'Sunday, Oct 20',
+    scheduledTime: '9:00 AM – 2:00 PM',
+    evidenceIds: [],
+    matchedResourceIds: [],
+    quickActions: [],
+    responses: [
+      { user: mockUsers[1], role: 'Tower rigging & bracket installation', time: '2 days ago' },
+      { user: mockUsers[3], role: 'Highland site access & power staging', time: '2 days ago' },
+      { user: currentUser, role: 'Frequency calibration & packet testing', time: '2 days ago' }
+    ]
+  },
+  {
+    id: 'req_caleb_02',
+    title: 'Backup Solar Battery Bank Deployment at Eastside Center',
+    description: 'Installing lithium iron phosphate battery backup arrays to keep medical refrigeration and community phone charging active during outages.',
+    category: 'labor',
+    location: {
+      address: 'Eastside Aid Center & Resilience Hub, Maplewood',
+      lat: 37.7750,
+      lng: -122.4190
+    },
+    urgency: 'medium',
+    requiredSkills: ['Electrical Wiring', 'Battery Inverter Setup'],
+    requiredResources: ['LiFePO4 Battery Unit', 'Pure Sine Inverter', 'Heavy Gauged Cables'],
+    peopleNeeded: 4,
+    peopleJoined: 3,
+    progressPercentage: 75,
+    status: 'open',
+    communityId: 'com_01',
+    visibility: 'public',
+    requester: mockUsers[5], // Caleb Zothansanga
+    createdAt: '1 day ago',
+    scheduledDate: 'Saturday, Nov 2',
+    scheduledTime: '10:00 AM – 3:00 PM',
+    evidenceIds: [],
+    matchedResourceIds: [],
+    quickActions: [],
+    responses: [
+      { user: mockUsers[4], role: 'Inverter safety and grounding inspection', time: '18 hours ago' },
+      { user: mockUsers[2], role: 'Cold-chain vaccine fridge power circuit check', time: '12 hours ago' }
+    ]
+  },
+  {
+    id: 'req_caleb_03',
+    title: 'Elderly Transit & Warming Shuttle Route Coordination',
+    description: 'Coordinating AWD vehicles to safely transport vulnerable elderly neighbors from unheated homes to the Southside Warming Shelter.',
+    category: 'transportation',
+    location: {
+      address: 'Pine Crest Manor to Central Shelter Corridor, Maplewood',
+      lat: 37.7695,
+      lng: -122.4280
+    },
+    urgency: 'critical',
+    requiredSkills: ['4WD Driving', 'Senior Assistance', 'First Aid'],
+    requiredResources: ['AWD Vehicles', 'Wheelchair Transfer Belts', 'Fleece Blankets'],
+    peopleNeeded: 2,
+    peopleJoined: 2,
+    progressPercentage: 100,
+    status: 'fulfilled',
+    communityId: 'com_02',
+    visibility: 'public',
+    requester: mockUsers[2], // Elena Rostova
+    createdAt: '3 days ago',
+    scheduledDate: 'Friday, Oct 18',
+    scheduledTime: '1:00 PM – 5:00 PM',
+    evidenceIds: [],
+    matchedResourceIds: [],
+    quickActions: [],
+    responses: [
+      { user: mockUsers[5], role: 'Route logistics coordinator & AWD vehicle driver', time: '3 days ago' },
+      { user: mockUsers[1], role: 'Wheelchair transfer support', time: '3 days ago' }
+    ]
   }
 ];
 
