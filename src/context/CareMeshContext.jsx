@@ -887,10 +887,20 @@ export const CareMeshProvider = ({ children }) => {
     const newId = `evt_${Date.now()}`;
     const coords = resolveCoordinates(data);
 
+    const isCustomEventType = Boolean(data.isCustomEventType || data.customEventType);
+    const customEventType = isCustomEventType ? (data.customEventType || data.eventType || 'Custom Activity').trim() : null;
+    const resolvedEventType = isCustomEventType ? 'custom' : (data.eventType || 'community_activity');
+    const attendeePrivacy = data.attendeePrivacy || 'public';
+    const chatPrivacy = data.chatPrivacy || 'members_only';
+
     const newEvt = {
       id: newId,
       title: data.title.trim(),
-      eventType: data.eventType || 'community_activity',
+      eventType: resolvedEventType,
+      customEventType,
+      isCustomEventType,
+      attendeePrivacy,
+      chatPrivacy,
       description: data.description,
       location: {
         address: data.locationAddress || 'Maplewood Community Hub',
@@ -915,7 +925,10 @@ export const CareMeshProvider = ({ children }) => {
     closeCreateModal();
     api.projects.create({
       title: data.title.trim(),
-      eventType: data.eventType || 'community_activity',
+      eventType: resolvedEventType,
+      customEventType,
+      attendeePrivacy,
+      chatPrivacy,
       description: data.description,
       location: newEvt.location,
       date: newEvt.date,
@@ -1787,6 +1800,17 @@ export const CareMeshProvider = ({ children }) => {
 
   const sendEventChatMessage = (eventId, text) => {
     if (!text || !text.trim()) return;
+
+    const targetEvent = (events || []).find(e => e.id === eventId);
+    if (targetEvent && targetEvent.chatPrivacy === 'members_only') {
+      const isMember = targetEvent.participants?.some(p => p.id === currentUser?.id);
+      const isOrganizer = targetEvent.organizer?.id === currentUser?.id || targetEvent.organizerId === currentUser?.id;
+      if (!isMember && !isOrganizer) {
+        showToast('Coordination chat is restricted to registered event members.', 'error');
+        return;
+      }
+    }
+
     setEvents(prev => prev.map(evt => {
       if (evt.id === eventId) {
         return {

@@ -49,6 +49,14 @@ const EditBioForm = ({ onClose }) => {
     whatsapp: currentUser?.socialLinks?.whatsapp || '',
     website: currentUser?.socialLinks?.website || ''
   });
+  const [hideSocialLinks, setHideSocialLinks] = useState(
+    Boolean(
+      currentUser?.hideSocialLinks ||
+      currentUser?.socialLinks?.hideSocialLinks ||
+      currentUser?.socialLinks?.hidden ||
+      currentUser?.privacySettings?.hideSocialLinks
+    )
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -78,6 +86,11 @@ const EditBioForm = ({ onClose }) => {
           lng: userLocation.lng
         },
         skills: skillsArray,
+        hideSocialLinks,
+        privacySettings: {
+          ...currentUser?.privacySettings,
+          hideSocialLinks
+        },
         socialLinks: {
           twitter: socialLinks.twitter?.trim() || '',
           linkedin: socialLinks.linkedin?.trim() || '',
@@ -85,7 +98,8 @@ const EditBioForm = ({ onClose }) => {
           instagram: socialLinks.instagram?.trim() || '',
           facebook: socialLinks.facebook?.trim() || '',
           whatsapp: socialLinks.whatsapp?.trim() || '',
-          website: socialLinks.website?.trim() || ''
+          website: socialLinks.website?.trim() || '',
+          hideSocialLinks
         }
       });
 
@@ -202,7 +216,29 @@ const EditBioForm = ({ onClose }) => {
             </span>
           </div>
 
-          <div className="d-flex flex-column gap-2">
+          {/* Hide / Show Social Links Toggle */}
+          <div className="d-flex align-center justify-between p-2 rounded mb-2.5" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+            <div className="d-flex align-center gap-2">
+              <span style={{ fontSize: '1rem' }}>🔒</span>
+              <div>
+                <span className="font-bold text-xs text-primary d-block">Hide Social Links on Profile</span>
+                <span className="text-xs text-muted" style={{ fontSize: '0.7rem' }}>
+                  Keep social media profiles private from other neighbors and public visitors.
+                </span>
+              </div>
+            </div>
+            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={hideSocialLinks}
+                onChange={(e) => setHideSocialLinks(e.target.checked)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <span className="text-xs font-semibold text-secondary">{hideSocialLinks ? 'Hidden' : 'Visible'}</span>
+            </label>
+          </div>
+
+          <div className="d-flex flex-column gap-2" style={{ opacity: hideSocialLinks ? 0.65 : 1, transition: 'opacity 0.2s' }}>
             {/* X / Twitter */}
             <div className="d-flex align-center gap-2">
               <div 

@@ -542,7 +542,7 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
                       <div className="min-w-0 flex-1">
                         <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
                           <span className="badge badge-purple text-xs text-uppercase font-semibold">
-                            {evt.eventType?.replace('_', ' ') || 'Event'}
+                            {evt.customEventType || evt.eventType?.replace('_', ' ') || 'Event'}
                           </span>
                           <span className={`badge ${isOrganizer ? 'badge-primary' : 'badge-emerald'} text-xs`}>
                             {isOrganizer ? 'Host' : 'Attending'}

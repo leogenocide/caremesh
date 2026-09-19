@@ -184,6 +184,17 @@ export function initDatabase() {
       db.prepare("ALTER TABLE requests ADD COLUMN scheduled_time TEXT").run();
     }
 
+    const projCols = db.prepare("PRAGMA table_info(projects)").all();
+    if (!projCols.some(c => c.name === 'custom_event_type')) {
+      db.prepare("ALTER TABLE projects ADD COLUMN custom_event_type TEXT").run();
+    }
+    if (!projCols.some(c => c.name === 'attendee_privacy')) {
+      db.prepare("ALTER TABLE projects ADD COLUMN attendee_privacy TEXT DEFAULT 'public'").run();
+    }
+    if (!projCols.some(c => c.name === 'chat_privacy')) {
+      db.prepare("ALTER TABLE projects ADD COLUMN chat_privacy TEXT DEFAULT 'members_only'").run();
+    }
+
     const evCols = db.prepare("PRAGMA table_info(evidence)").all();
     if (!evCols.some(c => c.name === 'parent_evidence_id')) {
       db.prepare("ALTER TABLE evidence ADD COLUMN parent_evidence_id TEXT").run();

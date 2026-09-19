@@ -110,13 +110,16 @@ export const EvidenceItemCard = ({
               className="user-profile-trigger"
               onClick={(e) => {
                 e.stopPropagation();
-                if (evidence.authorId) {
-                  viewUserProfile({ id: evidence.authorId, name: evidence.author });
+                const target = evidence.authorId || evidence.author_id
+                  ? { id: evidence.authorId || evidence.author_id, name: typeof evidence.author === 'string' ? evidence.author : evidence.author?.name }
+                  : evidence.author;
+                if (target) {
+                  viewUserProfile(target);
                 }
               }}
-              title={`View ${evidence.author}'s profile`}
+              title={`View ${typeof evidence.author === 'string' ? evidence.author : evidence.author?.name || 'Author'}'s profile`}
             >
-              Provided by <strong className="user-profile-name">{evidence.author}</strong>
+              Provided by <strong className="user-profile-name">{typeof evidence.author === 'string' ? evidence.author : evidence.author?.name || 'Community Member'}</strong>
             </span>
             <span>•</span>
             <span>{evidence.timestamp || 'Recorded on ledger'}</span>

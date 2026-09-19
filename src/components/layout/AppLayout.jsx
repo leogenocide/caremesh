@@ -43,6 +43,7 @@ export const AppLayout = ({ children }) => {
     closeLogOutcomeModal,
     selectedEventChat,
     setSelectedEventChat,
+    events,
     selectedUserProfile,
     closeUserProfile
   } = useCareMesh();
@@ -115,7 +116,7 @@ export const AppLayout = ({ children }) => {
         <EventDetailModal
           isOpen={Boolean(selectedEventChat)}
           onClose={() => setSelectedEventChat(null)}
-          event={selectedEventChat}
+          event={events?.find(e => e.id === selectedEventChat.id) || selectedEventChat}
         />
       )}
 

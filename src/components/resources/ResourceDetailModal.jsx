@@ -29,7 +29,8 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
     canUserManage,
     openRequestResourceModal,
     updateLoanAssignmentStatus,
-    openShareSocialModal
+    openShareSocialModal,
+    viewUserProfile
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'loans' | 'matching' | 'contact'
@@ -193,14 +194,23 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
 
           {/* Provider Card */}
           {resource.provider && (
-            <div className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0">
+            <div 
+              className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0 cursor-pointer card-interactive user-profile-trigger"
+              onClick={() => {
+                if (viewUserProfile) {
+                  onClose();
+                  viewUserProfile(resource.provider);
+                }
+              }}
+              title={`View ${resource.provider.name}'s profile`}
+            >
               <img
                 src={resource.provider.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80'}
                 alt={resource.provider.name}
                 style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
               />
               <div className="min-w-0">
-                <span className="text-xs font-bold text-primary d-block text-truncate" style={{ maxWidth: '120px' }}>{resource.provider.name}</span>
+                <span className="text-xs font-bold text-primary d-block text-truncate user-profile-name" style={{ maxWidth: '120px' }}>{resource.provider.name}</span>
                 <span className="text-xs text-brand font-semibold d-block">{resource.provider.handle || '@provider'}</span>
               </div>
             </div>

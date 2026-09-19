@@ -1550,7 +1550,11 @@ export const mockEvents = [
   {
     id: 'evt_01',
     title: 'Willow Creek Riparian Tree Planting & Silt Cleanup Work Party',
-    eventType: 'work_party',
+    eventType: 'custom',
+    customEventType: 'Riparian Watershed Planting',
+    isCustomEventType: true,
+    attendeePrivacy: 'public',
+    chatPrivacy: 'members_only',
     description: 'Community riparian restoration session to plant 80 native willow saplings and clear storm sediment basins before heavy rains.',
     location: {
       address: 'Willow Creek Trailhead, Maplewood',
@@ -1575,6 +1579,10 @@ export const mockEvents = [
     id: 'evt_02',
     title: 'Emergency Sandbagging Operation at Elm Street Crossing',
     eventType: 'assistance_operation',
+    customEventType: null,
+    isCustomEventType: false,
+    attendeePrivacy: 'members_only',
+    chatPrivacy: 'members_only',
     description: 'Pre-emptive flood barrier staging along low-lying river bank to protect residential culverts during forecast precipitation.',
     location: {
       address: 'River Road & Elm St Culvert Depository, Maplewood',
@@ -1598,6 +1606,10 @@ export const mockEvents = [
     id: 'evt_03',
     title: 'Community Solar Microgrid & Water Telemetry Workshop',
     eventType: 'workshop',
+    customEventType: null,
+    isCustomEventType: false,
+    attendeePrivacy: 'public',
+    chatPrivacy: 'public',
     description: 'Hands-on practical session teaching neighbors how to build and maintain open-source IoT water conductivity sensors and off-grid battery monitors.',
     location: {
       address: 'Maplewood Community Center, Workshop Room B',

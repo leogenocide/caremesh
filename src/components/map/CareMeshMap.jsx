@@ -35,6 +35,7 @@ const TILE_LAYERS = {
   osm: {
     id: 'osm',
     name: 'Street View',
+    shortName: 'Streets',
     icon: '🗺️',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
@@ -42,6 +43,7 @@ const TILE_LAYERS = {
   satellite: {
     id: 'satellite',
     name: 'Satellite',
+    shortName: 'Sat',
     icon: '🛰️',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, USGS, Maxar'
@@ -49,6 +51,7 @@ const TILE_LAYERS = {
   humanitarian: {
     id: 'humanitarian',
     name: 'Humanitarian',
+    shortName: 'Aid',
     icon: '🤝',
     url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors, HOT'
@@ -56,6 +59,7 @@ const TILE_LAYERS = {
   dark: {
     id: 'dark',
     name: 'Dark Mode',
+    shortName: 'Dark',
     icon: '🌙',
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
     attribution: '&copy; OpenStreetMap contributors'
@@ -128,7 +132,8 @@ export const CareMeshMap = ({
     isRequestVisibleToUser,
     openCreateModal,
     inspectEntity,
-    openEntityDetails
+    openEntityDetails,
+    viewUserProfile
   } = useCareMesh();
 
   const hasProvenance = useCallback((item, type) => {
@@ -790,6 +795,8 @@ export const CareMeshMap = ({
       const safeAddress = escapeHtml(item.location?.address || item.address || 'Site coordinate');
       const extraMeta = item.severity || item.urgency || item.status;
       const canInspect = hasProvenance(item, type);
+      const poster = item.author || item.organizer || item.requester || item.provider || item.proposer;
+      const posterName = poster ? (typeof poster === 'string' ? poster : poster.name) : null;
 
       container.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px;">
@@ -801,11 +808,19 @@ export const CareMeshMap = ({
         <div style="font-weight: 700; font-size: 13px; color: #0f172a; margin-bottom: 4px; line-height: 1.35;">
           ${safeTitle}
         </div>
-        ${safeDesc ? `<div style="font-size: 11px; color: #475569; margin-bottom: 8px; line-height: 1.4;">${safeDesc}</div>` : ''}
-        <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        ${safeDesc ? `<div style="font-size: 11px; color: #475569; margin-bottom: 6px; line-height: 1.4;">${safeDesc}</div>` : ''}
+        <div style="font-size: 11px; color: #64748b; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
           <span>📍</span>
           <span style="overflow: hidden; text-overflow: ellipsis;">${safeAddress}</span>
         </div>
+        ${posterName ? `
+          <div style="font-size: 11px; color: #64748b; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span>👤</span>
+            <span style="overflow: hidden; text-overflow: ellipsis;">
+              By <strong class="btn-popup-author-link" style="color: #0284c7; cursor: pointer; text-decoration: underline;">${escapeHtml(posterName)}</strong>
+            </span>
+          </div>
+        ` : ''}
         ${extraNotice ? `<div style="font-size: 10.5px; color: #0284c7; font-weight: 600; margin-bottom: 8px;">${extraNotice}</div>` : ''}
         <div style="display: flex; gap: 6px; margin-top: 6px;">
           <button type="button" class="btn-popup-open-details" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; background: #0284c7; color: #ffffff; border: none; padding: 7px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: background 0.15s ease; box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);">
@@ -819,6 +834,14 @@ export const CareMeshMap = ({
           ` : ''}
         </div>
       `;
+
+      const authorLink = container.querySelector('.btn-popup-author-link');
+      if (authorLink && poster) {
+        authorLink.addEventListener('click', (e) => {
+          e.stopPropagation();
+          viewUserProfile(poster);
+        });
+      }
 
       const openBtn = container.querySelector('.btn-popup-open-details');
       if (openBtn) {
@@ -1078,7 +1101,7 @@ export const CareMeshMap = ({
         });
       }
     });
-  }, [createClusterIcon, createCustomIcon, onSelectEntity, handleOpenDetails, hasProvenance, inspectEntity]);
+  }, [createClusterIcon, createCustomIcon, onSelectEntity, handleOpenDetails, hasProvenance, inspectEntity, viewUserProfile]);
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -1317,27 +1340,27 @@ export const CareMeshMap = ({
   }, [observations, safetyReports, visibleRequests, resources, matchesQuery, matchesCustomPinMode, customPinMode]);
 
   const filterButtons = [
-    { id: 'all', label: 'All Items', icon: <Layers size={14} />, count: filteredCounts.all },
-    { id: 'safety', label: 'Safety Hazards', icon: <ShieldAlert size={14} className="text-rose" />, count: filteredCounts.safety },
-    { id: 'requests', label: 'Help Requests', icon: <HandHeart size={14} className="text-amber" />, count: filteredCounts.requests },
-    { id: 'resources', label: 'Available Resources', icon: <Package size={14} className="text-brand" />, count: filteredCounts.resources },
-    { id: 'observations', label: 'Observations', icon: <Eye size={14} />, count: filteredCounts.observations }
+    { id: 'all', label: 'All Items', shortLabel: 'All', icon: <Layers size={14} />, count: filteredCounts.all },
+    { id: 'safety', label: 'Safety Hazards', shortLabel: 'Hazards', icon: <ShieldAlert size={14} className="text-rose" />, count: filteredCounts.safety },
+    { id: 'requests', label: 'Help Requests', shortLabel: 'Requests', icon: <HandHeart size={14} className="text-amber" />, count: filteredCounts.requests },
+    { id: 'resources', label: 'Available Resources', shortLabel: 'Resources', icon: <Package size={14} className="text-brand" />, count: filteredCounts.resources },
+    { id: 'observations', label: 'Observations', shortLabel: 'Observations', icon: <Eye size={14} />, count: filteredCounts.observations }
   ];
 
   return (
     <div className="d-flex flex-column gap-2" style={{ width: '100%' }}>
       {/* Filter Chips Bar */}
-      <div className="d-flex align-center justify-between gap-2 flex-wrap">
-        <div className="d-flex gap-2 flex-wrap">
+      <div className="map-filter-header d-flex align-center justify-between gap-2 flex-wrap">
+        <div className="map-filter-chips-bar">
           {filterButtons.map(fb => (
             <button
               key={fb.id}
-              className={`btn btn-sm ${activeFilter === fb.id ? 'btn-primary' : 'btn-secondary'}`}
+              className={`map-filter-chip btn btn-sm ${activeFilter === fb.id ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveFilter(fb.id)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               {fb.icon}
-              <span>{fb.label}</span>
+              <span className="d-none d-sm-inline">{fb.label}</span>
+              <span className="d-inline d-sm-none">{fb.shortLabel || fb.label}</span>
               <span
                 style={{
                   padding: '1px 6px',
@@ -1354,7 +1377,7 @@ export const CareMeshMap = ({
           ))}
         </div>
 
-        <div className="text-xs text-muted d-flex align-center gap-2">
+        <div className="text-xs text-muted d-flex align-center gap-2 map-filter-hint">
           {currentZoom <= 11 && (
             <span 
               className="badge badge-brand animate-fade-in"
@@ -1488,10 +1511,15 @@ export const CareMeshMap = ({
               }}
             >
               <Sparkles size={13} className={customPinMode !== 'none' ? 'text-amber-300' : 'text-indigo-600'} />
-              <span>
+              <span className="d-none d-sm-inline">
                 {customPinMode === 'none'
                   ? 'Custom Pins'
                   : `Custom Pins (${geojsonPoints.length})`}
+              </span>
+              <span className="d-inline d-sm-none">
+                {customPinMode === 'none'
+                  ? 'Custom'
+                  : `Custom (${geojsonPoints.length})`}
               </span>
               <ChevronDown size={11} style={{ opacity: 0.8, transform: isCustomPinMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
             </button>
@@ -1690,7 +1718,8 @@ export const CareMeshMap = ({
             style={{ padding: '4px 7px', fontSize: '0.72rem' }}
           >
             <Navigation size={13} className={isLocating ? 'animate-spin text-amber' : 'text-slate-600'} />
-            <span>{isLocating ? 'Locating...' : 'My Location'}</span>
+            <span className="d-none d-sm-inline">{isLocating ? 'Locating...' : 'My Location'}</span>
+            <span className="d-inline d-sm-none">{isLocating ? 'Locating...' : 'Locate'}</span>
           </button>
 
           <div className="map-control-divider" />
@@ -1705,7 +1734,8 @@ export const CareMeshMap = ({
               style={{ padding: '4px 7px', fontSize: '0.72rem' }}
             >
               <span>{TILE_LAYERS[activeBasemap]?.icon}</span>
-              <span>{TILE_LAYERS[activeBasemap]?.name}</span>
+              <span className="d-none d-sm-inline">{TILE_LAYERS[activeBasemap]?.name}</span>
+              <span className="d-inline d-sm-none">{TILE_LAYERS[activeBasemap]?.shortName || TILE_LAYERS[activeBasemap]?.name}</span>
               <ChevronDown size={11} style={{ opacity: 0.8, transform: isBasemapMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
             </button>
 

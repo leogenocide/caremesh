@@ -48,10 +48,18 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editEventType, setEditEventType] = useState('community_activity');
+  const [editIsCustomEventType, setEditIsCustomEventType] = useState(false);
+  const [editCustomEventType, setEditCustomEventType] = useState('');
+  const [editAttendeePrivacy, setEditAttendeePrivacy] = useState('public');
+  const [editChatPrivacy, setEditChatPrivacy] = useState('members_only');
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editLocation, setEditLocation] = useState({ address: '', lat: null, lng: null });
   const [editMaxParticipants, setEditMaxParticipants] = useState(20);
+
+  const isUserJoined = Boolean(event?.participants?.some(p => p.id === currentUser?.id));
+  const canViewAttendees = Boolean(event?.attendeePrivacy !== 'members_only' || isUserJoined || canManage);
+  const canAccessChat = Boolean(event?.chatPrivacy !== 'members_only' || isUserJoined || canManage);
 
   const filteredAttendees = useMemo(() => {
     const list = event?.participants || [];
@@ -65,7 +73,6 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
 
   if (!event) return null;
 
-  const isUserJoined = event.participants?.some(p => p.id === currentUser?.id);
   const linkedCheck = event?.id
     ? (readinessChecks || []).find(rc => rc.eventId === event.id || rc.event_id === event.id)
     : null;
@@ -73,7 +80,12 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
   const handleStartEdit = () => {
     setEditTitle(event.title || '');
     setEditDescription(event.description || '');
-    setEditEventType(event.eventType || 'community_activity');
+    const isCustom = Boolean(event.isCustomEventType || event.customEventType || event.eventType === 'custom');
+    setEditIsCustomEventType(isCustom);
+    setEditCustomEventType(event.customEventType || (isCustom ? event.eventType : ''));
+    setEditEventType(isCustom ? '__custom__' : (event.eventType || 'community_activity'));
+    setEditAttendeePrivacy(event.attendeePrivacy || 'public');
+    setEditChatPrivacy(event.chatPrivacy || 'members_only');
     setEditDate(event.date || '');
     setEditTime(event.time || '');
     setEditLocation({
@@ -91,10 +103,16 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
       if (showToast) showToast('Please enter a title for the activity.', 'error');
       return;
     }
+    const isCustom = editIsCustomEventType || editEventType === '__custom__';
+    const finalCustomName = editCustomEventType.trim() || 'Custom Activity';
     updateEvent(event.id, {
       title: editTitle.trim(),
       description: editDescription.trim(),
-      eventType: editEventType,
+      eventType: isCustom ? 'custom' : editEventType,
+      isCustomEventType: isCustom,
+      customEventType: isCustom ? finalCustomName : null,
+      attendeePrivacy: editAttendeePrivacy,
+      chatPrivacy: editChatPrivacy,
       date: editDate.trim(),
       time: editTime.trim(),
       location: {
@@ -168,16 +186,35 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
                   <label className="form-label text-xs font-semibold text-secondary mb-1">Activity Type</label>
                   <select
                     className="form-input"
-                    value={editEventType}
-                    onChange={(e) => setEditEventType(e.target.value)}
+                    value={editIsCustomEventType ? '__custom__' : editEventType}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setEditIsCustomEventType(true);
+                      } else {
+                        setEditIsCustomEventType(false);
+                        setEditEventType(e.target.value);
+                      }
+                    }}
                   >
                     <option value="community_activity">Community Activity</option>
+                    <option value="assistance_operation">Assistance Operation</option>
                     <option value="clean_up">Clean Up & Habitat</option>
                     <option value="repair_clinic">Repair Clinic</option>
                     <option value="workshop">Skill Share Workshop</option>
                     <option value="mutual_aid_prep">Mutual Aid Prep</option>
                     <option value="neighborhood_meeting">Neighborhood Assembly</option>
+                    <option value="__custom__">✨ Custom Activity Type...</option>
                   </select>
+                  {editIsCustomEventType && (
+                    <input
+                      type="text"
+                      className="form-input mt-1.5"
+                      value={editCustomEventType}
+                      onChange={(e) => setEditCustomEventType(e.target.value)}
+                      placeholder="e.g. Riparian Watershed Planting..."
+                      required={editIsCustomEventType}
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -234,6 +271,37 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
                 />
               </div>
 
+              {/* Privacy & Member Access Controls */}
+              <div className="p-2.5 rounded" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)' }}>
+                <span className="font-bold text-xs text-primary d-block mb-1.5">
+                  🔒 Privacy & Member Access Controls
+                </span>
+                <div className="grid-2 gap-2 text-xs">
+                  <div>
+                    <label className="form-label text-xs font-semibold text-secondary mb-1">Attendee Roster Visibility</label>
+                    <select
+                      className="form-input text-xs"
+                      value={editAttendeePrivacy}
+                      onChange={(e) => setEditAttendeePrivacy(e.target.value)}
+                    >
+                      <option value="public">Public (Anyone can view roster)</option>
+                      <option value="members_only">Members Only (Attendees & Host only)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label text-xs font-semibold text-secondary mb-1">Coordination Chat Access</label>
+                    <select
+                      className="form-input text-xs"
+                      value={editChatPrivacy}
+                      onChange={(e) => setEditChatPrivacy(e.target.value)}
+                    >
+                      <option value="members_only">Members Only (Registered attendees only)</option>
+                      <option value="public">Public (Open to everyone)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div className="d-flex align-center justify-end gap-2 mt-1">
                 <button
                   type="button"
@@ -253,10 +321,22 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
           </div>
         ) : (
           <div className="card p-4" style={{ background: 'var(--bg-subtle)' }}>
-            <div className="d-flex align-center justify-between mb-2">
-              <span className="badge badge-purple text-xs text-uppercase font-semibold">
-                {event.eventType?.replace('_', ' ')}
-              </span>
+            <div className="d-flex align-center justify-between mb-2 flex-wrap gap-1">
+              <div className="d-flex align-center gap-1.5 flex-wrap">
+                <span className="badge badge-purple text-xs text-uppercase font-semibold">
+                  {event.customEventType || event.eventType?.replace('_', ' ')}
+                </span>
+                {event.attendeePrivacy === 'members_only' && (
+                  <span className="badge badge-secondary text-xs" title="Attendee list is visible only to confirmed members and host">
+                    🔒 Private Roster
+                  </span>
+                )}
+                {event.chatPrivacy === 'members_only' && (
+                  <span className="badge badge-secondary text-xs" title="Coordination chat is restricted to confirmed members">
+                    🔒 Members-Only Chat
+                  </span>
+                )}
+              </div>
               <span className="badge badge-primary text-xs font-semibold">
                 {event.participants?.length || 0} / {event.maxParticipants} Attendees
               </span>
@@ -318,93 +398,129 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
               </div>
             )}
 
-            {/* Registered Attendees Roster (Scalable for High Volume) */}
-            <div className="card p-2.5 mt-3 rounded" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
-              <div className="d-flex align-center justify-between gap-2 mb-2 flex-wrap">
-                <div className="d-flex align-center gap-1.5">
-                  <Users size={14} className="text-brand flex-shrink-0" />
+            {/* Registered Attendees Roster (with Privacy Protection) */}
+            {!canViewAttendees ? (
+              <div className="card p-3 mt-3 rounded text-center" style={{ background: '#ffffff', border: '1px dashed var(--border-light)' }}>
+                <div className="d-flex align-center justify-center gap-1.5 mb-1">
+                  <Users size={14} className="text-muted" />
                   <span className="font-bold text-xs text-primary">
-                    Registered Attendees ({event.participants?.length || 0} / {event.maxParticipants || 20})
+                    Attendee Roster is Members-Only ({event.participants?.length || 0} / {event.maxParticipants || 20} Registered)
                   </span>
                 </div>
-                {(event.participants?.length || 0) > 5 && (
-                  <div className="position-relative d-flex align-center" style={{ minWidth: '150px' }}>
-                    <Search size={11} className="position-absolute text-muted" style={{ left: '6px' }} />
-                    <input
-                      type="text"
-                      className="form-input text-xs"
-                      style={{ paddingLeft: '22px', height: '24px', fontSize: '0.68rem' }}
-                      placeholder="Filter attendees..."
-                      value={attendeeSearch}
-                      onChange={(e) => setAttendeeSearch(e.target.value)}
-                    />
+                <p className="text-xs text-muted mb-2" style={{ fontSize: '0.72rem' }}>
+                  The organizer has restricted attendee list visibility to registered members and the host only.
+                </p>
+                {!isUserJoined && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs d-inline-flex align-center gap-1 mx-auto"
+                    onClick={() => {
+                      joinEvent(event.id);
+                      if (showToast) showToast(`You joined "${event.title}"!`, 'success');
+                    }}
+                  >
+                    <Users size={12} />
+                    <span>Join Activity to View Attendees</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="card p-2.5 mt-3 rounded" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+                <div className="d-flex align-center justify-between gap-2 mb-2 flex-wrap">
+                  <div className="d-flex align-center gap-1.5">
+                    <Users size={14} className="text-brand flex-shrink-0" />
+                    <span className="font-bold text-xs text-primary">
+                      Registered Attendees ({event.participants?.length || 0} / {event.maxParticipants || 20})
+                    </span>
                   </div>
-                )}
-              </div>
+                  {(event.participants?.length || 0) > 5 && (
+                    <div className="position-relative d-flex align-center" style={{ minWidth: '150px' }}>
+                      <Search size={11} className="position-absolute text-muted" style={{ left: '6px' }} />
+                      <input
+                        type="text"
+                        className="form-input text-xs"
+                        style={{ paddingLeft: '22px', height: '24px', fontSize: '0.68rem' }}
+                        placeholder="Filter attendees..."
+                        value={attendeeSearch}
+                        onChange={(e) => setAttendeeSearch(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
 
-              {/* Bounded Scrollable Attendees List */}
-              <div 
-                className="d-flex flex-column gap-1.5" 
-                style={{ 
-                  maxHeight: '160px', 
-                  overflowY: 'auto', 
-                  paddingRight: '4px' 
-                }}
-              >
-                {filteredAttendees.length > 0 ? (
-                  filteredAttendees.map((p, idx) => {
-                    const isHost = p.id === event.organizer?.id || p.id === event.organizerId;
-                    return (
-                      <div 
-                        key={p.id || idx}
-                        className="p-1.5 rounded d-flex align-center justify-between gap-2"
-                        style={{ background: 'var(--bg-subtle)' }}
-                      >
+                {/* Bounded Scrollable Attendees List */}
+                <div 
+                  className="d-flex flex-column gap-1.5" 
+                  style={{ 
+                    maxHeight: '160px', 
+                    overflowY: 'auto', 
+                    paddingRight: '4px' 
+                  }}
+                >
+                  {filteredAttendees.length > 0 ? (
+                    filteredAttendees.map((p, idx) => {
+                      const isHost = p.id === event.organizer?.id || p.id === event.organizerId;
+                      return (
                         <div 
-                          className="d-flex align-center gap-2 min-w-0 cursor-pointer"
-                          onClick={() => {
-                            if (viewUserProfile) {
-                              onClose();
-                              viewUserProfile(p);
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          title={`View ${p.name}'s Profile`}
+                          key={p.id || idx}
+                          className="p-1.5 rounded d-flex align-center justify-between gap-2"
+                          style={{ background: 'var(--bg-subtle)' }}
                         >
-                          <img
-                            src={p.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                            alt={p.name}
-                            style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
-                          />
-                          <div className="min-w-0">
-                            <span className="font-semibold text-xs text-primary d-block text-truncate hover-underline">
-                              {p.name}
-                            </span>
-                            <span className="text-xs text-muted d-block text-truncate" style={{ fontSize: '0.66rem' }}>
-                              {p.handle || `@user_${p.id?.slice(-4) || 'neighbor'}`}
-                            </span>
+                          <div 
+                            className="d-flex align-center gap-2 min-w-0 cursor-pointer"
+                            onClick={() => {
+                              if (viewUserProfile) {
+                                onClose();
+                                viewUserProfile(p);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            title={`View ${p.name}'s Profile`}
+                          >
+                            <img
+                              src={p.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                              alt={p.name}
+                              style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                            <div className="min-w-0">
+                              <span className="font-semibold text-xs text-primary d-block text-truncate hover-underline">
+                                {p.name}
+                              </span>
+                              <span className="text-xs text-muted d-block text-truncate" style={{ fontSize: '0.66rem' }}>
+                                {p.handle || `@user_${p.id?.slice(-4) || 'neighbor'}`}
+                              </span>
+                            </div>
                           </div>
-                        </div>
 
-                        <span className={`badge ${isHost ? 'badge-primary' : 'badge-secondary'} text-xs flex-shrink-0`} style={{ fontSize: '0.62rem' }}>
-                          {isHost ? 'Host' : 'Attending'}
-                        </span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <span className="text-xs text-muted p-2 text-center d-block">
-                    {attendeeSearch ? 'No attendees match search filter.' : 'No attendees registered yet. Be the first to join!'}
-                  </span>
-                )}
+                          <span className={`badge ${isHost ? 'badge-primary' : 'badge-secondary'} text-xs flex-shrink-0`} style={{ fontSize: '0.62rem' }}>
+                            {isHost ? 'Host' : 'Attending'}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <span className="text-xs text-muted p-2 text-center d-block">
+                      {attendeeSearch ? 'No attendees match search filter.' : 'No attendees registered yet. Be the first to join!'}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Actions ribbon */}
             <div className="mt-3 pt-3 border-top d-flex justify-between align-center flex-wrap gap-2">
-              <span className="text-xs text-muted">
-                Organized by {event.organizer?.name}
+              <span 
+                className="text-xs text-muted user-profile-trigger cursor-pointer"
+                onClick={() => {
+                  if (viewUserProfile && event.organizer) {
+                    onClose();
+                    viewUserProfile(event.organizer);
+                  }
+                }}
+                title={`View ${event.organizer?.name || 'Organizer'}'s profile`}
+              >
+                Organized by <strong className="user-profile-name">{event.organizer?.name || 'Community Member'}</strong>
               </span>
 
               <div className="d-flex align-center gap-2 flex-wrap">
@@ -485,52 +601,90 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
 
         {/* Live Coordination Chat for this event */}
         <div className="card p-3" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
-          <div className="d-flex align-center gap-2 pb-2 mb-2 border-bottom">
-            <MessageSquare size={16} className="text-brand" />
-            <h5 className="font-bold text-xs text-primary text-uppercase">
-              Activity Coordination Chat ({event.chatMessages?.length || 0})
-            </h5>
+          <div className="d-flex align-center justify-between pb-2 mb-2 border-bottom flex-wrap gap-1">
+            <div className="d-flex align-center gap-2">
+              <MessageSquare size={16} className="text-brand" />
+              <h5 className="font-bold text-xs text-primary text-uppercase mb-0">
+                Activity Coordination Chat {canAccessChat ? `(${event.chatMessages?.length || 0})` : ''}
+              </h5>
+            </div>
+            {event.chatPrivacy === 'members_only' && (
+              <span className="badge badge-secondary text-xs" style={{ fontSize: '0.65rem' }}>
+                🔒 Members Only
+              </span>
+            )}
           </div>
 
-          {/* Messages list */}
-          <div className="d-flex flex-column gap-2 mb-3" style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
-            {event.chatMessages?.map((msg) => {
-              const isMe = msg.sender?.id === currentUser.id;
-              return (
-                <div 
-                  key={msg.id} 
-                  className={`d-flex flex-column p-2 rounded text-xs ${isMe ? 'align-end' : 'align-start'}`}
-                  style={{
-                    background: isMe ? 'var(--primary-50)' : 'var(--bg-muted)',
-                    alignSelf: isMe ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    borderRadius: 'var(--radius-md)'
+          {!canAccessChat ? (
+            <div className="p-4 text-center rounded" style={{ background: 'var(--bg-subtle)' }}>
+              <div style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>🔒</div>
+              <h6 className="font-bold text-xs text-primary mb-1">Coordination Chat is Members-Only</h6>
+              <p className="text-xs text-muted mb-3" style={{ maxWidth: '420px', margin: '0 auto 0.75rem auto', lineHeight: 1.4, fontSize: '0.78rem' }}>
+                This channel is restricted to confirmed event attendees and the organizer to keep planning discussions secure.
+              </p>
+              {!isUserJoined && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm d-inline-flex align-center gap-1.5 mx-auto"
+                  onClick={() => {
+                    joinEvent(event.id);
+                    if (showToast) showToast(`You joined "${event.title}"!`, 'success');
                   }}
                 >
-                  <div className="d-flex align-center gap-2 mb-1">
-                    <span className="font-bold text-primary">{msg.sender?.name || 'Volunteer'}</span>
-                    <span className="text-muted" style={{ fontSize: '0.68rem' }}>{msg.time}</span>
+                  <Users size={14} />
+                  <span>Join Activity to Access Chat</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Messages list */}
+              <div className="d-flex flex-column gap-2 mb-3" style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '4px' }}>
+                {event.chatMessages && event.chatMessages.length > 0 ? (
+                  event.chatMessages.map((msg) => {
+                    const isMe = msg.sender?.id === currentUser?.id;
+                    return (
+                      <div 
+                        key={msg.id} 
+                        className={`d-flex flex-column p-2 rounded text-xs ${isMe ? 'align-end' : 'align-start'}`}
+                        style={{
+                          background: isMe ? 'var(--primary-50)' : 'var(--bg-muted)',
+                          alignSelf: isMe ? 'flex-end' : 'flex-start',
+                          maxWidth: '85%',
+                          borderRadius: 'var(--radius-md)'
+                        }}
+                      >
+                        <div className="d-flex align-center gap-2 mb-1">
+                          <span className="font-bold text-primary">{msg.sender?.name || 'Volunteer'}</span>
+                          <span className="text-muted" style={{ fontSize: '0.68rem' }}>{msg.time}</span>
+                        </div>
+                        <p className="text-secondary" style={{ margin: 0 }}>{msg.text}</p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center p-3 text-xs text-muted">
+                    No messages yet. Send a message to coordinate tools, timing, or arrival!
                   </div>
-                  <p className="text-secondary" style={{ margin: 0 }}>{msg.text}</p>
-                </div>
-              );
-            })}
-          </div>
+                )}
+              </div>
 
-          {/* Chat input */}
-          <form onSubmit={handleSendChat} className="d-flex gap-2">
-            <input
-              type="text"
-              placeholder="Send message to coordinate tools, timing, or arrival..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              className="form-input"
-              style={{ fontSize: '0.85rem' }}
-            />
-            <button type="submit" className="btn btn-primary btn-sm">
-              <Send size={14} />
-            </button>
-          </form>
+              {/* Chat input */}
+              <form onSubmit={handleSendChat} className="d-flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Send message to coordinate tools, timing, or arrival..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  className="form-input"
+                  style={{ fontSize: '0.85rem' }}
+                />
+                <button type="submit" className="btn btn-primary btn-sm" disabled={!chatInput.trim()}>
+                  <Send size={14} />
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </Modal>

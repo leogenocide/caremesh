@@ -54,7 +54,8 @@ export const ExploreView = () => {
     openShareSocialModal,
     inspectEntity,
     openEntityDetails,
-    highlightedEntityId
+    highlightedEntityId,
+    viewUserProfile
   } = useCareMesh();
 
   const [selectedEntityState, setSelectedEntityState] = useState(null); // { item, type }
@@ -1384,6 +1385,23 @@ export const ExploreView = () => {
                   <span className="d-flex align-center gap-1 text-truncate">
                     <MapPin size={11} /> <span className="text-truncate">{selectedEntity.item.location?.address || 'Site coordinate'}</span>
                   </span>
+                  {(() => {
+                    const poster = selectedEntity.item.author || selectedEntity.item.organizer || selectedEntity.item.requester || selectedEntity.item.provider || selectedEntity.item.proposer;
+                    if (!poster) return null;
+                    const posterName = typeof poster === 'string' ? poster : poster.name;
+                    return (
+                      <span 
+                        className="user-profile-trigger cursor-pointer text-primary hover:text-brand font-medium d-inline-flex align-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          viewUserProfile(poster);
+                        }}
+                        title={`View ${posterName}'s profile`}
+                      >
+                        • By <strong className="user-profile-name">{posterName}</strong>
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div className="d-flex gap-2">

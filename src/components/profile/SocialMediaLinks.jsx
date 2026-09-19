@@ -179,18 +179,39 @@ const PLATFORMS = {
 };
 
 /**
+ * Checks whether user has chosen to hide their social links
+ */
+const isUserSocialLinksHidden = (user) => {
+  if (!user) return false;
+  const rawLinks = user.socialLinks || user.social || {};
+  return Boolean(
+    user.hideSocialLinks || 
+    rawLinks.hideSocialLinks || 
+    rawLinks.hidden || 
+    user.privacySettings?.hideSocialLinks
+  );
+};
+
+/**
  * Extracts and cleans user social links
  */
 const getParsedSocialLinks = (user) => {
   if (!user) return [];
 
+  // Check if user has chosen to hide their social links
+  if (isUserSocialLinksHidden(user)) {
+    return [];
+  }
+
   const rawLinks = user.socialLinks || user.social || {};
   const list = [];
+  const hasConfiguredKeys = typeof rawLinks === 'object' && !Array.isArray(rawLinks) && Object.keys(rawLinks).length > 0;
 
   // Parse structured object
   if (typeof rawLinks === 'object' && !Array.isArray(rawLinks)) {
     Object.entries(rawLinks).forEach(([key, value]) => {
       if (!value || typeof value !== 'string' || !value.trim()) return;
+      if (key === 'hideSocialLinks' || key === 'hidden') return;
       const lowerKey = key.toLowerCase();
       const platformDef = PLATFORMS[lowerKey] || PLATFORMS.website;
 
@@ -208,9 +229,9 @@ const getParsedSocialLinks = (user) => {
     });
   }
 
-  // Graceful fallback: If no explicit social links object is stored,
-  // generate a clean default based on user's handle so each profile is never bare.
-  if (list.length === 0 && user.handle) {
+  // Graceful fallback: If no explicit social links object was ever configured,
+  // generate a clean default based on user's handle so fresh profiles aren't bare.
+  if (list.length === 0 && user.handle && !hasConfiguredKeys) {
     const rawHandle = user.handle.replace('@', '').trim();
     if (rawHandle && rawHandle !== 'guest') {
       const twitterDef = PLATFORMS.twitter;
@@ -255,8 +276,14 @@ export const SocialMediaLinks = ({
   size = 'md',
   className = '' 
 }) => {
+  const isHidden = isUserSocialLinksHidden(user);
   const socialList = useMemo(() => getParsedSocialLinks(user), [user]);
   const isCompact = size === 'sm';
+
+  // If hidden and viewing another user's profile, render nothing
+  if (isHidden && !isSelf) {
+    return null;
+  }
 
   if (!socialList.length && !isSelf) {
     return null;
@@ -267,7 +294,16 @@ export const SocialMediaLinks = ({
       className={`d-flex align-center flex-wrap gap-1.5 ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
-      {socialList.map((item) => {
+      {isSelf && isHidden && (
+        <span 
+          className="badge badge-secondary text-xs d-inline-flex align-center gap-1"
+          style={{ fontSize: isCompact ? '0.66rem' : '0.72rem', padding: isCompact ? '0.2rem 0.5rem' : '0.25rem 0.6rem', opacity: 0.9 }}
+          title="Your social links are currently hidden from public visitors"
+        >
+          <span>🔒 Social links hidden</span>
+        </span>
+      )}
+      {!isHidden && socialList.map((item) => {
         const IconComponent = item.icon;
         return (
           <a

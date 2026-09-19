@@ -37,6 +37,7 @@ export const ProfileView = () => {
   const { 
     currentUser, 
     setCurrentUser, 
+    updateUserProfile,
     resources = [], 
     requests = [], 
     plans = [], 
@@ -196,6 +197,7 @@ export const ProfileView = () => {
         e.title?.toLowerCase().includes(q) ||
         e.description?.toLowerCase().includes(q) ||
         e.eventType?.toLowerCase().includes(q) ||
+        e.customEventType?.toLowerCase().includes(q) ||
         e.location?.address?.toLowerCase().includes(q)
       );
     });
@@ -277,13 +279,28 @@ export const ProfileView = () => {
 
   const togglePrivacy = (key) => {
     if (!isSelf) return;
-    setCurrentUser(prev => ({
-      ...prev,
-      privacySettings: {
-        ...prev.privacySettings,
-        [key]: !prev.privacySettings?.[key]
-      }
-    }));
+    const nextVal = !currentUser.privacySettings?.[key];
+    const nextPrivacy = {
+      ...currentUser.privacySettings,
+      [key]: nextVal
+    };
+    if (updateUserProfile) {
+      updateUserProfile({
+        privacySettings: nextPrivacy,
+        ...(key === 'hideSocialLinks' ? {
+          hideSocialLinks: nextVal,
+          socialLinks: {
+            ...currentUser.socialLinks,
+            hideSocialLinks: nextVal
+          }
+        } : {})
+      });
+    } else {
+      setCurrentUser(prev => ({
+        ...prev,
+        privacySettings: nextPrivacy
+      }));
+    }
   };
 
   const handleReportUser = () => {
@@ -963,7 +980,7 @@ export const ProfileView = () => {
                           <div className="min-w-0 flex-1">
                             <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
                               <span className="badge badge-purple text-xs text-uppercase font-semibold">
-                                {evt.eventType?.replace('_', ' ') || 'Event'}
+                                {evt.customEventType || evt.eventType?.replace('_', ' ') || 'Event'}
                               </span>
                               <span className={`badge ${isOrganizer ? 'badge-primary' : 'badge-emerald'} text-xs`}>
                                 {isOrganizer ? 'Host & Organizer' : 'Registered Attendee'}
@@ -1238,6 +1255,19 @@ export const ProfileView = () => {
                 onClick={() => togglePrivacy('publicContributionHistory')}
               >
                 {currentUser.privacySettings?.publicContributionHistory ? 'Enabled' : 'Disabled'}
+              </button>
+            </div>
+
+            <div className="d-flex align-center justify-between p-3 rounded" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+              <div>
+                <span className="font-bold text-xs text-primary d-block">Public Social Media Profiles</span>
+                <span className="text-xs text-muted">When hidden, external social links (X, LinkedIn, GitHub, Instagram, Facebook, WhatsApp) are kept private from neighbors.</span>
+              </div>
+              <button
+                className={`btn btn-sm ${!currentUser.privacySettings?.hideSocialLinks && !currentUser.hideSocialLinks ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => togglePrivacy('hideSocialLinks')}
+              >
+                {!currentUser.privacySettings?.hideSocialLinks && !currentUser.hideSocialLinks ? 'Visible' : 'Hidden'}
               </button>
             </div>
           </div>

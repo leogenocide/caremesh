@@ -41,6 +41,10 @@ export const CreateModal = () => {
   const [customEvidenceType, setCustomEvidenceType] = useState('');
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState('');
+  const [isCustomEventType, setIsCustomEventType] = useState(false);
+  const [customEventType, setCustomEventType] = useState('');
+  const [attendeePrivacy, setAttendeePrivacy] = useState('public');
+  const [chatPrivacy, setChatPrivacy] = useState('members_only');
 
   // Form states
   const [formData, setFormData] = useState({
@@ -151,7 +155,13 @@ export const CreateModal = () => {
       },
       mediaUrls,
       files: attachedFiles.map(f => ({ ...f, evidenceType: finalEvidenceType })),
-      imageUrl: mediaUrls.length > 0 ? mediaUrls[0] : formData.imageUrl
+      imageUrl: mediaUrls.length > 0 ? mediaUrls[0] : formData.imageUrl,
+      ...(activeType === 'event' ? {
+        isCustomEventType,
+        customEventType: isCustomEventType ? (customEventType.trim() || 'Custom Activity') : '',
+        attendeePrivacy,
+        chatPrivacy
+      } : {})
     };
 
     if (activeType === 'observation') {
@@ -185,6 +195,10 @@ export const CreateModal = () => {
     setCustomEvidenceType('');
     setIsCustomCategory(false);
     setCustomCategory('');
+    setIsCustomEventType(false);
+    setCustomEventType('');
+    setAttendeePrivacy('public');
+    setChatPrivacy('members_only');
     setFormData({
       title: '',
       description: '',
@@ -637,13 +651,43 @@ export const CreateModal = () => {
           <div className="grid-2">
             <div>
               <label className="form-label">Activity / Event Type</label>
-              <select name="eventType" value={formData.eventType} onChange={handleChange} className="form-select">
+              <select
+                name="eventType"
+                value={isCustomEventType ? '__custom__' : formData.eventType}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setIsCustomEventType(true);
+                  } else {
+                    setIsCustomEventType(false);
+                    handleChange(e);
+                  }
+                }}
+                className="form-select"
+              >
                 <option value="assistance_operation">Community Assistance Operation</option>
                 <option value="volunteer_workday">Volunteer Workday / Clean-up</option>
                 <option value="skill_share">Skill Share & Workshop</option>
                 <option value="emergency_response">Emergency Response Team</option>
                 <option value="planning_assembly">Community Planning Assembly</option>
+                <option value="__custom__">✨ Custom Activity Type...</option>
               </select>
+              {isCustomEventType && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={customEventType}
+                    onChange={(e) => setCustomEventType(e.target.value)}
+                    placeholder="e.g. Riparian Watershed Planting, Tool Repair Café..."
+                    className="form-input"
+                    style={{ borderColor: 'var(--brand, #2d6a4f)' }}
+                    required={isCustomEventType}
+                    autoFocus
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted, #666)' }}>
+                    Specify your custom community activity or work party name.
+                  </span>
+                </div>
+              )}
             </div>
             <div>
               <label className="form-label">Max Participants Capacity</label>
@@ -680,6 +724,69 @@ export const CreateModal = () => {
                 className="form-input"
                 required
               />
+            </div>
+
+            {/* Privacy & Member Access Controls */}
+            <div style={{ gridColumn: '1 / -1', padding: '0.9rem', background: 'var(--bg-subtle, #f8fafc)', borderRadius: '8px', border: '1px solid var(--border-light, #e2e8f0)', marginTop: '0.25rem' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary, #1e293b)' }}>
+                <span>🔒</span> Privacy & Member Access Controls
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                <div>
+                  <label className="form-label text-xs font-semibold text-secondary" style={{ marginBottom: '0.4rem', display: 'block' }}>
+                    Attendee Roster Visibility
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.82rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="attendeePrivacy"
+                        value="public"
+                        checked={attendeePrivacy === 'public'}
+                        onChange={(e) => setAttendeePrivacy(e.target.value)}
+                      />
+                      <span><strong>Public:</strong> Anyone can view registered members</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="attendeePrivacy"
+                        value="members_only"
+                        checked={attendeePrivacy === 'members_only'}
+                        onChange={(e) => setAttendeePrivacy(e.target.value)}
+                      />
+                      <span><strong>Members Only:</strong> Only attendees & host can see roster</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label text-xs font-semibold text-secondary" style={{ marginBottom: '0.4rem', display: 'block' }}>
+                    Coordination Chat Access
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.82rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="chatPrivacy"
+                        value="members_only"
+                        checked={chatPrivacy === 'members_only'}
+                        onChange={(e) => setChatPrivacy(e.target.value)}
+                      />
+                      <span><strong>Members Only:</strong> Registered attendees only (Recommended)</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="chatPrivacy"
+                        value="public"
+                        checked={chatPrivacy === 'public'}
+                        onChange={(e) => setChatPrivacy(e.target.value)}
+                      />
+                      <span><strong>Public:</strong> Open discussion for all community members</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
