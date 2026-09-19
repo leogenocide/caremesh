@@ -26,6 +26,7 @@ export function formatUser(row) {
     skills: JSON.parse(row.skills || '[]'),
     badges: JSON.parse(row.badges || '[]'),
     privacySettings: JSON.parse(row.privacy_settings || '{}'),
+    socialLinks: JSON.parse(row.social_links || '{}'),
     stats: JSON.parse(row.stats || '{}'),
     isPublicModerator: Boolean(row.is_public_moderator),
     status: row.status || 'active',

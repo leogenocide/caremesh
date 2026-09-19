@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { ChangeAvatarModal } from '../components/profile/ChangeAvatarModal';
 import { EditBioModal } from '../components/profile/EditBioModal';
+import { SocialMediaLinks } from '../components/profile/SocialMediaLinks';
 import { usePagination } from '../hooks/usePagination';
 import { Pagination } from '../components/common/Pagination';
 
@@ -89,12 +90,27 @@ export const ProfileView = () => {
 
   // Target user's linked items across all entity domains
   const userRequests = useMemo(() => {
-    return (requests || []).filter(r => 
-      r.requester?.id === targetUser?.id || 
-      r.requesterId === targetUser?.id ||
-      r.authorId === targetUser?.id || 
-      r.responses?.some(resp => resp.user?.id === targetUser?.id || resp.userId === targetUser?.id)
-    );
+    if (!targetUser) return [];
+    const uid = targetUser.id;
+    const uemail = targetUser.email;
+    const uhandle = targetUser.handle;
+
+    return (requests || []).filter(r => {
+      const isOwner = (
+        r.requester?.id === uid || 
+        r.requesterId === uid ||
+        r.authorId === uid ||
+        (uemail && r.requester?.email === uemail) ||
+        (uhandle && r.requester?.handle === uhandle)
+      );
+      const isVolunteer = r.responses?.some(resp => 
+        resp.user?.id === uid || 
+        resp.userId === uid ||
+        (uemail && resp.user?.email === uemail) ||
+        (uhandle && resp.user?.handle === uhandle)
+      );
+      return isOwner || isVolunteer;
+    });
   }, [requests, targetUser]);
 
   const userEvents = useMemo(() => {
@@ -132,9 +148,24 @@ export const ProfileView = () => {
   // Search & Filtered Sub-collections
   const filteredRequests = useMemo(() => {
     const q = profileSearch.toLowerCase().trim();
+    const uid = targetUser?.id;
+    const uemail = targetUser?.email;
+    const uhandle = targetUser?.handle;
+
     return userRequests.filter(r => {
-      const isOwner = r.requester?.id === targetUser?.id || r.requesterId === targetUser?.id || r.authorId === targetUser?.id;
-      const isVolunteer = r.responses?.some(resp => resp.user?.id === targetUser?.id || resp.userId === targetUser?.id);
+      const isOwner = (
+        r.requester?.id === uid || 
+        r.requesterId === uid || 
+        r.authorId === uid ||
+        (uemail && r.requester?.email === uemail) ||
+        (uhandle && r.requester?.handle === uhandle)
+      );
+      const isVolunteer = r.responses?.some(resp => 
+        resp.user?.id === uid || 
+        resp.userId === uid ||
+        (uemail && resp.user?.email === uemail) ||
+        (uhandle && resp.user?.handle === uhandle)
+      );
       
       if (requestFilter === 'my_requests' && !isOwner) return false;
       if (requestFilter === 'volunteering' && !isVolunteer) return false;
@@ -226,7 +257,23 @@ export const ProfileView = () => {
   const totalContributions = targetUser.stats?.contributions || (
     userResources.length + userRequests.length + userPlans.length + userEvents.length + userObservations.length
   );
-  const requestsFulfilled = targetUser.stats?.requestsFulfilled || userRequests.filter(r => r.status === 'fulfilled').length;
+  const requestsFulfilledCount = userRequests.filter(r => r.status === 'fulfilled').length;
+  const requestsOpenCount = userRequests.filter(r => r.status !== 'fulfilled').length;
+  const requestsAuthoredCount = userRequests.filter(r => 
+    r.requester?.id === targetUser?.id || 
+    r.requesterId === targetUser?.id || 
+    r.authorId === targetUser?.id || 
+    (targetUser?.email && r.requester?.email === targetUser.email) ||
+    (targetUser?.handle && r.requester?.handle === targetUser.handle)
+  ).length;
+  const requestsVolunteeringCount = userRequests.filter(r => 
+    r.responses?.some(resp => 
+      resp.user?.id === targetUser?.id || 
+      resp.userId === targetUser?.id || 
+      (targetUser?.email && resp.user?.email === targetUser.email) ||
+      (targetUser?.handle && resp.user?.handle === targetUser.handle)
+    )
+  ).length;
 
   const togglePrivacy = (key) => {
     if (!isSelf) return;
@@ -333,13 +380,23 @@ export const ProfileView = () => {
                   {targetUser.email}
                 </span>
               )}
-              <span className="d-flex align-center gap-1 text-xs text-muted">
+              <span className="d-flex align-center gap-1 text-xs text-muted mb-2">
                 <MapPin size={13} /> {
                   (!isSelf && targetUser.privacySettings?.showExactLocation === false)
                     ? (typeof targetUser.location === 'object' ? (targetUser.location?.neighborhood || 'Maplewood District, CA') : 'Maplewood District, CA')
                     : (typeof targetUser.location === 'object' ? (targetUser.location?.address || targetUser.location?.neighborhood || 'Maplewood, CA') : (targetUser.location || 'Maplewood, CA'))
                 }
               </span>
+
+              {/* Social Media Platforms Links */}
+              <div className="mt-1">
+                <SocialMediaLinks 
+                  user={targetUser} 
+                  isSelf={isSelf} 
+                  onEdit={() => setIsBioModalOpen(true)}
+                  size="md"
+                />
+              </div>
             </div>
           </div>
 
@@ -689,7 +746,7 @@ export const ProfileView = () => {
                     style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
                     onClick={() => setRequestFilter('my_requests')}
                   >
-                    Authored Requests ({userRequests.filter(r => r.requester?.id === targetUser?.id || r.requesterId === targetUser?.id || r.authorId === targetUser?.id).length})
+                    Authored Requests ({requestsAuthoredCount})
                   </button>
                   <button
                     type="button"
@@ -697,7 +754,7 @@ export const ProfileView = () => {
                     style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
                     onClick={() => setRequestFilter('volunteering')}
                   >
-                    Volunteering ({userRequests.filter(r => r.responses?.some(resp => resp.user?.id === targetUser?.id || resp.userId === targetUser?.id)).length})
+                    Volunteering ({requestsVolunteeringCount})
                   </button>
                   <button
                     type="button"
@@ -705,7 +762,7 @@ export const ProfileView = () => {
                     style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
                     onClick={() => setRequestFilter('open')}
                   >
-                    Open Needs
+                    Open Needs ({requestsOpenCount})
                   </button>
                   <button
                     type="button"
@@ -713,7 +770,7 @@ export const ProfileView = () => {
                     style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
                     onClick={() => setRequestFilter('fulfilled')}
                   >
-                    Fulfilled ({requestsFulfilled})
+                    Fulfilled ({requestsFulfilledCount})
                   </button>
                 </div>
               )}

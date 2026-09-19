@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   skills TEXT DEFAULT '[]',
   badges TEXT DEFAULT '[]',
   privacy_settings TEXT DEFAULT '{}',
+  social_links TEXT DEFAULT '{}',
   stats TEXT DEFAULT '{}',
   is_public_moderator INTEGER DEFAULT 0,
   status TEXT DEFAULT 'active', -- 'active' | 'restricted'

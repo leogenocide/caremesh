@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { PlanStatusBadge, UrgencyBadge } from '../common/Badge';
 import { useNavigate } from 'react-router-dom';
+import { SocialMediaLinks } from './SocialMediaLinks';
 
 export const UserProfileModal = ({ isOpen, onClose, user }) => {
   const navigate = useNavigate();
@@ -56,7 +57,19 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
 
   // Linked items
   const userResources = profileUser ? resources.filter(r => r.provider?.id === profileUser.id || r.providerId === profileUser.id) : [];
-  const userRequests = profileUser ? requests.filter(r => r.requester?.id === profileUser.id || r.authorId === profileUser.id) : [];
+  const userRequests = profileUser ? requests.filter(r => 
+    r.requester?.id === profileUser.id || 
+    r.requesterId === profileUser.id ||
+    r.authorId === profileUser.id ||
+    (profileUser.email && r.requester?.email === profileUser.email) ||
+    (profileUser.handle && r.requester?.handle === profileUser.handle) ||
+    r.responses?.some(resp => 
+      resp.user?.id === profileUser.id || 
+      resp.userId === profileUser.id ||
+      (profileUser.email && resp.user?.email === profileUser.email) ||
+      (profileUser.handle && resp.user?.handle === profileUser.handle)
+    )
+  ) : [];
   const userEvents = profileUser ? (events || []).filter(e => e.organizer?.id === profileUser.id || e.organizerId === profileUser.id || e.participants?.some(p => p.id === profileUser.id)) : [];
   const userObservations = profileUser ? observations.filter(o => o.author?.id === profileUser.id || o.authorId === profileUser.id || o.author_id === profileUser.id) : [];
   const userPlans = profileUser ? plans.filter(p => p.proposer?.id === profileUser.id || p.participants?.some(part => part.user?.id === profileUser.id)) : [];
@@ -228,9 +241,18 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
               )}
 
               {/* Location */}
-              <div className="d-flex align-center gap-2 text-xs text-muted">
+              <div className="d-flex align-center gap-2 text-xs text-muted mb-2">
                 <MapPin size={13} className="text-muted flex-shrink-0" />
                 <span>{locationStr}</span>
+              </div>
+
+              {/* Social Media Platform Links */}
+              <div className="mt-2">
+                <SocialMediaLinks 
+                  user={profileUser} 
+                  isSelf={isSelf}
+                  size="sm"
+                />
               </div>
             </div>
 
@@ -465,9 +487,15 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
                     className="card p-3 card-interactive cursor-pointer"
                     onClick={() => { onClose(); viewRequestDetail(r); }}
                   >
-                    <div className="d-flex align-center justify-between mb-1">
+                    <div className="d-flex align-center justify-between mb-1 gap-2 flex-wrap">
                       <span className="font-bold text-sm text-primary">{r.title}</span>
-                      <UrgencyBadge urgency={r.urgency} />
+                      <div className="d-flex align-center gap-1.5 flex-shrink-0">
+                        {r.status === 'fulfilled' ? (
+                          <span className="badge badge-emerald text-xs">🟢 Fulfilled</span>
+                        ) : (
+                          <UrgencyBadge urgency={r.urgency} />
+                        )}
+                      </div>
                     </div>
                     <p className="text-xs text-secondary mb-2">{r.description}</p>
                     <span className="text-xs text-muted">{r.location?.address} • {r.timestamp || 'Recent'}</span>

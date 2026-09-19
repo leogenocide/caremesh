@@ -496,6 +496,77 @@ button.text-right {
   border: 1px solid var(--border-light);
 }
 
+/* Social Platform Chips in User Profiles */
+.social-platform-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.social-platform-chip:hover {
+  transform: translateY(-1px);
+  background: var(--chip-hover-bg, var(--bg-muted));
+  border-color: var(--chip-hover-border, var(--border-default));
+  color: var(--chip-brand-color, var(--text-primary));
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+.social-platform-chip:active {
+  transform: translateY(0);
+}
+
+.social-platform-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.social-platform-label {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.social-platform-external-arrow {
+  opacity: 0.45;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.social-platform-chip:hover .social-platform-external-arrow {
+  opacity: 0.9;
+  transform: translate(0.5px, -0.5px);
+}
+
+.social-platform-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  border: 1px dashed var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.social-platform-edit-btn:hover {
+  border-color: var(--primary-500);
+  color: var(--primary-700);
+  background: var(--primary-50);
+}
+
 /* Claims Status Badges */
 .badge-claim-supported {
   background-color: #dcfce7;
