@@ -41,6 +41,15 @@ export const EvidenceDetailModal = () => {
   const evidence = selectedEvidenceDetail?.evidence || selectedEvidenceDetail;
   const passedParentObs = selectedEvidenceDetail?.parentObservation || null;
 
+  const evidenceAuthor = (typeof evidence?.author === 'object' && evidence?.author !== null)
+    ? evidence.author
+    : (evidence?.author || evidence?.authorId || evidence?.author_id ? {
+        id: evidence?.authorId || evidence?.author_id || evidence?.author,
+        name: typeof evidence?.author === 'string' ? evidence.author : 'Evidence Author',
+        avatar: evidence?.authorAvatar,
+        handle: evidence?.authorHandle || '@author'
+      } : null);
+
   // Resolve parent observation
   const parentObservation = passedParentObs || observations.find(o => 
     o.id === evidence?.parentObservationId || (o.evidenceIds && o.evidenceIds.includes(evidence?.id))
@@ -184,22 +193,31 @@ export const EvidenceDetailModal = () => {
           </div>
 
           <div className="d-flex align-center gap-3 text-xs text-muted flex-wrap">
-            <span 
-              className="user-profile-trigger"
-              onClick={() => {
-                const target = evidence.authorId || evidence.author_id
-                  ? { id: evidence.authorId || evidence.author_id, name: typeof evidence.author === 'string' ? evidence.author : evidence.author?.name }
-                  : evidence.author;
-                if (target) {
-                  closeEvidenceDetailModal();
-                  viewUserProfile(target);
-                }
-              }}
-              title={`View ${typeof evidence.author === 'string' ? evidence.author : evidence.author?.name || 'Author'}'s profile`}
-            >
-              Author: <strong className="user-profile-name">{typeof evidence.author === 'string' ? evidence.author : evidence.author?.name || 'Community Member'}</strong>
-            </span>
-            <span>•</span>
+            {evidenceAuthor && (
+              <span 
+                className="d-flex align-center gap-1.5 user-profile-trigger cursor-pointer"
+                onClick={() => {
+                  viewUserProfile(evidenceAuthor);
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    viewUserProfile(evidenceAuthor);
+                  }
+                }}
+                title={`View ${evidenceAuthor.name}'s profile`}
+              >
+                <img
+                  src={evidenceAuthor.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                  alt={evidenceAuthor.name}
+                  style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+                <span>Author: <strong className="user-profile-name">{evidenceAuthor.name}</strong></span>
+              </span>
+            )}
+            {evidenceAuthor && <span>•</span>}
             <span className="d-flex align-center gap-1">
               <Clock size={12} />
               <span>{evidence.timestamp || 'Recorded'}</span>

@@ -56,7 +56,8 @@ export const ProfileView = () => {
     openReportModal,
     showToast,
     restrictUser,
-    unrestrictUser
+    unrestrictUser,
+    changePassword
   } = useCareMesh();
 
   const [activeSubTab, setActiveSubTab] = useState('requests'); // 'requests' | 'events' | 'plans' | 'resources' | 'observations' | 'privacy'
@@ -69,6 +70,13 @@ export const ProfileView = () => {
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [isBioModalOpen, setIsBioModalOpen] = useState(false);
   const [overrideStatus, setOverrideStatus] = useState(null);
+
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   const isSelf = !userId || userId === currentUser?.id;
 
@@ -1316,6 +1324,118 @@ export const ProfileView = () => {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Change Account Password */}
+          <div className="p-3 rounded mb-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+            <div className="d-flex align-center justify-between flex-wrap gap-2">
+              <div>
+                <span className="font-bold text-xs text-primary d-block">Account Password & Security</span>
+                <span className="text-xs text-muted">Update your account password securely. Required for System Admin and all member accounts.</span>
+              </div>
+              <button
+                type="button"
+                className={`btn ${isChangePasswordOpen ? 'btn-secondary' : 'btn-primary'} btn-xs d-flex align-center gap-1`}
+                onClick={() => {
+                  setIsChangePasswordOpen(!isChangePasswordOpen);
+                  setPasswordError('');
+                }}
+              >
+                <Lock size={12} />
+                <span>{isChangePasswordOpen ? 'Cancel' : 'Change Password'}</span>
+              </button>
+            </div>
+
+            {isChangePasswordOpen && (
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setPasswordError('');
+                  if (!currentPassword) {
+                    setPasswordError('Please enter your current password.');
+                    return;
+                  }
+                  if (newPassword.length < 8) {
+                    setPasswordError('New password must be at least 8 characters long.');
+                    return;
+                  }
+                  if (newPassword !== confirmPassword) {
+                    setPasswordError('New password and confirmation do not match.');
+                    return;
+                  }
+                  setPasswordLoading(true);
+                  try {
+                    await changePassword(currentPassword, newPassword);
+                    showToast('Account password updated successfully!', 'success');
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setIsChangePasswordOpen(false);
+                  } catch (err) {
+                    setPasswordError(err.message || 'Failed to update password.');
+                  } finally {
+                    setPasswordLoading(false);
+                  }
+                }}
+                className="mt-3 pt-3 border-top d-flex flex-column gap-2"
+              >
+                {passwordError && (
+                  <div className="p-2 rounded text-xs bg-rose-50 text-rose border border-rose-200">
+                    {passwordError}
+                  </div>
+                )}
+                <div>
+                  <label className="form-label text-xs mb-1 font-semibold">Current Password *</label>
+                  <input
+                    type="password"
+                    className="form-input text-xs"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label text-xs mb-1 font-semibold">New Password (min 8 chars) *</label>
+                  <input
+                    type="password"
+                    className="form-input text-xs"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new strong password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="form-label text-xs mb-1 font-semibold">Confirm New Password *</label>
+                  <input
+                    type="password"
+                    className="form-input text-xs"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new strong password"
+                    required
+                  />
+                </div>
+                <div className="d-flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => setIsChangePasswordOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-xs d-flex align-center gap-1"
+                    disabled={passwordLoading}
+                  >
+                    <Lock size={12} />
+                    <span>{passwordLoading ? 'Saving...' : 'Update Password'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Reset Prototype Data Button */}

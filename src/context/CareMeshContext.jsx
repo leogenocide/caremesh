@@ -3040,6 +3040,34 @@ export const CareMeshProvider = ({ children }) => {
     return res;
   };
 
+  const changePassword = async (currentPassword, newPassword) => {
+    return await api.auth.changePassword({ currentPassword, newPassword });
+  };
+
+  const forgotPassword = async (email) => {
+    return await api.auth.forgotPassword(email);
+  };
+
+  const resetPassword = async (resetData) => {
+    const res = await api.auth.resetPassword(resetData);
+    if (res?.user) {
+      setCurrentUser(res.user);
+      localStorage.setItem('caremesh_user', JSON.stringify(res.user));
+      await refreshUserData(res.user);
+    }
+    return res;
+  };
+
+  const resetPasswordWithGoogle = async (googleResetData) => {
+    const res = await api.auth.resetPasswordWithGoogle(googleResetData);
+    if (res?.user) {
+      setCurrentUser(res.user);
+      localStorage.setItem('caremesh_user', JSON.stringify(res.user));
+      await refreshUserData(res.user);
+    }
+    return res;
+  };
+
   const logoutUser = async () => {
     api.setToken(null);
     localStorage.removeItem('caremesh_token');
@@ -4109,6 +4137,10 @@ export const CareMeshProvider = ({ children }) => {
       loginUser,
       registerUser,
       loginWithGoogle,
+      changePassword,
+      forgotPassword,
+      resetPassword,
+      resetPasswordWithGoogle,
       logoutUser,
       switchUserAccount,
       updateUserProfile,

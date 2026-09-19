@@ -84,6 +84,15 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
 
   if (!plan) return null;
 
+  const proposerUser = (typeof plan.proposer === 'object' && plan.proposer !== null)
+    ? plan.proposer
+    : (plan.proposer || plan.proposerId || plan.proposer_id ? {
+        id: plan.proposerId || plan.proposer_id || plan.proposer,
+        name: plan.proposerName || 'Plan Proposer',
+        avatar: plan.proposerAvatar,
+        handle: plan.proposerHandle || '@proposer'
+      } : null);
+
   const lifecycleStages = [
     { key: 'draft', label: '1. Draft' },
     { key: 'community_review', label: '2. Community Review' },
@@ -107,7 +116,7 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
         {/* 1. Proposal Lifecycle Progression Header */}
         <div className="card p-3" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
           <div className="d-flex align-center justify-between flex-wrap gap-2 mb-2">
-            <div className="d-flex align-center gap-2">
+            <div className="d-flex align-center gap-2 flex-wrap">
               <span className="badge badge-primary font-bold text-xs">Version {plan.currentVersion || 'v1.0'}</span>
               <LifecycleBadge stage={plan.lifecycleStage} />
               <PlanStatusBadge status={plan.overallStatus || 'planning'} />
@@ -121,6 +130,48 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                 <span>Share</span>
               </button>
             </div>
+
+            {/* Proposer Profile Card */}
+            {proposerUser && (
+              <div 
+                className="d-flex align-center gap-2 p-1.5 px-2 rounded bg-white border cursor-pointer card-interactive user-profile-trigger"
+                onClick={() => {
+                  if (viewUserProfile) {
+                    viewUserProfile(proposerUser);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (viewUserProfile) {
+                      viewUserProfile(proposerUser);
+                    }
+                  }
+                }}
+                title={`View proposer ${proposerUser.name}'s profile`}
+              >
+                <img
+                  src={proposerUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                  alt={proposerUser.name}
+                  style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+                <div className="min-w-0">
+                  <div className="d-flex align-center gap-1">
+                    <span className="text-xs font-bold text-primary text-truncate user-profile-name" style={{ maxWidth: '120px' }}>
+                      {proposerUser.name}
+                    </span>
+                    <span className="badge badge-emerald text-xs" style={{ fontSize: '0.6rem', padding: '1px 4px' }}>
+                      Proposer
+                    </span>
+                  </div>
+                  <span className="text-xs text-brand font-semibold d-block" style={{ fontSize: '0.68rem' }}>
+                    {proposerUser.handle || '@proposer'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Stage Progression CTAs for Author / Coordinators */}
             {isAuthorOrCoordinator && (
@@ -391,25 +442,41 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
 
             {/* Action Bar */}
             <div className="d-flex justify-between align-center pt-2 border-top">
-              <span className="text-xs text-muted">
-                {plan.proposer ? (
-                  <span 
-                    className="user-profile-trigger cursor-pointer"
+              <div className="d-flex align-center gap-2 flex-wrap">
+                {proposerUser ? (
+                  <div 
+                    className="d-flex align-center gap-1.5 user-profile-trigger cursor-pointer"
                     onClick={() => {
                       if (viewUserProfile) {
-                        onClose();
-                        viewUserProfile(plan.proposer);
+                        viewUserProfile(proposerUser);
                       }
                     }}
-                    title={`View ${plan.proposer.name}'s profile`}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (viewUserProfile) {
+                          viewUserProfile(proposerUser);
+                        }
+                      }
+                    }}
+                    title={`View ${proposerUser.name}'s profile`}
                   >
-                    Proposed by <strong className="user-profile-name">{plan.proposer.name}</strong>
-                  </span>
+                    <img
+                      src={proposerUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                      alt={proposerUser.name}
+                      style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                    <span className="text-xs text-muted">
+                      Proposed by <strong className="user-profile-name">{proposerUser.name}</strong>
+                    </span>
+                  </div>
                 ) : (
-                  <span>Proposed by Community Member</span>
+                  <span className="text-xs text-muted">Proposed by Community Member</span>
                 )}
-                {' • '}Current Draft: {plan.currentVersion || 'v1.0'}
-              </span>
+                <span className="text-xs text-muted">• Current Draft: {plan.currentVersion || 'v1.0'}</span>
+              </div>
 
               <div className="d-flex gap-2">
                 <button

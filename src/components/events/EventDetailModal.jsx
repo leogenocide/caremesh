@@ -44,6 +44,15 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
   );
   const canManage = isOwner || canUserManage(event);
 
+  const organizerUser = (typeof event?.organizer === 'object' && event?.organizer !== null)
+    ? event.organizer
+    : (event?.organizer || event?.organizerId || event?.organizer_id ? {
+        id: event.organizerId || event.organizer_id || event.organizer,
+        name: event.organizerName || 'Activity Host',
+        avatar: event.organizerAvatar,
+        handle: event.organizerHandle || '@organizer'
+      } : null);
+
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -321,25 +330,67 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
           </div>
         ) : (
           <div className="card p-4" style={{ background: 'var(--bg-subtle)' }}>
-            <div className="d-flex align-center justify-between mb-2 flex-wrap gap-1">
-              <div className="d-flex align-center gap-1.5 flex-wrap">
-                <span className="badge badge-purple text-xs text-uppercase font-semibold">
-                  {event.customEventType || event.eventType?.replace('_', ' ')}
-                </span>
-                {event.attendeePrivacy === 'members_only' && (
-                  <span className="badge badge-secondary text-xs" title="Attendee list is visible only to confirmed members and host">
-                    🔒 Private Roster
+            <div className="d-flex align-start justify-between gap-3 mb-2 flex-wrap">
+              <div className="d-flex flex-column gap-1.5 flex-1 min-w-0">
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="badge badge-purple text-xs text-uppercase font-semibold">
+                    {event.customEventType || event.eventType?.replace('_', ' ')}
                   </span>
-                )}
-                {event.chatPrivacy === 'members_only' && (
-                  <span className="badge badge-secondary text-xs" title="Coordination chat is restricted to confirmed members">
-                    🔒 Members-Only Chat
+                  {event.attendeePrivacy === 'members_only' && (
+                    <span className="badge badge-secondary text-xs" title="Attendee list is visible only to confirmed members and host">
+                      🔒 Private Roster
+                    </span>
+                  )}
+                  {event.chatPrivacy === 'members_only' && (
+                    <span className="badge badge-secondary text-xs" title="Coordination chat is restricted to confirmed members">
+                      🔒 Members-Only Chat
+                    </span>
+                  )}
+                  <span className="badge badge-primary text-xs font-semibold">
+                    {event.participants?.length || 0} / {event.maxParticipants} Attendees
                   </span>
-                )}
+                </div>
               </div>
-              <span className="badge badge-primary text-xs font-semibold">
-                {event.participants?.length || 0} / {event.maxParticipants} Attendees
-              </span>
+
+              {/* Host / Organizer Profile Card */}
+              {organizerUser && (
+                <div 
+                  className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0 cursor-pointer card-interactive user-profile-trigger"
+                  onClick={() => {
+                    if (viewUserProfile) {
+                      viewUserProfile(organizerUser);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (viewUserProfile) {
+                        viewUserProfile(organizerUser);
+                      }
+                    }
+                  }}
+                  title={`View host ${organizerUser.name}'s profile`}
+                >
+                  <img
+                    src={organizerUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                    alt={organizerUser.name}
+                    style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                  <div className="min-w-0">
+                    <div className="d-flex align-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-primary d-block text-truncate user-profile-name" style={{ maxWidth: '120px' }}>
+                        {organizerUser.name}
+                      </span>
+                      <span className="badge badge-purple text-xs" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>
+                        Host
+                      </span>
+                    </div>
+                    <span className="text-xs text-brand font-semibold d-block">{organizerUser.handle || '@organizer'}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.5' }}>
@@ -510,18 +561,38 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
 
             {/* Actions ribbon */}
             <div className="mt-3 pt-3 border-top d-flex justify-between align-center flex-wrap gap-2">
-              <span 
-                className="text-xs text-muted user-profile-trigger cursor-pointer"
-                onClick={() => {
-                  if (viewUserProfile && event.organizer) {
-                    onClose();
-                    viewUserProfile(event.organizer);
-                  }
-                }}
-                title={`View ${event.organizer?.name || 'Organizer'}'s profile`}
-              >
-                Organized by <strong className="user-profile-name">{event.organizer?.name || 'Community Member'}</strong>
-              </span>
+              {organizerUser ? (
+                <div 
+                  className="d-flex align-center gap-1.5 user-profile-trigger cursor-pointer"
+                  onClick={() => {
+                    if (viewUserProfile) {
+                      viewUserProfile(organizerUser);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (viewUserProfile) {
+                        viewUserProfile(organizerUser);
+                      }
+                    }
+                  }}
+                  title={`View ${organizerUser.name}'s profile`}
+                >
+                  <img
+                    src={organizerUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                    alt={organizerUser.name}
+                    style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                  <span className="text-xs text-muted">
+                    Organized by <strong className="user-profile-name">{organizerUser.name}</strong>
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xs text-muted">Organized by Community Member</span>
+              )}
 
               <div className="d-flex align-center gap-2 flex-wrap">
                 {canManage && (

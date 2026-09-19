@@ -104,6 +104,34 @@ class ApiClient {
       });
       if (res.token) this.setToken(res.token);
       return res;
+    },
+    changePassword: async (passwords) => {
+      return this.request('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify(passwords)
+      });
+    },
+    forgotPassword: async (email) => {
+      return this.request('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+    },
+    resetPassword: async (resetData) => {
+      const res = await this.request('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(resetData)
+      });
+      if (res.token) this.setToken(res.token);
+      return res;
+    },
+    resetPasswordWithGoogle: async (googleResetData) => {
+      const res = await this.request('/auth/reset-password-with-google', {
+        method: 'POST',
+        body: JSON.stringify(googleResetData)
+      });
+      if (res.token) this.setToken(res.token);
+      return res;
     }
   };
 

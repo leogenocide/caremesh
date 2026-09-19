@@ -20,7 +20,8 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
     inspectEntity,
     deleteSafetyReport,
     canUserManage,
-    openShareSocialModal
+    openShareSocialModal,
+    viewUserProfile
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'timeline' | 'mitigation'
@@ -30,6 +31,15 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
   const [feedbackNotice, setFeedbackNotice] = useState('');
 
   if (!report) return null;
+
+  const reporterUser = (typeof report.reporter === 'object' && report.reporter !== null)
+    ? report.reporter
+    : (report.reporter || report.reporterId || report.reporter_id ? {
+        id: report.reporterId || report.reporter_id || report.reporter,
+        name: report.reporterName || 'Field Reporter',
+        avatar: report.reporterAvatar,
+        handle: report.reporterHandle || '@reporter'
+      } : null);
 
   const linkedObs = (observations || []).filter(obs => 
     report.relatedObservationIds?.includes(obs.id)
@@ -91,16 +101,41 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
           </div>
 
           {/* Reporter Card */}
-          {report.reporter && (
-            <div className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0">
+          {reporterUser && (
+            <div 
+              className="d-flex align-center gap-2 p-2 rounded bg-white border flex-shrink-0 cursor-pointer card-interactive user-profile-trigger"
+              onClick={() => {
+                if (viewUserProfile) {
+                  viewUserProfile(reporterUser);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (viewUserProfile) {
+                    viewUserProfile(reporterUser);
+                  }
+                }
+              }}
+              title={`View ${reporterUser.name}'s profile`}
+            >
               <img
-                src={report.reporter.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
-                alt={report.reporter.name}
-                style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                src={reporterUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                alt={reporterUser.name}
+                style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }}
               />
               <div className="min-w-0">
-                <span className="text-xs font-bold text-primary d-block text-truncate" style={{ maxWidth: '120px' }}>{report.reporter.name}</span>
-                <span className="text-xs text-brand font-semibold d-block">{report.reporter.handle || '@reporter'}</span>
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-primary d-block text-truncate user-profile-name" style={{ maxWidth: '120px' }}>
+                    {reporterUser.name}
+                  </span>
+                  <span className="badge badge-rose text-xs" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>
+                    Reporter
+                  </span>
+                </div>
+                <span className="text-xs text-brand font-semibold d-block">{reporterUser.handle || '@reporter'}</span>
               </div>
             </div>
           )}
