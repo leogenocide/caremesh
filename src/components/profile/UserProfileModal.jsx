@@ -119,31 +119,31 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
       maxWidth="760px"
       zIndex={1100}
       footer={
-        <div className="d-flex align-center justify-between w-100 gap-2 flex-wrap">
+        <div className="user-profile-modal-footer">
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm profile-footer-close"
             onClick={onClose}
           >
             Close
           </button>
 
-          <div className="d-flex align-center gap-2">
+          <div className="profile-footer-actions">
             {!isSelf && (
               <>
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm text-muted d-flex align-center gap-1"
+                  className="btn btn-ghost btn-sm text-muted profile-footer-report d-flex align-center gap-1"
                   onClick={handleReportUser}
                   title="Report profile for moderation audit"
                 >
                   <Flag size={13} />
-                  <span>Report</span>
+                  <span className="profile-footer-btn-label">Report</span>
                 </button>
 
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm d-flex align-center gap-1.5"
+                  className="btn btn-primary btn-sm profile-footer-message d-flex align-center gap-1.5"
                   onClick={handleMessageUser}
                 >
                   <MessageSquare size={14} />
@@ -154,12 +154,12 @@ export const UserProfileModal = ({ isOpen, onClose, user }) => {
 
             <button
               type="button"
-              className="btn btn-secondary btn-sm d-flex align-center gap-1"
+              className="btn btn-secondary btn-sm profile-footer-view d-flex align-center gap-1"
               onClick={handleViewFullProfilePage}
               title="Open full dedicated profile page"
             >
               <ExternalLink size={13} />
-              <span>Full Page</span>
+              <span className="profile-footer-btn-label">Full Page</span>
             </button>
           </div>
         </div>

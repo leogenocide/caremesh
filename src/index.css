@@ -1344,33 +1344,154 @@ select {
 
 .collaborate-card-actions {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  width: 100%;
+}
+
+.collaborate-action-primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.collaborate-action-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 @media (max-width: 640px) {
   .collaborate-card-actions {
-    display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .collaborate-action-primary {
+    width: 100% !important;
+    min-width: 100% !important;
+    justify-content: center;
+    padding: 0.55rem 0.75rem;
+  }
+
+  .collaborate-action-secondary {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
-  .collaborate-card-actions > .btn:first-child {
-    width: 100%;
-    flex: 1 1 100%;
+
+  .collaborate-action-secondary .btn {
+    width: 100% !important;
+    justify-content: center;
+    font-size: 0.78rem;
+    padding: 0.45rem 0.5rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
-  .collaborate-card-actions > .btn:not(:first-child) {
-    flex: 1 1 calc(50% - 0.25rem);
+}
+
+/* Plan Card Footer & Actions */
+.plan-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .plan-card-footer {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+
+  .plan-card-actions {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .plan-card-actions > .btn:last-child {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
     min-width: 0;
   }
 }
 
-@media (max-width: 360px) {
-  .collaborate-card-actions {
-    flex-direction: column;
-  }
-  .collaborate-card-actions .btn {
+/* User Profile Modal Footer */
+.user-profile-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.profile-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 580px) {
+  .user-profile-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
     width: 100%;
+    flex-wrap: nowrap !important;
+  }
+
+  .profile-footer-close {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  .profile-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 1;
+    justify-content: flex-end;
+    min-width: 0;
+    flex-wrap: nowrap !important;
+  }
+
+  .profile-footer-message {
+    flex: 1;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8rem;
     justify-content: center;
+    min-width: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  .profile-footer-report,
+  .profile-footer-view {
+    padding: 0.45rem 0.55rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 440px) {
+  .profile-footer-btn-label {
+    display: none !important;
+  }
+  .profile-footer-report,
+  .profile-footer-view {
+    padding: 0.45rem 0.5rem;
   }
 }
 

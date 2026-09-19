@@ -226,6 +226,18 @@ export function initDatabase() {
         FOREIGN KEY (author_id) REFERENCES users(id)
       )
     `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS match_endorsements (
+        id TEXT PRIMARY KEY,
+        match_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(match_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_match_endorsements_mid ON match_endorsements(match_id);
+      CREATE INDEX IF NOT EXISTS idx_match_endorsements_uid ON match_endorsements(user_id);
+    `);
   } catch (err) {
     console.warn('Migration warning for new columns:', err.message);
   }

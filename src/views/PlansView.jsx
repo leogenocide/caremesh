@@ -277,7 +277,7 @@ export const PlansView = () => {
               </div>
 
               {/* Card Footer */}
-              <div className="d-flex align-center justify-between pt-3 border-top text-xs text-muted flex-wrap gap-2">
+              <div className="plan-card-footer d-flex align-center justify-between pt-3 border-top text-xs text-muted flex-wrap gap-2">
                 <div className="d-flex align-center gap-3 flex-wrap">
                   <span className="d-flex align-center gap-1">
                     <Users size={13} /> {plan.participants?.length || 1} Working Group Members
@@ -287,7 +287,7 @@ export const PlansView = () => {
                   </span>
                 </div>
 
-                <div className="d-flex align-center gap-2">
+                <div className="plan-card-actions">
                   <button
                     type="button"
                     className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
@@ -307,7 +307,8 @@ export const PlansView = () => {
                       viewPlanDetail(plan);
                     }}
                   >
-                    Inspect Proposal, Critique & History →
+                    <span className="d-none d-sm-inline">Inspect Proposal, Critique & History →</span>
+                    <span className="d-inline d-sm-none">Inspect Proposal &rarr;</span>
                   </button>
                 </div>
               </div>

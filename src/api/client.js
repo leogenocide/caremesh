@@ -337,6 +337,10 @@ class ApiClient {
     createAssignment: async (data) => this.request('/matcher/assign', {
       method: 'POST',
       body: JSON.stringify(data)
+    }),
+    endorseMatch: async (matchId) => this.request('/matcher/endorse', {
+      method: 'POST',
+      body: JSON.stringify({ matchId })
     })
   };
 
