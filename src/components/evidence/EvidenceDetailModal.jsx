@@ -107,8 +107,8 @@ export const EvidenceDetailModal = () => {
           className="card p-2.5 d-flex align-center justify-between flex-wrap gap-2"
           style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-default)' }}
         >
-          <div className="d-flex align-center gap-1.5 flex-wrap text-xs text-muted">
-            <span className="font-semibold text-secondary d-flex align-center gap-1">
+          <div className="d-flex align-center gap-1.5 flex-wrap text-xs text-muted min-w-0 flex-1">
+            <span className="font-semibold text-secondary d-flex align-center gap-1 flex-shrink-0">
               <Layers size={13} className="text-brand" />
               <span>Lineage:</span>
             </span>
@@ -117,7 +117,8 @@ export const EvidenceDetailModal = () => {
               <>
                 <button
                   type="button"
-                  className="btn btn-ghost btn-xs text-brand font-semibold p-0"
+                  className="btn btn-ghost btn-xs text-brand font-semibold p-0 text-truncate"
+                  style={{ maxWidth: '140px' }}
                   onClick={handleBackToParent}
                   title="Inspect root observation post"
                 >
@@ -131,7 +132,8 @@ export const EvidenceDetailModal = () => {
               <>
                 <button
                   type="button"
-                  className="btn btn-ghost btn-xs text-brand font-semibold p-0"
+                  className="btn btn-ghost btn-xs text-brand font-semibold p-0 text-truncate"
+                  style={{ maxWidth: '140px' }}
                   onClick={() => {
                     if (viewEvidenceDetail) {
                       viewEvidenceDetail(parentEvidence, parentObservation);
@@ -145,7 +147,7 @@ export const EvidenceDetailModal = () => {
               </>
             )}
 
-            <span className="font-bold text-primary truncate" style={{ maxWidth: '240px' }}>
+            <span className="font-bold text-primary text-truncate" style={{ maxWidth: '160px' }}>
               {evidence.title}
             </span>
           </div>
@@ -153,7 +155,7 @@ export const EvidenceDetailModal = () => {
           {parentObservation && (
             <button
               type="button"
-              className="btn btn-secondary btn-xs d-flex align-center gap-1 font-semibold"
+              className="btn btn-secondary btn-xs d-flex align-center justify-center gap-1 font-semibold flex-shrink-0 w-100-mobile"
               onClick={handleBackToParent}
             >
               <ArrowLeft size={12} />
@@ -288,17 +290,17 @@ export const EvidenceDetailModal = () => {
         {/* 6. Recursive Child Sub-Posts Suite (Sub-Evidence & Sub-Contradictions) */}
         <div className="pt-2 border-top">
           <div className="d-flex align-center justify-between mb-3 flex-wrap gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <h4 className="font-bold text-sm text-primary mb-0.5">Sub-Posts Created on this Evidence</h4>
               <p className="text-xs text-muted mb-0">
                 Community members can attach secondary corroborating proof (sub-evidence) or challenge this proof (sub-contradictions).
               </p>
             </div>
 
-            <div className="d-flex align-center gap-2">
+            <div className="d-flex align-center gap-2 flex-wrap w-100-mobile">
               <button
                 type="button"
-                className="btn btn-secondary btn-xs d-flex align-center gap-1 font-semibold"
+                className="btn btn-secondary btn-xs d-flex align-center justify-center gap-1 font-semibold flex-1"
                 onClick={handleAddSubEvidence}
               >
                 <Plus size={12} className="text-brand" />
@@ -306,7 +308,7 @@ export const EvidenceDetailModal = () => {
               </button>
               <button
                 type="button"
-                className="btn btn-xs text-rose d-flex align-center gap-1 font-semibold"
+                className="btn btn-xs text-rose d-flex align-center justify-center gap-1 font-semibold flex-1"
                 style={{ background: 'var(--rose-50)', border: '1px solid var(--rose-200)' }}
                 onClick={handleAddSubContradiction}
               >
@@ -429,10 +431,10 @@ export const EvidenceDetailModal = () => {
 
         {/* 7. Footer Actions */}
         <div className="d-flex align-center justify-between pt-3 border-top flex-wrap gap-2">
-          <div className="d-flex align-center gap-2">
+          <div className="d-flex align-center gap-2 flex-wrap w-100-mobile">
             <button
               type="button"
-              className="btn btn-secondary btn-sm d-flex align-center gap-1.5"
+              className="btn btn-secondary btn-sm d-flex align-center justify-center gap-1.5 flex-1"
               onClick={() => openShareSocialModal(evidence, 'observation')}
             >
               <Share2 size={13} />
@@ -440,7 +442,7 @@ export const EvidenceDetailModal = () => {
             </button>
             <button
               type="button"
-              className="btn btn-ghost btn-sm text-muted d-flex align-center gap-1"
+              className="btn btn-ghost btn-sm text-muted d-flex align-center justify-center gap-1 flex-1"
               onClick={() => {
                 openReportModal({
                   targetType: 'evidence',
@@ -456,11 +458,11 @@ export const EvidenceDetailModal = () => {
             </button>
           </div>
 
-          <div className="d-flex align-center gap-2">
+          <div className="d-flex align-center gap-2 flex-wrap w-100-mobile justify-end">
             {canUserManage(evidence) && (
               <button
                 type="button"
-                className="btn btn-sm text-rose d-flex align-center gap-1.5"
+                className="btn btn-sm text-rose d-flex align-center justify-center gap-1.5 flex-1"
                 style={{ background: 'var(--rose-50)', border: '1px solid var(--rose-200)' }}
                 onClick={() => {
                   if (window.confirm(`Are you sure you want to permanently delete evidence record "${evidence.title}"? This action cannot be undone.`)) {
@@ -476,7 +478,7 @@ export const EvidenceDetailModal = () => {
             )}
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
+              className="btn btn-secondary btn-sm flex-1"
               onClick={closeEvidenceDetailModal}
             >
               Close

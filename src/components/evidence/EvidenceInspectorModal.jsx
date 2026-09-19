@@ -587,9 +587,10 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => openShareSocialModal(observation, 'observation')}
+                    title="Share this observation to other platforms or community feed"
                   >
                     <Share2 size={14} />
-                    <span>Share to Social</span>
+                    <span>Share Record</span>
                   </button>
 
                   <button

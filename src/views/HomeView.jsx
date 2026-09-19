@@ -441,6 +441,19 @@ export const HomeView = () => {
 
                       <button
                         type="button"
+                        className="btn btn-ghost btn-xs text-muted d-inline-flex align-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShareSocialModal(req, 'request');
+                        }}
+                        title="Share this request"
+                      >
+                        <Share2 size={13} />
+                        <span>Share</span>
+                      </button>
+
+                      <button
+                        type="button"
                         className="btn btn-ghost btn-xs text-brand font-semibold"
                         onClick={() => viewRequestDetail(req)}
                       >
@@ -639,7 +652,21 @@ export const HomeView = () => {
                     </p>
                     <div className="d-flex align-center justify-between pt-1 border-top text-xs text-muted">
                       <span>{plan.participants?.length || 0} Collaborators</span>
-                      <span className="text-brand font-semibold">Inspect →</span>
+                      <div className="d-flex align-center gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-muted p-0 d-inline-flex align-center gap-0.5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openShareSocialModal(plan, 'plan');
+                          }}
+                          title="Share plan"
+                        >
+                          <Share2 size={12} />
+                          <span>Share</span>
+                        </button>
+                        <span className="text-brand font-semibold">Inspect →</span>
+                      </div>
                     </div>
                   </div>
                 );

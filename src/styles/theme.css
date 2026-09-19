@@ -12,6 +12,11 @@
   --primary-800: #065f46;
   --primary-900: #064e3b;
 
+  /* Brand Aliases */
+  --brand: var(--primary-600);
+  --brand-light: var(--primary-100);
+  --brand-dark: var(--primary-700);
+
   /* Accent Amber (Warmth, Urgent Needs, Notice) */
   --amber-50: #fffbeb;
   --amber-100: #fef3c7;

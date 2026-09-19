@@ -77,13 +77,13 @@ export const Modal = ({
         <div className="modal-drag-handle" />
 
         <div className="modal-header">
-          <div>
-            <h3 id={titleId} className="font-bold text-lg text-primary">{title}</h3>
-            {subtitle && <p id={subtitleId} className="text-xs text-muted mt-1">{subtitle}</p>}
+          <div className="flex-1 min-w-0 pr-2">
+            <h3 id={titleId} className="font-bold text-lg text-primary" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{title}</h3>
+            {subtitle && <p id={subtitleId} className="text-xs text-muted mt-1" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{subtitle}</p>}
           </div>
           <button 
             type="button" 
-            className="btn-icon text-muted" 
+            className="btn-icon text-muted flex-shrink-0" 
             onClick={onClose} 
             aria-label="Close dialog"
           >

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Modal } from '../common/Modal';
 import { LocationPicker } from '../common/LocationPicker';
 import { useCareMesh } from '../../context/useCareMesh';
@@ -12,12 +12,28 @@ import {
   Edit2,
   Trash2,
   Check,
-  X
+  X,
+  Share2,
+  UserCheck,
+  Search
 } from 'lucide-react';
 
 export const EventDetailModal = ({ isOpen, onClose, event }) => {
-  const { joinEvent, sendEventChatMessage, currentUser, updateEvent, deleteEvent, canUserManage } = useCareMesh();
+  const { 
+    joinEvent, 
+    sendEventChatMessage, 
+    currentUser, 
+    updateEvent, 
+    deleteEvent, 
+    canUserManage,
+    openShareSocialModal,
+    showToast,
+    openReadinessModal,
+    readinessChecks,
+    viewUserProfile
+  } = useCareMesh();
   const [chatInput, setChatInput] = useState('');
+  const [attendeeSearch, setAttendeeSearch] = useState('');
 
   const isOwner = Boolean(
     event && currentUser && (
@@ -37,9 +53,22 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
   const [editLocation, setEditLocation] = useState({ address: '', lat: null, lng: null });
   const [editMaxParticipants, setEditMaxParticipants] = useState(20);
 
+  const filteredAttendees = useMemo(() => {
+    const list = event?.participants || [];
+    if (!attendeeSearch.trim()) return list;
+    const q = attendeeSearch.toLowerCase().trim();
+    return list.filter(p => 
+      p.name?.toLowerCase().includes(q) || 
+      p.handle?.toLowerCase().includes(q)
+    );
+  }, [event?.participants, attendeeSearch]);
+
   if (!event) return null;
 
   const isUserJoined = event.participants?.some(p => p.id === currentUser?.id);
+  const linkedCheck = event?.id
+    ? (readinessChecks || []).find(rc => rc.eventId === event.id || rc.event_id === event.id)
+    : null;
 
   const handleStartEdit = () => {
     setEditTitle(event.title || '');
@@ -59,7 +88,7 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
   const handleSaveEdit = (e) => {
     if (e) e.preventDefault();
     if (!editTitle.trim()) {
-      alert('Please enter a title for the activity.');
+      if (showToast) showToast('Please enter a title for the activity.', 'error');
       return;
     }
     updateEvent(event.id, {
@@ -252,13 +281,133 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
               </div>
             </div>
 
+            {/* Attendee Readiness Roll Call Panel */}
+            {linkedCheck && (
+              <div className="card p-2.5 mt-3 rounded" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                <div className="d-flex align-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <div className="d-flex align-center gap-2">
+                    <UserCheck size={16} className="text-brand flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-xs text-primary d-block">
+                        Attendee Readiness Roll Call Active
+                      </span>
+                      <span className="text-xs text-muted" style={{ fontSize: '0.7rem' }}>
+                        {linkedCheck.readyCount || 0} of {linkedCheck.targetHeadcount || event.maxParticipants || 10} attendees confirmed ready ({linkedCheck.readyPercentage || 0}%)
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs d-inline-flex align-center gap-1"
+                    onClick={() => openReadinessModal({ eventId: event.id, checkId: linkedCheck.id })}
+                  >
+                    <UserCheck size={12} />
+                    <span>Open Readiness Console</span>
+                  </button>
+                </div>
+                <div style={{ height: '5px', background: '#dcfce7', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div 
+                    style={{ 
+                      width: `${Math.min(100, linkedCheck.readyPercentage || 0)}%`, 
+                      height: '100%', 
+                      background: 'var(--brand)', 
+                      transition: 'width 0.3s ease' 
+                    }} 
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Registered Attendees Roster (Scalable for High Volume) */}
+            <div className="card p-2.5 mt-3 rounded" style={{ background: '#ffffff', border: '1px solid var(--border-light)' }}>
+              <div className="d-flex align-center justify-between gap-2 mb-2 flex-wrap">
+                <div className="d-flex align-center gap-1.5">
+                  <Users size={14} className="text-brand flex-shrink-0" />
+                  <span className="font-bold text-xs text-primary">
+                    Registered Attendees ({event.participants?.length || 0} / {event.maxParticipants || 20})
+                  </span>
+                </div>
+                {(event.participants?.length || 0) > 5 && (
+                  <div className="position-relative d-flex align-center" style={{ minWidth: '150px' }}>
+                    <Search size={11} className="position-absolute text-muted" style={{ left: '6px' }} />
+                    <input
+                      type="text"
+                      className="form-input text-xs"
+                      style={{ paddingLeft: '22px', height: '24px', fontSize: '0.68rem' }}
+                      placeholder="Filter attendees..."
+                      value={attendeeSearch}
+                      onChange={(e) => setAttendeeSearch(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Bounded Scrollable Attendees List */}
+              <div 
+                className="d-flex flex-column gap-1.5" 
+                style={{ 
+                  maxHeight: '160px', 
+                  overflowY: 'auto', 
+                  paddingRight: '4px' 
+                }}
+              >
+                {filteredAttendees.length > 0 ? (
+                  filteredAttendees.map((p, idx) => {
+                    const isHost = p.id === event.organizer?.id || p.id === event.organizerId;
+                    return (
+                      <div 
+                        key={p.id || idx}
+                        className="p-1.5 rounded d-flex align-center justify-between gap-2"
+                        style={{ background: 'var(--bg-subtle)' }}
+                      >
+                        <div 
+                          className="d-flex align-center gap-2 min-w-0 cursor-pointer"
+                          onClick={() => {
+                            if (viewUserProfile) {
+                              onClose();
+                              viewUserProfile(p);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          title={`View ${p.name}'s Profile`}
+                        >
+                          <img
+                            src={p.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'}
+                            alt={p.name}
+                            style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
+                          <div className="min-w-0">
+                            <span className="font-semibold text-xs text-primary d-block text-truncate hover-underline">
+                              {p.name}
+                            </span>
+                            <span className="text-xs text-muted d-block text-truncate" style={{ fontSize: '0.66rem' }}>
+                              {p.handle || `@user_${p.id?.slice(-4) || 'neighbor'}`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className={`badge ${isHost ? 'badge-primary' : 'badge-secondary'} text-xs flex-shrink-0`} style={{ fontSize: '0.62rem' }}>
+                          {isHost ? 'Host' : 'Attending'}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <span className="text-xs text-muted p-2 text-center d-block">
+                    {attendeeSearch ? 'No attendees match search filter.' : 'No attendees registered yet. Be the first to join!'}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* Actions ribbon */}
             <div className="mt-3 pt-3 border-top d-flex justify-between align-center flex-wrap gap-2">
               <span className="text-xs text-muted">
                 Organized by {event.organizer?.name}
               </span>
 
-              <div className="d-flex align-center gap-2">
+              <div className="d-flex align-center gap-2 flex-wrap">
                 {canManage && (
                   <>
                     <button
@@ -281,6 +430,28 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
                   </>
                 )}
 
+                {canManage && !linkedCheck && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => openReadinessModal({ eventId: event.id })}
+                    title="Initiate Member Readiness Check for this event"
+                  >
+                    <UserCheck size={14} className="text-brand" />
+                    <span>Readiness Check</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => openShareSocialModal(event, 'event')}
+                  title="Share Activity to External Platforms or Community"
+                >
+                  <Share2 size={14} />
+                  <span>Share</span>
+                </button>
+
                 {isOwner ? (
                   <button
                     type="button"
@@ -297,9 +468,9 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
                     onClick={() => {
                       if (!isUserJoined) {
                         joinEvent(event.id);
-                        alert(`You joined "${event.title}"!`);
+                        if (showToast) showToast(`You joined "${event.title}"!`, 'success');
                       } else {
-                        alert('You are already registered for this event.');
+                        if (showToast) showToast('You are already registered for this event.', 'info');
                       }
                     }}
                   >

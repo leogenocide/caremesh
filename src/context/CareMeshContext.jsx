@@ -154,11 +154,15 @@ export const CareMeshProvider = ({ children }) => {
 
   const [events, setEvents] = useState(() => {
     try {
-      localStorage.removeItem('caremesh_events');
+      const saved = localStorage.getItem('caremesh_events');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch {
       // Ignore local storage errors
     }
-    return [];
+    return initialEvents;
   });
 
   const [plans, setPlans] = useState(() => {
@@ -222,6 +226,8 @@ export const CareMeshProvider = ({ children }) => {
   const [isReadinessModalOpen, setIsReadinessModalOpen] = useState(false);
   const [readinessModalCommunity, setReadinessModalCommunity] = useState(null);
   const [readinessModalCheckId, setReadinessModalCheckId] = useState(null);
+  const [readinessModalRequestId, setReadinessModalRequestId] = useState(null);
+  const [readinessModalEventId, setReadinessModalEventId] = useState(null);
 
   const [isPublicRecordsModModalOpen, setIsPublicRecordsModModalOpen] = useState(false);
 
@@ -317,6 +323,7 @@ export const CareMeshProvider = ({ children }) => {
       localStorage.setItem('caremesh_quick_actions', JSON.stringify(quickActions));
       localStorage.setItem('caremesh_matching', JSON.stringify(matchingFactors));
       localStorage.setItem('caremesh_plans', JSON.stringify(plans));
+      localStorage.setItem('caremesh_events', JSON.stringify(events));
       localStorage.setItem('caremesh_safety', JSON.stringify(safetyReports));
       localStorage.setItem('caremesh_posts', JSON.stringify(posts));
       localStorage.setItem('caremesh_communities', JSON.stringify(communities));
@@ -3052,22 +3059,37 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const openReadinessModal = useCallback((communityOrOptions = null, targetCheckId = null) => {
-    if (communityOrOptions && typeof communityOrOptions === 'object' && !communityOrOptions.membersCount && !communityOrOptions.slug) {
-      if (communityOrOptions.requestId || communityOrOptions.request || communityOrOptions.checkId) {
-        setReadinessModalCommunity(null);
-        setReadinessModalCheckId(communityOrOptions.checkId || targetCheckId || null);
-        setIsReadinessModalOpen(true);
-        return;
+    let comm = null;
+    let checkId = targetCheckId;
+    let reqId = null;
+    let evtId = null;
+
+    if (communityOrOptions && typeof communityOrOptions === 'object') {
+      if (communityOrOptions.requestId) reqId = communityOrOptions.requestId;
+      if (communityOrOptions.eventId) evtId = communityOrOptions.eventId;
+      if (communityOrOptions.checkId) checkId = communityOrOptions.checkId;
+      if (communityOrOptions.communityId) {
+        comm = communities.find(c => c.id === communityOrOptions.communityId) || null;
       }
+      if (communityOrOptions.membersCount || communityOrOptions.slug) {
+        comm = communityOrOptions;
+      }
+    } else if (communityOrOptions && typeof communityOrOptions === 'string') {
+      comm = communities.find(c => c.id === communityOrOptions) || null;
     }
-    setReadinessModalCommunity(communityOrOptions);
-    setReadinessModalCheckId(targetCheckId || null);
+
+    setReadinessModalCommunity(comm);
+    setReadinessModalCheckId(checkId || null);
+    setReadinessModalRequestId(reqId || null);
+    setReadinessModalEventId(evtId || null);
     setIsReadinessModalOpen(true);
-  }, []);
+  }, [communities]);
 
   const closeReadinessModal = () => {
     setReadinessModalCommunity(null);
     setReadinessModalCheckId(null);
+    setReadinessModalRequestId(null);
+    setReadinessModalEventId(null);
     setIsReadinessModalOpen(false);
   };
 
@@ -3832,6 +3854,8 @@ export const CareMeshProvider = ({ children }) => {
       shareSocialTarget,
       openShareSocialModal,
       closeShareSocialModal,
+      openShareModal: openShareSocialModal,
+      closeShareModal: closeShareSocialModal,
 
       // Inspectors & Plan Modals
       inspectedEntity,
@@ -3903,6 +3927,8 @@ export const CareMeshProvider = ({ children }) => {
       isReadinessModalOpen,
       readinessModalCommunity,
       readinessModalCheckId,
+      readinessModalRequestId,
+      readinessModalEventId,
       openReadinessModal,
       closeReadinessModal,
       isPublicRecordsModModalOpen,

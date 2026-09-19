@@ -19,7 +19,8 @@ import {
   Lock,
   Globe,
   Plus,
-  Users
+  Users,
+  Share2
 } from 'lucide-react';
 
 const STANDARD_REQUEST_CATEGORIES = [
@@ -37,6 +38,9 @@ export const CollaborateView = () => {
     highlightedEntityId,
     requests,
     resources,
+    events,
+    setSelectedEventChat,
+    joinEvent,
     communities,
     matchingFactors,
     currentUser,
@@ -47,7 +51,8 @@ export const CollaborateView = () => {
     viewResourceDetail,
     openRequestResourceModal,
     isRequestVisibleToUser,
-    showToast
+    showToast,
+    openShareSocialModal
   } = useCareMesh();
 
   const [activeTabState, setActiveTabState] = useState('requests');
@@ -83,6 +88,7 @@ export const CollaborateView = () => {
   const tabs = [
     { id: 'requests', label: 'Help Requests & Needs', icon: <HandHeart size={16} />, count: activeNeedsCount },
     { id: 'resources', label: 'Resource Directory', icon: <Package size={16} />, count: resources.length },
+    { id: 'events', label: 'Civic Events & Work Parties', icon: <Calendar size={16} />, count: events?.length || 0 },
     { id: 'matcher', label: 'Transparent Resource Matcher', icon: <GitMerge size={16} /> }
   ];
 
@@ -96,6 +102,7 @@ export const CollaborateView = () => {
 
   const requestsPagination = usePagination(filteredRequests, 6);
   const resourcesPagination = usePagination(resources, 6);
+  const eventsPagination = usePagination(events || [], 6);
 
   // Reset page when any filter changes
   useEffect(() => {
@@ -120,6 +127,13 @@ export const CollaborateView = () => {
           >
             <Package size={15} />
             <span>Offer Resource / Skill</span>
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => openCreateModal('event')}
+          >
+            <Calendar size={15} />
+            <span>Schedule Event / Work Party</span>
           </button>
           <button
             className="btn btn-primary btn-sm"
@@ -361,6 +375,16 @@ export const CollaborateView = () => {
                       >
                         Request Details
                       </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm d-flex align-center gap-1"
+                        onClick={() => openShareSocialModal(req, 'request')}
+                        title="Share this request"
+                      >
+                        <Share2 size={14} />
+                        <span>Share</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -493,6 +517,15 @@ export const CollaborateView = () => {
                       >
                         Resource Details
                       </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm d-flex align-center gap-1"
+                        onClick={() => openShareSocialModal(res, 'resource')}
+                        title="Share this resource"
+                      >
+                        <Share2 size={14} />
+                        <span>Share</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -518,7 +551,152 @@ export const CollaborateView = () => {
         </div>
       )}
 
-      {/* TAB 3: TRANSPARENT RESOURCE MATCHER */}
+      {/* TAB 3: CIVIC EVENTS & WORK PARTIES */}
+      {activeTab === 'events' && (
+        <div className="d-flex flex-column gap-3">
+          <div className="d-flex align-center justify-between gap-2 flex-wrap">
+            <span className="text-xs text-muted">
+              Showing {(events || []).length} scheduled community work parties & civic events
+            </span>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => openCreateModal('event')}
+            >
+              <Plus size={14} />
+              <span>Schedule Event / Work Party</span>
+            </button>
+          </div>
+
+          {eventsPagination.paginatedItems.length === 0 ? (
+            <EmptyState
+              icon={<Calendar size={48} className="text-muted" />}
+              title="No Civic Events Scheduled"
+              description="Get your community together for a volunteer workday, workshop, or mutual aid response."
+              actionLabel="Schedule First Event"
+              onAction={() => openCreateModal('event')}
+            />
+          ) : (
+            <div className="grid-3 gap-3">
+              {eventsPagination.paginatedItems.map((evt) => {
+                const isUserJoined = evt.participants?.some(p => p.id === currentUser?.id);
+                const isOwner = Boolean(
+                  currentUser && (
+                    evt.organizer?.id === currentUser?.id ||
+                    evt.organizerId === currentUser?.id ||
+                    evt.organizer_id === currentUser?.id
+                  )
+                );
+                const isHighlighted = highlightedEntityId === evt.id;
+
+                return (
+                  <div
+                    key={evt.id}
+                    id={`event-${evt.id}`}
+                    className={`card p-3 d-flex flex-column justify-between transition-all ${isHighlighted ? 'ring-2' : ''}`}
+                    style={{
+                      background: '#ffffff',
+                      border: isHighlighted ? '2px solid var(--primary-500)' : '1px solid var(--border-default)',
+                      boxShadow: isHighlighted ? '0 0 12px rgba(16, 185, 129, 0.25)' : undefined
+                    }}
+                  >
+                    <div>
+                      {/* Badge and Share */}
+                      <div className="d-flex align-center justify-between mb-2">
+                        <span className="badge badge-purple text-xs text-uppercase font-semibold">
+                          {(evt.eventType || 'Civic Activity').replace('_', ' ')}
+                        </span>
+                        <div className="d-flex align-center gap-1">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs text-muted"
+                            title="Share Event"
+                            onClick={() => openShareSocialModal(evt, 'event')}
+                          >
+                            <Share2 size={13} />
+                          </button>
+                          <span className="badge badge-primary text-xs font-semibold">
+                            {evt.participants?.length || 0}/{evt.maxParticipants || 20}
+                          </span>
+                        </div>
+                      </div>
+
+                      <h4 className="font-bold text-sm text-primary mb-1" style={{ lineHeight: '1.3' }}>
+                        {evt.title}
+                      </h4>
+
+                      <p className="text-xs text-secondary mb-3 line-clamp-2" style={{ lineHeight: '1.4' }}>
+                        {evt.description}
+                      </p>
+
+                      <div className="d-flex flex-column gap-1.5 text-xs text-muted mb-3">
+                        <div className="d-flex align-center gap-1.5">
+                          <Calendar size={12} className="text-purple flex-shrink-0" />
+                          <span>{evt.date} &bull; {evt.time}</span>
+                        </div>
+                        <div className="d-flex align-center gap-1.5">
+                          <MapPin size={12} className="text-purple flex-shrink-0" />
+                          <span className="truncate">{evt.location?.address || 'Community Hub'}</span>
+                        </div>
+                        <div className="d-flex align-center gap-1.5">
+                          <Users size={12} className="text-purple flex-shrink-0" />
+                          <span>Organized by {evt.organizer?.name || 'Community Member'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-top d-flex align-center justify-between gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-primary font-semibold"
+                        onClick={() => setSelectedEventChat(evt)}
+                      >
+                        Chat & Details &rarr;
+                      </button>
+
+                      {isOwner ? (
+                        <span className="badge badge-secondary text-xs">Host</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${isUserJoined ? 'btn-secondary' : 'btn-primary'}`}
+                          onClick={() => {
+                            if (!isUserJoined) {
+                              joinEvent(evt.id);
+                              if (showToast) showToast(`You joined "${evt.title}"!`, 'success');
+                            } else {
+                              if (showToast) showToast('You are already registered for this event.', 'info');
+                            }
+                          }}
+                        >
+                          <Users size={12} />
+                          <span>{isUserJoined ? 'Attending' : 'Join'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {eventsPagination.totalPages > 1 && (
+            <Pagination
+              currentPage={eventsPagination.currentPage}
+              totalPages={eventsPagination.totalPages}
+              totalItems={eventsPagination.totalItems}
+              startIndex={eventsPagination.startIndex}
+              endIndex={eventsPagination.endIndex}
+              onPageChange={eventsPagination.setPage}
+              pageSize={eventsPagination.pageSize}
+              onPageSizeChange={eventsPagination.setPageSize}
+              pageSizeOptions={[4, 6, 12, 24]}
+              itemName="civic events"
+            />
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: TRANSPARENT RESOURCE MATCHER */}
       {activeTab === 'matcher' && (
         <div className="d-flex flex-column gap-3">
           <div className="card p-3" style={{ background: 'var(--blue-50)', border: '1px solid var(--blue-100)' }}>

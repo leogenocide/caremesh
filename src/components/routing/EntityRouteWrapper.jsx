@@ -76,7 +76,9 @@ export const EntityRouteWrapper = ({ entityType }) => {
     } else if (entityType === 'event') {
       const evt = events.find(e => e.id === id);
       if (evt) {
-        setCurrentView('home');
+        setCurrentView('collaborate');
+        setCurrentSubTab('events');
+        setHighlightedEntityId(id);
         setSelectedEventChat(evt);
       }
     } else if (entityType === 'safety') {
@@ -92,7 +94,7 @@ export const EntityRouteWrapper = ({ entityType }) => {
   if (entityType === 'observation' || entityType === 'claim' || entityType === 'evidence' || entityType === 'safety') {
     return <ExploreView />;
   }
-  if (entityType === 'request' || entityType === 'resource') {
+  if (entityType === 'request' || entityType === 'resource' || entityType === 'event') {
     return <CollaborateView />;
   }
   if (entityType === 'plan') {

@@ -25,6 +25,7 @@ export const EvidenceItemCard = ({
     openObservationRelationModal, 
     deleteEvidence,
     canUserManage,
+    closeEvidenceDetailModal,
     evidence: allEvidence = [], 
     observations = [] 
   } = useCareMesh();
@@ -276,6 +277,7 @@ export const EvidenceItemCard = ({
                     className="p-1.5 bg-white rounded border card-interactive cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (closeEvidenceDetailModal) closeEvidenceDetailModal();
                       if (inspectEntity) {
                         inspectEntity(subContra, 'observation');
                       }
@@ -304,6 +306,7 @@ export const EvidenceItemCard = ({
                     className="p-1.5 bg-white rounded border card-interactive cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (closeEvidenceDetailModal) closeEvidenceDetailModal();
                       if (inspectEntity) {
                         inspectEntity(subCorrob, 'observation');
                       }

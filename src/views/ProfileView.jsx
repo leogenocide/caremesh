@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCareMesh } from '../context/useCareMesh';
-import { PlanStatusBadge } from '../components/common/Badge';
+import { PlanStatusBadge, UrgencyBadge } from '../components/common/Badge';
 import { 
   MapPin, 
   Package, 
@@ -17,7 +17,12 @@ import {
   MessageSquare, 
   Flag,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  Calendar,
+  Radio,
+  Search,
+  X,
+  Eye
 } from 'lucide-react';
 import { ChangeAvatarModal } from '../components/profile/ChangeAvatarModal';
 import { EditBioModal } from '../components/profile/EditBioModal';
@@ -31,13 +36,17 @@ export const ProfileView = () => {
   const { 
     currentUser, 
     setCurrentUser, 
-    resources, 
-    requests, 
-    plans, 
+    resources = [], 
+    requests = [], 
+    plans = [], 
+    events = [],
+    observations = [],
     resetToSeedData, 
     viewPlanDetail, 
     viewRequestDetail, 
     viewResourceDetail, 
+    setSelectedEventChat,
+    inspectEntity,
     openAuthModal, 
     logoutUser,
     mockUsers,
@@ -48,7 +57,13 @@ export const ProfileView = () => {
     unrestrictUser
   } = useCareMesh();
 
-  const [activeSubTab, setActiveSubTab] = useState('contributions'); // 'contributions' | 'resources' | 'privacy'
+  const [activeSubTab, setActiveSubTab] = useState('requests'); // 'requests' | 'events' | 'plans' | 'resources' | 'observations' | 'privacy'
+  const [profileSearch, setProfileSearch] = useState('');
+  const [requestFilter, setRequestFilter] = useState('all'); // 'all' | 'my_requests' | 'volunteering' | 'open' | 'fulfilled'
+  const [eventFilter, setEventFilter] = useState('all'); // 'all' | 'organizing' | 'attending'
+  const [planFilter, setPlanFilter] = useState('all'); // 'all' | 'proposer' | 'participant'
+  const [resourceFilter, setResourceFilter] = useState('all'); // 'all' | 'available' | 'allocated'
+
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [isBioModalOpen, setIsBioModalOpen] = useState(false);
   const [overrideStatus, setOverrideStatus] = useState(null);
@@ -72,20 +87,146 @@ export const ProfileView = () => {
     };
   }, [userId, isSelf, currentUser, mockUsers]);
 
-  // Target user's linked items
-  const userResources = resources.filter(res => res.provider?.id === targetUser?.id || res.providerId === targetUser?.id);
-  const userRequests = requests.filter(r => r.requester?.id === targetUser?.id || r.authorId === targetUser?.id || r.responses?.some(resp => resp.user?.id === targetUser?.id));
-  const userPlans = Array.from(new Map(
-    plans.filter(p => p.participants?.some(part => part.user?.id === targetUser?.id) || p.proposer?.id === targetUser?.id)
-      .map(p => [p.id, p])
-  ).values());
+  // Target user's linked items across all entity domains
+  const userRequests = useMemo(() => {
+    return (requests || []).filter(r => 
+      r.requester?.id === targetUser?.id || 
+      r.requesterId === targetUser?.id ||
+      r.authorId === targetUser?.id || 
+      r.responses?.some(resp => resp.user?.id === targetUser?.id || resp.userId === targetUser?.id)
+    );
+  }, [requests, targetUser]);
 
-  const plansPagination = usePagination(userPlans, 4);
-  const requestsPagination = usePagination(userRequests, 4);
-  const resourcesPagination = usePagination(userResources, 4);
+  const userEvents = useMemo(() => {
+    return (events || []).filter(e => 
+      e.organizer?.id === targetUser?.id || 
+      e.organizerId === targetUser?.id || 
+      e.participants?.some(p => p.id === targetUser?.id)
+    );
+  }, [events, targetUser]);
 
-  const totalContributions = targetUser.stats?.contributions || (userResources.length + userRequests.length + userPlans.length);
-  const requestsFulfilled = targetUser.stats?.requestsFulfilled || 0;
+  const userPlans = useMemo(() => {
+    return Array.from(new Map(
+      (plans || []).filter(p => 
+        p.proposer?.id === targetUser?.id || 
+        p.participants?.some(part => part.user?.id === targetUser?.id || part.id === targetUser?.id)
+      ).map(p => [p.id, p])
+    ).values());
+  }, [plans, targetUser]);
+
+  const userResources = useMemo(() => {
+    return (resources || []).filter(res => 
+      res.provider?.id === targetUser?.id || 
+      res.providerId === targetUser?.id
+    );
+  }, [resources, targetUser]);
+
+  const userObservations = useMemo(() => {
+    return (observations || []).filter(o => 
+      o.observer?.id === targetUser?.id || 
+      o.observerId === targetUser?.id || 
+      o.author?.id === targetUser?.id
+    );
+  }, [observations, targetUser]);
+
+  // Search & Filtered Sub-collections
+  const filteredRequests = useMemo(() => {
+    const q = profileSearch.toLowerCase().trim();
+    return userRequests.filter(r => {
+      const isOwner = r.requester?.id === targetUser?.id || r.requesterId === targetUser?.id || r.authorId === targetUser?.id;
+      const isVolunteer = r.responses?.some(resp => resp.user?.id === targetUser?.id || resp.userId === targetUser?.id);
+      
+      if (requestFilter === 'my_requests' && !isOwner) return false;
+      if (requestFilter === 'volunteering' && !isVolunteer) return false;
+      if (requestFilter === 'open' && r.status === 'fulfilled') return false;
+      if (requestFilter === 'fulfilled' && r.status !== 'fulfilled') return false;
+
+      if (!q) return true;
+      return (
+        r.title?.toLowerCase().includes(q) ||
+        r.description?.toLowerCase().includes(q) ||
+        r.category?.toLowerCase().includes(q) ||
+        r.location?.address?.toLowerCase().includes(q)
+      );
+    });
+  }, [userRequests, profileSearch, requestFilter, targetUser]);
+
+  const filteredEvents = useMemo(() => {
+    const q = profileSearch.toLowerCase().trim();
+    return userEvents.filter(e => {
+      const isOrganizer = e.organizer?.id === targetUser?.id || e.organizerId === targetUser?.id;
+      const isAttendee = e.participants?.some(p => p.id === targetUser?.id);
+
+      if (eventFilter === 'organizing' && !isOrganizer) return false;
+      if (eventFilter === 'attending' && !isAttendee) return false;
+
+      if (!q) return true;
+      return (
+        e.title?.toLowerCase().includes(q) ||
+        e.description?.toLowerCase().includes(q) ||
+        e.eventType?.toLowerCase().includes(q) ||
+        e.location?.address?.toLowerCase().includes(q)
+      );
+    });
+  }, [userEvents, profileSearch, eventFilter, targetUser]);
+
+  const filteredPlans = useMemo(() => {
+    const q = profileSearch.toLowerCase().trim();
+    return userPlans.filter(p => {
+      const isProposer = p.proposer?.id === targetUser?.id;
+      const isParticipant = p.participants?.some(part => part.user?.id === targetUser?.id || part.id === targetUser?.id);
+
+      if (planFilter === 'proposer' && !isProposer) return false;
+      if (planFilter === 'participant' && !isParticipant) return false;
+
+      if (!q) return true;
+      return (
+        p.title?.toLowerCase().includes(q) ||
+        p.problemStatement?.toLowerCase().includes(q) ||
+        p.targetCommunity?.toLowerCase().includes(q)
+      );
+    });
+  }, [userPlans, profileSearch, planFilter, targetUser]);
+
+  const filteredResources = useMemo(() => {
+    const q = profileSearch.toLowerCase().trim();
+    return userResources.filter(res => {
+      if (resourceFilter === 'available' && res.availability !== 'available') return false;
+      if (resourceFilter === 'allocated' && res.availability === 'available') return false;
+
+      if (!q) return true;
+      return (
+        res.title?.toLowerCase().includes(q) ||
+        res.description?.toLowerCase().includes(q) ||
+        res.contributionType?.toLowerCase().includes(q) ||
+        res.conditionsTerms?.toLowerCase().includes(q)
+      );
+    });
+  }, [userResources, profileSearch, resourceFilter]);
+
+  const filteredObservations = useMemo(() => {
+    const q = profileSearch.toLowerCase().trim();
+    return userObservations.filter(o => {
+      if (!q) return true;
+      return (
+        o.title?.toLowerCase().includes(q) ||
+        o.description?.toLowerCase().includes(q) ||
+        o.location?.address?.toLowerCase().includes(q) ||
+        o.category?.toLowerCase().includes(q)
+      );
+    });
+  }, [userObservations, profileSearch]);
+
+  const requestsPagination = usePagination(filteredRequests, 5);
+  const eventsPagination = usePagination(filteredEvents, 5);
+  const plansPagination = usePagination(filteredPlans, 5);
+  const resourcesPagination = usePagination(filteredResources, 5);
+  const observationsPagination = usePagination(filteredObservations, 5);
+
+  const totalContributions = targetUser.stats?.contributions || (
+    userResources.length + userRequests.length + userPlans.length + userEvents.length + userObservations.length
+  );
+  const requestsFulfilled = targetUser.stats?.requestsFulfilled || userRequests.filter(r => r.status === 'fulfilled').length;
 
   const togglePrivacy = (key) => {
     if (!isSelf) return;
@@ -370,22 +511,34 @@ export const ProfileView = () => {
 
         {/* Impact & Contribution Stats Ribbon */}
         {(!isSelf && targetUser.privacySettings?.publicContributionHistory === false) ? null : (
-          <div className="stats-grid gap-2 p-3 card" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
-            <div className="text-center">
+          <div 
+            className="gap-2 p-3 card" 
+            style={{ 
+              background: 'var(--bg-subtle)', 
+              border: '1px solid var(--border-light)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))'
+            }}
+          >
+            <div className="text-center p-1.5">
               <span className="font-bold text-lg text-primary d-block">{totalContributions}</span>
               <span className="text-xs text-muted">Total Contributions</span>
             </div>
-            <div className="text-center">
-              <span className="font-bold text-lg text-brand d-block">{requestsFulfilled}</span>
-              <span className="text-xs text-muted">Requests Fulfilled</span>
+            <div className="text-center p-1.5">
+              <span className="font-bold text-lg text-brand d-block">{userRequests.length}</span>
+              <span className="text-xs text-muted">Help Requests</span>
             </div>
-            <div className="text-center">
-              <span className="font-bold text-lg text-amber d-block">{userResources.length}</span>
-              <span className="text-xs text-muted">Resources Shared</span>
+            <div className="text-center p-1.5">
+              <span className="font-bold text-lg text-purple d-block">{userEvents.length}</span>
+              <span className="text-xs text-muted">Civic Events</span>
             </div>
-            <div className="text-center">
-              <span className="font-bold text-lg text-purple d-block">{userPlans.length}</span>
+            <div className="text-center p-1.5">
+              <span className="font-bold text-lg text-emerald d-block">{userPlans.length}</span>
               <span className="text-xs text-muted">Plans Joined</span>
+            </div>
+            <div className="text-center p-1.5">
+              <span className="font-bold text-lg text-amber d-block">{userResources.length}</span>
+              <span className="text-xs text-muted">Shared Resources</span>
             </div>
           </div>
         )}
@@ -430,185 +583,555 @@ export const ProfileView = () => {
         </div>
       ) : (
         <>
-          {/* Sub-tab Switcher */}
-          <div className="touch-tab-nav border-bottom pb-2 mb-2">
+          {/* Sub-tab Switcher with Live Entity Counts */}
+          <div className="touch-tab-nav border-bottom pb-2 mb-2 d-flex gap-1.5 flex-wrap">
             <button
-          className={`btn btn-sm ${activeSubTab === 'contributions' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{ whiteSpace: 'nowrap' }}
-          onClick={() => setActiveSubTab('contributions')}
-        >
-          <HandHeart size={14} />
-          <span>Active Plans & Needs ({userPlans.length + userRequests.length})</span>
-        </button>
-        <button
-          className={`btn btn-sm ${activeSubTab === 'resources' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{ whiteSpace: 'nowrap' }}
-          onClick={() => setActiveSubTab('resources')}
-        >
-          <Package size={14} />
-          <span>Shared Resources ({userResources.length})</span>
-        </button>
-        {isSelf && (
-          <button
-            className={`btn btn-sm ${activeSubTab === 'privacy' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ whiteSpace: 'nowrap' }}
-            onClick={() => setActiveSubTab('privacy')}
-          >
-            <Lock size={14} />
-            <span>Privacy & Prototype Settings</span>
-          </button>
-        )}
-      </div>
+              type="button"
+              className={`btn btn-sm ${activeSubTab === 'requests' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => setActiveSubTab('requests')}
+            >
+              <HandHeart size={14} />
+              <span>Help Requests ({userRequests.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeSubTab === 'events' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => setActiveSubTab('events')}
+            >
+              <Calendar size={14} />
+              <span>Civic Events ({userEvents.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeSubTab === 'plans' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => setActiveSubTab('plans')}
+            >
+              <Radio size={14} />
+              <span>Plans ({userPlans.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeSubTab === 'resources' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => setActiveSubTab('resources')}
+            >
+              <Package size={14} />
+              <span>Shared Resources ({userResources.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeSubTab === 'observations' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => setActiveSubTab('observations')}
+            >
+              <Eye size={14} />
+              <span>Observations ({userObservations.length})</span>
+            </button>
+            {isSelf && (
+              <button
+                type="button"
+                className={`btn btn-sm ${activeSubTab === 'privacy' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={() => setActiveSubTab('privacy')}
+              >
+                <Lock size={14} />
+                <span>Privacy & Settings</span>
+              </button>
+            )}
+          </div>
 
-      {/* TAB 1: CONTRIBUTIONS & PLANS */}
-      {activeSubTab === 'contributions' && (
-        <div className="d-flex flex-column gap-3">
-          <h4 className="font-bold text-sm text-primary">Participating Long-term Plans</h4>
-          <div className="d-flex flex-column gap-2">
-            {userPlans.length === 0 ? (
-              <div className="card p-3 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
-                {isSelf 
-                  ? 'No active participating plans at this time. Explore community proposals to get involved!' 
-                  : `${targetUser.name} has not joined any public community plans yet.`}
+          {/* Real-Time Search & Scalable Filter Controls */}
+          {activeSubTab !== 'privacy' && (
+            <div className="card p-2.5 mb-2 d-flex flex-column gap-2" style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)' }}>
+              <div className="d-flex align-center gap-2">
+                <div className="position-relative flex-1 d-flex align-center">
+                  <Search size={14} className="position-absolute text-muted" style={{ left: '10px' }} />
+                  <input
+                    type="text"
+                    className="form-input text-xs w-100"
+                    style={{ paddingLeft: '30px', paddingRight: profileSearch ? '28px' : '10px', height: '32px' }}
+                    placeholder={`Search within ${targetUser.name}'s ${activeSubTab}...`}
+                    value={profileSearch}
+                    onChange={(e) => setProfileSearch(e.target.value)}
+                  />
+                  {profileSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setProfileSearch('')}
+                      className="btn-icon position-absolute"
+                      style={{ right: '6px', width: '20px', height: '20px', padding: 0 }}
+                      title="Clear search"
+                    >
+                      <X size={12} className="text-muted" />
+                    </button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <>
-                {plansPagination.paginatedItems.map(plan => {
-                  const completedCount = plan.milestones?.filter(m => m.status === 'completed').length || 0;
-                  const totalCount = plan.milestones?.length || 0;
 
-                  return (
+              {/* Subtab Drill-Down Filter Pills */}
+              {activeSubTab === 'requests' && (
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs text-muted font-semibold mr-1">Filter:</span>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${requestFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setRequestFilter('all')}
+                  >
+                    All ({userRequests.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${requestFilter === 'my_requests' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setRequestFilter('my_requests')}
+                  >
+                    Authored Requests ({userRequests.filter(r => r.requester?.id === targetUser?.id || r.requesterId === targetUser?.id || r.authorId === targetUser?.id).length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${requestFilter === 'volunteering' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setRequestFilter('volunteering')}
+                  >
+                    Volunteering ({userRequests.filter(r => r.responses?.some(resp => resp.user?.id === targetUser?.id || resp.userId === targetUser?.id)).length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${requestFilter === 'open' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setRequestFilter('open')}
+                  >
+                    Open Needs
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${requestFilter === 'fulfilled' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setRequestFilter('fulfilled')}
+                  >
+                    Fulfilled ({requestsFulfilled})
+                  </button>
+                </div>
+              )}
+
+              {activeSubTab === 'events' && (
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs text-muted font-semibold mr-1">Filter:</span>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${eventFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setEventFilter('all')}
+                  >
+                    All ({userEvents.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${eventFilter === 'organizing' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setEventFilter('organizing')}
+                  >
+                    Organizing / Host ({userEvents.filter(e => e.organizer?.id === targetUser?.id || e.organizerId === targetUser?.id).length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${eventFilter === 'attending' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setEventFilter('attending')}
+                  >
+                    Attending ({userEvents.filter(e => e.participants?.some(p => p.id === targetUser?.id)).length})
+                  </button>
+                </div>
+              )}
+
+              {activeSubTab === 'plans' && (
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs text-muted font-semibold mr-1">Filter:</span>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${planFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setPlanFilter('all')}
+                  >
+                    All ({userPlans.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${planFilter === 'proposer' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setPlanFilter('proposer')}
+                  >
+                    Proposer ({userPlans.filter(p => p.proposer?.id === targetUser?.id).length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${planFilter === 'participant' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setPlanFilter('participant')}
+                  >
+                    Participant ({userPlans.filter(p => p.participants?.some(part => part.user?.id === targetUser?.id || part.id === targetUser?.id)).length})
+                  </button>
+                </div>
+              )}
+
+              {activeSubTab === 'resources' && (
+                <div className="d-flex align-center gap-1.5 flex-wrap">
+                  <span className="text-xs text-muted font-semibold mr-1">Filter:</span>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${resourceFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setResourceFilter('all')}
+                  >
+                    All ({userResources.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${resourceFilter === 'available' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setResourceFilter('available')}
+                  >
+                    Available
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${resourceFilter === 'allocated' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '12px' }}
+                    onClick={() => setResourceFilter('allocated')}
+                  >
+                    In Use / Allocated
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 1: HELP REQUESTS */}
+          {activeSubTab === 'requests' && (
+            <div className="d-flex flex-column gap-2.5">
+              {filteredRequests.length === 0 ? (
+                <div className="card p-4 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
+                  {profileSearch 
+                    ? `No help requests match "${profileSearch}".`
+                    : isSelf 
+                      ? 'You have not authored or volunteered for any help requests yet.' 
+                      : `${targetUser.name} has no matching help requests.`}
+                </div>
+              ) : (
+                <>
+                  {requestsPagination.paginatedItems.map(req => {
+                    const isOwner = req.requester?.id === targetUser?.id || req.requesterId === targetUser?.id || req.authorId === targetUser?.id;
+                    return (
+                      <div 
+                        key={req.id} 
+                        className="card p-3 card-interactive cursor-pointer d-flex flex-column gap-2"
+                        onClick={() => viewRequestDetail(req)}
+                      >
+                        <div className="d-flex align-start justify-between gap-2 flex-wrap">
+                          <div className="min-w-0 flex-1">
+                            <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
+                              <UrgencyBadge urgency={req.urgency} />
+                              <span className="badge badge-secondary text-xs">{req.category}</span>
+                              <span className={`badge ${isOwner ? 'badge-primary' : 'badge-emerald'} text-xs`}>
+                                {isOwner ? 'Requester (Author)' : 'Committed Volunteer'}
+                              </span>
+                              {req.status === 'fulfilled' && (
+                                <span className="badge badge-emerald text-xs">Fulfilled</span>
+                              )}
+                            </div>
+                            <h5 className="font-bold text-sm text-primary mb-1">{req.title}</h5>
+                            <p className="text-xs text-secondary mb-1 line-clamp-2" style={{ lineHeight: '1.4' }}>
+                              {req.description}
+                            </p>
+                            <div className="d-flex align-center gap-2 text-xs text-muted flex-wrap">
+                              <span><MapPin size={11} className="d-inline mr-0.5" /> {req.location?.address || 'Community Area'}</span>
+                              <span>•</span>
+                              <span>{req.peopleJoined || 0} of {req.peopleNeeded || 1} volunteers</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewRequestDetail(req);
+                            }}
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <Pagination
+                    currentPage={requestsPagination.currentPage}
+                    totalPages={requestsPagination.totalPages}
+                    totalItems={requestsPagination.totalItems}
+                    pageSize={requestsPagination.pageSize}
+                    onPageChange={requestsPagination.setCurrentPage}
+                    compact={true}
+                    itemLabel="requests"
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: CIVIC EVENTS & WORK PARTIES */}
+          {activeSubTab === 'events' && (
+            <div className="d-flex flex-column gap-2.5">
+              {filteredEvents.length === 0 ? (
+                <div className="card p-4 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
+                  {profileSearch 
+                    ? `No civic events match "${profileSearch}".`
+                    : isSelf 
+                      ? 'You have not organized or joined any civic events yet.' 
+                      : `${targetUser.name} has no matching civic events.`}
+                </div>
+              ) : (
+                <>
+                  {eventsPagination.paginatedItems.map(evt => {
+                    const isOrganizer = evt.organizer?.id === targetUser?.id || evt.organizerId === targetUser?.id;
+                    return (
+                      <div 
+                        key={evt.id} 
+                        className="card p-3 card-interactive cursor-pointer d-flex flex-column gap-2"
+                        onClick={() => setSelectedEventChat && setSelectedEventChat(evt)}
+                      >
+                        <div className="d-flex align-start justify-between gap-2 flex-wrap">
+                          <div className="min-w-0 flex-1">
+                            <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
+                              <span className="badge badge-purple text-xs text-uppercase font-semibold">
+                                {evt.eventType?.replace('_', ' ') || 'Event'}
+                              </span>
+                              <span className={`badge ${isOrganizer ? 'badge-primary' : 'badge-emerald'} text-xs`}>
+                                {isOrganizer ? 'Host & Organizer' : 'Registered Attendee'}
+                              </span>
+                              <span className="badge badge-secondary text-xs">
+                                {evt.participants?.length || 0} / {evt.maxParticipants || 20} Attendees
+                              </span>
+                            </div>
+                            <h5 className="font-bold text-sm text-primary mb-1">{evt.title}</h5>
+                            <p className="text-xs text-secondary mb-1 line-clamp-2" style={{ lineHeight: '1.4' }}>
+                              {evt.description}
+                            </p>
+                            <div className="d-flex align-center gap-2 text-xs text-muted flex-wrap">
+                              <span><Calendar size={11} className="d-inline mr-0.5" /> {evt.date} • {evt.time}</span>
+                              <span>•</span>
+                              <span><MapPin size={11} className="d-inline mr-0.5" /> {evt.location?.address || 'Community Venue'}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm flex-shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (setSelectedEventChat) setSelectedEventChat(evt);
+                            }}
+                          >
+                            View & Coordinate
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <Pagination
+                    currentPage={eventsPagination.currentPage}
+                    totalPages={eventsPagination.totalPages}
+                    totalItems={eventsPagination.totalItems}
+                    pageSize={eventsPagination.pageSize}
+                    onPageChange={eventsPagination.setCurrentPage}
+                    compact={true}
+                    itemLabel="events"
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: LONG-TERM PLANS */}
+          {activeSubTab === 'plans' && (
+            <div className="d-flex flex-column gap-2.5">
+              {filteredPlans.length === 0 ? (
+                <div className="card p-4 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
+                  {profileSearch 
+                    ? `No plans match "${profileSearch}".`
+                    : isSelf 
+                      ? 'No active participating plans at this time. Explore community proposals to get involved!' 
+                      : `${targetUser.name} has not joined any public community plans yet.`}
+                </div>
+              ) : (
+                <>
+                  {plansPagination.paginatedItems.map(plan => {
+                    const completedCount = plan.milestones?.filter(m => m.status === 'completed').length || 0;
+                    const totalCount = plan.milestones?.length || 0;
+
+                    return (
+                      <div 
+                        key={plan.id} 
+                        className="card p-3 card-interactive cursor-pointer d-flex align-center justify-between gap-2"
+                        onClick={() => viewPlanDetail(plan)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <h5 className="font-bold text-sm text-primary mb-1">{plan.title}</h5>
+                          <span className="text-xs text-muted d-block line-clamp-2">
+                            {completedCount} of {totalCount} Milestones Completed · {plan.problemStatement}
+                          </span>
+                        </div>
+                        <div className="d-flex align-center gap-2 flex-shrink-0">
+                          <PlanStatusBadge status={plan.overallStatus || 'in_progress'} />
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewPlanDetail(plan);
+                            }}
+                          >
+                            Plan Details
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <Pagination
+                    currentPage={plansPagination.currentPage}
+                    totalPages={plansPagination.totalPages}
+                    totalItems={plansPagination.totalItems}
+                    pageSize={plansPagination.pageSize}
+                    onPageChange={plansPagination.setCurrentPage}
+                    compact={true}
+                    itemLabel="plans"
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: SHARED RESOURCES */}
+          {activeSubTab === 'resources' && (
+            <div className="d-flex flex-column gap-2.5">
+              {filteredResources.length === 0 ? (
+                <div className="card p-4 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
+                  {profileSearch 
+                    ? `No resources match "${profileSearch}".`
+                    : isSelf 
+                      ? 'You have not shared any resources yet.' 
+                      : `${targetUser.name} has not listed any shared equipment or resources yet.`}
+                </div>
+              ) : (
+                <>
+                  {resourcesPagination.paginatedItems.map(res => (
                     <div 
-                      key={plan.id} 
-                      className="card p-3 card-interactive cursor-pointer d-flex align-center justify-between"
-                      onClick={() => viewPlanDetail(plan)}
+                      key={res.id} 
+                      className="card p-3 card-interactive cursor-pointer d-flex flex-column justify-between gap-2"
+                      onClick={() => viewResourceDetail(res)}
                     >
                       <div>
-                        <h5 className="font-bold text-sm text-primary mb-1">{plan.title}</h5>
+                        <div className="d-flex align-center justify-between mb-1.5 flex-wrap gap-1">
+                          <span className="badge badge-primary text-xs">{res.contributionType}</span>
+                          <span className={`badge ${res.availability === 'available' ? 'badge-emerald' : 'badge-secondary'} text-xs`}>
+                            {res.availability}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-sm text-primary mb-1">{res.title}</h4>
+                        <p className="text-xs text-secondary mb-1 line-clamp-2">{res.description}</p>
+                        <div className="text-xs text-muted">
+                          <strong>Capacity:</strong> {res.quantity} • <strong>Terms:</strong> {res.conditionsTerms}
+                        </div>
+                      </div>
+                      <div className="d-flex justify-end pt-1.5 border-top">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            viewResourceDetail(res);
+                          }}
+                        >
+                          Resource Details
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <Pagination
+                    currentPage={resourcesPagination.currentPage}
+                    totalPages={resourcesPagination.totalPages}
+                    totalItems={resourcesPagination.totalItems}
+                    pageSize={resourcesPagination.pageSize}
+                    onPageChange={resourcesPagination.setCurrentPage}
+                    compact={true}
+                    itemLabel="resources"
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: FIELD OBSERVATIONS */}
+          {activeSubTab === 'observations' && (
+            <div className="d-flex flex-column gap-2.5">
+              {filteredObservations.length === 0 ? (
+                <div className="card p-4 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
+                  {profileSearch 
+                    ? `No observations match "${profileSearch}".`
+                    : isSelf 
+                      ? 'You have not published any field observations yet.' 
+                      : `${targetUser.name} has no field observations recorded.`}
+                </div>
+              ) : (
+                <>
+                  {observationsPagination.paginatedItems.map(obs => (
+                    <div 
+                      key={obs.id} 
+                      className="card p-3 card-interactive cursor-pointer d-flex align-center justify-between gap-2"
+                      onClick={() => inspectEntity && inspectEntity(obs)}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="d-flex align-center gap-1.5 mb-1 flex-wrap">
+                          <span className="badge badge-secondary text-xs">{obs.category || 'Observation'}</span>
+                          <span className="badge badge-emerald text-xs font-semibold">
+                            {obs.evidenceCount || (obs.evidenceFiles?.length) || 1} Evidence Records
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-sm text-primary mb-1">{obs.title}</h5>
+                        <p className="text-xs text-secondary mb-1 line-clamp-2" style={{ lineHeight: '1.4' }}>
+                          {obs.description}
+                        </p>
                         <span className="text-xs text-muted">
-                          {completedCount} of {totalCount} Milestones Completed · {plan.problemStatement}
+                          <MapPin size={11} className="d-inline mr-0.5" /> {obs.location?.address || 'Field Location'}
                         </span>
                       </div>
-                      <PlanStatusBadge status={plan.overallStatus || 'in_progress'} />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (inspectEntity) inspectEntity(obs);
+                        }}
+                      >
+                        Inspect Record
+                      </button>
                     </div>
-                  );
-                })}
-                <Pagination
-                  currentPage={plansPagination.currentPage}
-                  totalPages={plansPagination.totalPages}
-                  totalItems={plansPagination.totalItems}
-                  pageSize={plansPagination.pageSize}
-                  onPageChange={plansPagination.setCurrentPage}
-                  compact={true}
-                  itemLabel="plans"
-                />
-              </>
-            )}
-          </div>
-
-          <h4 className="font-bold text-sm text-primary mt-3">Help Requests & Volunteer Needs</h4>
-          <div className="d-flex flex-column gap-2">
-            {userRequests.length === 0 ? (
-              <div className="card p-3 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
-                {isSelf 
-                  ? 'No active help requests posted.' 
-                  : `${targetUser.name} has no open help requests.`}
-              </div>
-            ) : (
-              <>
-                {requestsPagination.paginatedItems.map(req => (
-                  <div 
-                    key={req.id} 
-                    className="card p-3 card-interactive cursor-pointer d-flex align-center justify-between"
-                    onClick={() => viewRequestDetail(req)}
-                  >
-                    <div>
-                      <h5 className="font-bold text-sm text-primary mb-1">{req.title}</h5>
-                      <span className="text-xs text-muted">{req.location?.address} • {req.status} • {req.peopleJoined || 0}/{req.peopleNeeded || 1} volunteers</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        viewRequestDetail(req);
-                      }}
-                    >
-                      View Details
-                    </button>
-                  </div>
-                ))}
-                <Pagination
-                  currentPage={requestsPagination.currentPage}
-                  totalPages={requestsPagination.totalPages}
-                  totalItems={requestsPagination.totalItems}
-                  pageSize={requestsPagination.pageSize}
-                  onPageChange={requestsPagination.setCurrentPage}
-                  compact={true}
-                  itemLabel="requests"
-                />
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: MY RESOURCES */}
-      {activeSubTab === 'resources' && (
-        <div className="d-flex flex-column gap-3">
-          {userResources.length === 0 ? (
-            <div className="card p-3 text-center text-xs text-muted" style={{ background: 'var(--bg-subtle)' }}>
-              {isSelf 
-                ? 'You have not shared any resources yet.' 
-                : `${targetUser.name} has not listed any shared equipment or resources yet.`}
+                  ))}
+                  <Pagination
+                    currentPage={observationsPagination.currentPage}
+                    totalPages={observationsPagination.totalPages}
+                    totalItems={observationsPagination.totalItems}
+                    pageSize={observationsPagination.pageSize}
+                    onPageChange={observationsPagination.setCurrentPage}
+                    compact={true}
+                    itemLabel="observations"
+                  />
+                </>
+              )}
             </div>
-          ) : (
-            <>
-              {resourcesPagination.paginatedItems.map(res => (
-                <div 
-                  key={res.id} 
-                  className="card p-4 card-interactive cursor-pointer d-flex flex-column justify-between"
-                  onClick={() => viewResourceDetail(res)}
-                >
-                  <div>
-                    <div className="d-flex align-center justify-between mb-2">
-                      <span className="badge badge-primary text-xs">{res.contributionType}</span>
-                      <span className="text-xs text-muted">{res.availability}</span>
-                    </div>
-                    <h4 className="font-bold text-sm text-primary mb-1">{res.title}</h4>
-                    <p className="text-xs text-secondary mb-2">{res.description}</p>
-                    <div className="text-xs text-muted mb-3">
-                      <strong>Capacity:</strong> {res.quantity} • <strong>Terms:</strong> {res.conditionsTerms}
-                    </div>
-                  </div>
-                  <div className="d-flex justify-end pt-2 border-top">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        viewResourceDetail(res);
-                      }}
-                    >
-                      Resource Details
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <Pagination
-                currentPage={resourcesPagination.currentPage}
-                totalPages={resourcesPagination.totalPages}
-                totalItems={resourcesPagination.totalItems}
-                pageSize={resourcesPagination.pageSize}
-                onPageChange={resourcesPagination.setCurrentPage}
-                compact={true}
-                itemLabel="resources"
-              />
-            </>
           )}
-        </div>
-      )}
-      </>
+        </>
       )}
 
       {/* TAB 3: PRIVACY & PROTOTYPE CONTROLS (Self only) */}

@@ -54,6 +54,7 @@ export function formatReadinessCheck(row) {
     creatorId: row.creator_id,
     communityId: row.community_id,
     requestId: row.request_id || null,
+    eventId: row.event_id || null,
     title: row.title,
     description: row.description || '',
     notes: row.description || '',
@@ -81,7 +82,7 @@ export function formatReadinessCheck(row) {
 
 // GET /api/readiness
 router.get('/', optionalAuth, (req, res) => {
-  const { communityId, requestId } = req.query;
+  const { communityId, requestId, eventId } = req.query;
   let sql = 'SELECT * FROM readiness_checks WHERE 1=1';
   const params = [];
 
@@ -92,6 +93,10 @@ router.get('/', optionalAuth, (req, res) => {
   if (requestId) {
     sql += ' AND request_id = ?';
     params.push(requestId);
+  }
+  if (eventId) {
+    sql += ' AND event_id = ?';
+    params.push(eventId);
   }
 
   sql += ' ORDER BY created_at DESC';
@@ -125,7 +130,8 @@ router.post('/', optionalAuth, (req, res) => {
     targetHeadcount = 5,
     requiredSkills = [],
     communityId = null,
-    requestId = null
+    requestId = null,
+    eventId = null
   } = req.body;
 
   if (!title) {
@@ -138,13 +144,14 @@ router.post('/', optionalAuth, (req, res) => {
   const finalHeadcount = Number(targetHeadcount) || 5;
 
   db.prepare(`
-    INSERT INTO readiness_checks (id, creator_id, community_id, request_id, title, description, target_date, target_headcount, required_skills, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+    INSERT INTO readiness_checks (id, creator_id, community_id, request_id, event_id, title, description, target_date, target_headcount, required_skills, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
   `).run(
     id,
     creatorId,
     communityId || null,
     requestId || null,
+    eventId || null,
     title,
     finalDescription,
     finalDate,
@@ -171,6 +178,28 @@ router.post('/', optionalAuth, (req, res) => {
       }
     } catch (e) {
       console.warn('Could not dispatch volunteer readiness notifications:', e.message);
+    }
+  }
+
+  // Dispatch notifications to registered participants if linked to an event
+  if (eventId) {
+    try {
+      const event = db.prepare('SELECT * FROM projects WHERE id = ?').get(eventId);
+      const participantRows = db.prepare('SELECT DISTINCT user_id FROM project_members WHERE project_id = ? AND user_id != ?').all(eventId, creatorId);
+      const notifInsert = db.prepare(`
+        INSERT INTO notifications (id, user_id, type, title, body, timestamp, is_read, target_view, target_sub_tab, target_entity_id)
+        VALUES (?, ?, 'readiness_check', 'Event Readiness Check', ?, 'Just now', 0, 'collaborate', 'events', ?)
+      `);
+      for (const p of participantRows) {
+        notifInsert.run(
+          `notif_${Date.now()}_${p.user_id}`,
+          p.user_id,
+          `Roll-Call: Please confirm your readiness for civic event "${event?.title || title}".`,
+          eventId
+        );
+      }
+    } catch (e) {
+      console.warn('Could not dispatch event readiness notifications:', e.message);
     }
   }
 

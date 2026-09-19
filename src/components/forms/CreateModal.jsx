@@ -12,7 +12,8 @@ import {
   Send,
   Lock,
   Globe,
-  Users
+  Users,
+  Calendar
 } from 'lucide-react';
 
 export const CreateModal = () => {
@@ -24,6 +25,7 @@ export const CreateModal = () => {
     createObservation,
     createRequest,
     createResource,
+    createEvent,
     createPlan,
     createSafetyReport,
     communities,
@@ -158,6 +160,8 @@ export const CreateModal = () => {
       createRequest(payload);
     } else if (activeType === 'resource') {
       createResource(payload);
+    } else if (activeType === 'event') {
+      createEvent(payload);
     } else if (activeType === 'plan') {
       createPlan(payload);
     } else if (activeType === 'safety') {
@@ -168,6 +172,7 @@ export const CreateModal = () => {
       observation: 'Field Observation',
       request: 'Help Request',
       resource: 'Resource Offering',
+      event: 'Civic Event / Work Party',
       plan: 'Long-Term Plan Proposal',
       safety: 'Safety & Hazard Alert'
     };
@@ -215,6 +220,7 @@ export const CreateModal = () => {
     { id: 'observation', label: 'Observation', icon: <Eye size={16} /> },
     { id: 'request', label: 'Help Request', icon: <HandHeart size={16} /> },
     { id: 'resource', label: 'Offer Resource', icon: <Package size={16} /> },
+    { id: 'event', label: 'Civic Event', icon: <Calendar size={16} /> },
     { id: 'plan', label: 'Long-term Plan', icon: <Target size={16} /> },
     { id: 'safety', label: 'Safety Report', icon: <ShieldAlert size={16} /> }
   ];
@@ -227,7 +233,7 @@ export const CreateModal = () => {
         closeCreateModal();
       }}
       title="Create CareMesh Coordination Entry"
-      subtitle="Connect observations, requests, resources, plans, and safety reports to real-world context."
+      subtitle="Connect observations, requests, resources, civic events, plans, and safety reports to real-world context."
       maxWidth="720px"
     >
       {/* Type Selector Tabs */}
@@ -621,6 +627,58 @@ export const CreateModal = () => {
                 onChange={handleChange}
                 placeholder="e.g. Will drop off on site"
                 className="form-input"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Civic Event & Work Party Specific */}
+        {activeType === 'event' && (
+          <div className="grid-2">
+            <div>
+              <label className="form-label">Activity / Event Type</label>
+              <select name="eventType" value={formData.eventType} onChange={handleChange} className="form-select">
+                <option value="assistance_operation">Community Assistance Operation</option>
+                <option value="volunteer_workday">Volunteer Workday / Clean-up</option>
+                <option value="skill_share">Skill Share & Workshop</option>
+                <option value="emergency_response">Emergency Response Team</option>
+                <option value="planning_assembly">Community Planning Assembly</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Max Participants Capacity</label>
+              <input
+                type="number"
+                name="maxParticipants"
+                min="1"
+                max="100"
+                value={formData.maxParticipants}
+                onChange={handleChange}
+                className="form-input"
+              />
+            </div>
+            <div>
+              <label className="form-label">Scheduled Date / Day</label>
+              <input
+                type="text"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                placeholder="e.g. Saturday, Oct 14 or Upcoming Weekend"
+                className="form-input"
+                required
+              />
+            </div>
+            <div>
+              <label className="form-label">Time Window</label>
+              <input
+                type="text"
+                name="time"
+                value={formData.time}
+                onChange={handleChange}
+                placeholder="e.g. 9:00 AM - 1:00 PM"
+                className="form-input"
+                required
               />
             </div>
           </div>

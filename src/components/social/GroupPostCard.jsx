@@ -45,7 +45,8 @@ export const GroupPostCard = ({ post, community }) => {
     plans,
     openReportModal,
     kickPostMember,
-    viewUserProfile
+    viewUserProfile,
+    openShareSocialModal
   } = useCareMesh();
 
   const [isCommentOpen, setIsCommentOpen] = useState(true);
@@ -575,10 +576,8 @@ export const GroupPostCard = ({ post, community }) => {
         <button
           type="button"
           className="btn btn-ghost btn-xs text-muted d-flex align-center gap-1"
-          onClick={() => {
-            navigator.clipboard?.writeText(window.location.href);
-            alert('Post link copied to clipboard.');
-          }}
+          onClick={() => openShareSocialModal(post, 'post')}
+          title="Share post to other platforms or community feed"
         >
           <Share2 size={14} />
           <span>Share</span>
