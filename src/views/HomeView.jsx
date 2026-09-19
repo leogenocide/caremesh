@@ -401,11 +401,11 @@ export const HomeView = () => {
                       </div>
                     </div>
 
-                    <div className="d-flex align-center justify-between pt-2.5 border-top gap-2">
+                    <div className="home-card-actions pt-2.5 border-top d-flex align-center justify-between gap-2 flex-wrap">
                       {isOwner ? (
                         <button
                           type="button"
-                          className="btn btn-xs btn-secondary flex-1 d-flex align-center justify-center gap-1.5"
+                          className="btn btn-xs btn-secondary flex-1 d-flex align-center justify-center gap-1.5 home-action-primary"
                           onClick={() => viewRequestDetail(req)}
                           title="Manage your help request"
                         >
@@ -415,7 +415,7 @@ export const HomeView = () => {
                       ) : (
                         <button
                           type="button"
-                          className={`btn btn-xs ${isUserJoined ? 'btn-secondary' : 'btn-primary'} flex-1 d-flex align-center justify-center gap-1.5`}
+                          className={`btn btn-xs ${isUserJoined ? 'btn-secondary' : 'btn-primary'} flex-1 d-flex align-center justify-center gap-1.5 home-action-primary`}
                           onClick={() => {
                             if (!isUserJoined) {
                               respondToRequest(req.id, 'Volunteer');
@@ -439,26 +439,28 @@ export const HomeView = () => {
                         </button>
                       )}
 
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-xs text-muted d-inline-flex align-center gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openShareSocialModal(req, 'request');
-                        }}
-                        title="Share this request"
-                      >
-                        <Share2 size={13} />
-                        <span>Share</span>
-                      </button>
+                      <div className="d-flex align-center gap-1 home-action-secondary">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-muted d-inline-flex align-center gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openShareSocialModal(req, 'request');
+                          }}
+                          title="Share this request"
+                        >
+                          <Share2 size={13} />
+                          <span>Share</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-xs text-brand font-semibold"
-                        onClick={() => viewRequestDetail(req)}
-                      >
-                        Details →
-                      </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-brand font-semibold"
+                          onClick={() => viewRequestDetail(req)}
+                        >
+                          Details →
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

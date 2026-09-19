@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export const PlansView = () => {
-  const { plans, viewPlanDetail, openCreateModal, openShareSocialModal } = useCareMesh();
+  const { plans, viewPlanDetail, openCreateModal, openShareSocialModal, viewUserProfile } = useCareMesh();
   const [searchQuery, setSearchQuery] = useState('');
   const [stageTab, setStageTab] = useState('all'); // 'all' | 'review' | 'active' | 'completed'
 
@@ -184,7 +184,21 @@ export const PlansView = () => {
                   )}
                 </div>
                 <span className="text-xs text-muted">
-                  Proposed by {plan.proposer?.name || 'Community Member'} • Updated {plan.updates?.[0]?.date || 'Recently'}
+                  {plan.proposer ? (
+                    <span 
+                      className="user-profile-trigger cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        viewUserProfile(plan.proposer);
+                      }}
+                      title={`View ${plan.proposer.name}'s profile`}
+                    >
+                      Proposed by <strong className="user-profile-name">{plan.proposer.name}</strong>
+                    </span>
+                  ) : (
+                    <span>Proposed by Community Member</span>
+                  )}
+                  {' • '}Updated {plan.updates?.[0]?.date || 'Recently'}
                 </span>
               </div>
 

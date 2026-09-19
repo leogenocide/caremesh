@@ -47,7 +47,8 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
     requests, 
     observations,
     currentUser,
-    openShareSocialModal 
+    openShareSocialModal,
+    viewUserProfile
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('proposal'); // 'proposal' | 'critique' | 'revisions' | 'milestones' | 'decisions' | 'outcomes'
@@ -391,7 +392,23 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
             {/* Action Bar */}
             <div className="d-flex justify-between align-center pt-2 border-top">
               <span className="text-xs text-muted">
-                Proposed by {plan.proposer?.name || 'Community Member'} • Current Draft: {plan.currentVersion || 'v1.0'}
+                {plan.proposer ? (
+                  <span 
+                    className="user-profile-trigger cursor-pointer"
+                    onClick={() => {
+                      if (viewUserProfile) {
+                        onClose();
+                        viewUserProfile(plan.proposer);
+                      }
+                    }}
+                    title={`View ${plan.proposer.name}'s profile`}
+                  >
+                    Proposed by <strong className="user-profile-name">{plan.proposer.name}</strong>
+                  </span>
+                ) : (
+                  <span>Proposed by Community Member</span>
+                )}
+                {' • '}Current Draft: {plan.currentVersion || 'v1.0'}
               </span>
 
               <div className="d-flex gap-2">

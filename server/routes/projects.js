@@ -38,6 +38,10 @@ export function formatProject(row) {
     id: row.id,
     title: row.title,
     eventType: row.event_type,
+    customEventType: row.custom_event_type || null,
+    isCustomEventType: Boolean(row.custom_event_type),
+    attendeePrivacy: row.attendee_privacy || 'public',
+    chatPrivacy: row.chat_privacy || 'members_only',
     description: row.description,
     location: {
       address: row.address,
@@ -105,7 +109,19 @@ router.get('/:id', (req, res) => {
 
 // POST /api/projects
 router.post('/', optionalAuth, (req, res) => {
-  const { title, eventType, description, location, date, time, maxParticipants = 20, planId } = req.body;
+  const { 
+    title, 
+    eventType, 
+    customEventType = null,
+    attendeePrivacy = 'public',
+    chatPrivacy = 'members_only',
+    description, 
+    location, 
+    date, 
+    time, 
+    maxParticipants = 20, 
+    planId 
+  } = req.body;
 
   if (!title || !description || !eventType) {
     return res.status(400).json({ error: 'Title, description, and eventType are required.' });
@@ -119,12 +135,15 @@ router.post('/', optionalAuth, (req, res) => {
 
   const tx = db.transaction(() => {
     db.prepare(`
-      INSERT INTO projects (id, title, event_type, description, address, lat, lng, date, time, organizer_id, max_participants, status, plan_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming', ?)
+      INSERT INTO projects (id, title, event_type, custom_event_type, attendee_privacy, chat_privacy, description, address, lat, lng, date, time, organizer_id, max_participants, status, plan_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming', ?)
     `).run(
       id,
       title,
       eventType,
+      customEventType || null,
+      attendeePrivacy || 'public',
+      chatPrivacy || 'members_only',
       description,
       location?.address || 'Maplewood Local Area',
       location?.lat || 37.7749,
@@ -191,6 +210,19 @@ router.post('/:id/messages', optionalAuth, (req, res) => {
     return res.status(401).json({ error: 'Authentication required to post messages.' });
   }
 
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  // Enforce members_only chat privacy
+  if (project.chat_privacy === 'members_only' && project.organizer_id !== senderId) {
+    const isParticipant = db.prepare('SELECT 1 FROM project_participants WHERE project_id = ? AND user_id = ?').get(req.params.id, senderId);
+    if (!isParticipant) {
+      return res.status(403).json({ error: 'Coordination chat is restricted to registered event participants.' });
+    }
+  }
+
   const id = `msg_${Date.now()}`;
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -222,6 +254,9 @@ router.patch('/:id', optionalAuth, (req, res) => {
   const {
     title = project.title,
     eventType = project.event_type,
+    customEventType = project.custom_event_type,
+    attendeePrivacy = project.attendee_privacy,
+    chatPrivacy = project.chat_privacy,
     description = project.description,
     location,
     date = project.date,
@@ -234,9 +269,22 @@ router.patch('/:id', optionalAuth, (req, res) => {
 
   db.prepare(`
     UPDATE projects
-    SET title = ?, event_type = ?, description = ?, address = ?, date = ?, time = ?, max_participants = ?, status = ?
+    SET title = ?, event_type = ?, custom_event_type = ?, attendee_privacy = ?, chat_privacy = ?, description = ?, address = ?, date = ?, time = ?, max_participants = ?, status = ?
     WHERE id = ?
-  `).run(title, eventType, description, address, date, time, maxParticipants, status, req.params.id);
+  `).run(
+    title,
+    eventType,
+    customEventType !== undefined ? customEventType : project.custom_event_type,
+    attendeePrivacy || 'public',
+    chatPrivacy || 'members_only',
+    description,
+    address,
+    date,
+    time,
+    maxParticipants,
+    status,
+    req.params.id
+  );
 
   res.json(formatProject(db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id)));
 });

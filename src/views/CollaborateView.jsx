@@ -52,7 +52,8 @@ export const CollaborateView = () => {
     openRequestResourceModal,
     isRequestVisibleToUser,
     showToast,
-    openShareSocialModal
+    openShareSocialModal,
+    viewUserProfile
   } = useCareMesh();
 
   const [activeTabState, setActiveTabState] = useState('requests');
@@ -86,10 +87,10 @@ export const CollaborateView = () => {
   const activeNeedsCount = visibleRequests.filter(r => r.status !== 'fulfilled').length;
 
   const tabs = [
-    { id: 'requests', label: 'Help Requests & Needs', icon: <HandHeart size={16} />, count: activeNeedsCount },
-    { id: 'resources', label: 'Resource Directory', icon: <Package size={16} />, count: resources.length },
-    { id: 'events', label: 'Civic Events & Work Parties', icon: <Calendar size={16} />, count: events?.length || 0 },
-    { id: 'matcher', label: 'Transparent Resource Matcher', icon: <GitMerge size={16} /> }
+    { id: 'requests', label: 'Help Requests & Needs', shortLabel: 'Needs', icon: <HandHeart size={16} />, count: activeNeedsCount },
+    { id: 'resources', label: 'Resource Directory', shortLabel: 'Resources', icon: <Package size={16} />, count: resources.length },
+    { id: 'events', label: 'Civic Events & Work Parties', shortLabel: 'Events', icon: <Calendar size={16} />, count: events?.length || 0 },
+    { id: 'matcher', label: 'Transparent Resource Matcher', shortLabel: 'Matcher', icon: <GitMerge size={16} /> }
   ];
 
   const filteredRequests = visibleRequests.filter(r => {
@@ -327,7 +328,20 @@ export const CollaborateView = () => {
                       <div className="d-flex align-center gap-3 text-xs text-muted mb-2 flex-wrap">
                         <span className="d-flex align-center gap-1"><MapPin size={12} /> {req.location?.address}</span>
                         <span className="d-flex align-center gap-1"><Calendar size={12} /> {req.expiresAt}</span>
-                        <span className="d-flex align-center gap-1"><User size={12} /> By {req.requester?.name}</span>
+                        {req.requester ? (
+                          <span 
+                            className="d-flex align-center gap-1 user-profile-trigger cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewUserProfile(req.requester);
+                            }}
+                            title={`View ${req.requester.name}'s profile`}
+                          >
+                            <User size={12} /> By <strong className="user-profile-name">{req.requester.name}</strong>
+                          </span>
+                        ) : (
+                          <span className="d-flex align-center gap-1"><User size={12} /> By Neighbor</span>
+                        )}
                       </div>
                     </div>
 
@@ -486,7 +500,20 @@ export const CollaborateView = () => {
 
                       <div className="d-flex align-center gap-3 text-xs text-muted mb-2">
                         <span className="d-flex align-center gap-1"><MapPin size={12} /> {res.location?.address}</span>
-                        <span className="d-flex align-center gap-1"><User size={12} /> Provider: {res.provider?.name}</span>
+                        {res.provider ? (
+                          <span 
+                            className="d-flex align-center gap-1 user-profile-trigger cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              viewUserProfile(res.provider);
+                            }}
+                            title={`View ${res.provider.name}'s profile`}
+                          >
+                            <User size={12} /> Provider: <strong className="user-profile-name">{res.provider.name}</strong>
+                          </span>
+                        ) : (
+                          <span className="d-flex align-center gap-1"><User size={12} /> Provider: Neighbor</span>
+                        )}
                       </div>
                     </div>
 
@@ -601,10 +628,22 @@ export const CollaborateView = () => {
                   >
                     <div>
                       {/* Badge and Share */}
-                      <div className="d-flex align-center justify-between mb-2">
-                        <span className="badge badge-purple text-xs text-uppercase font-semibold">
-                          {(evt.eventType || 'Civic Activity').replace('_', ' ')}
-                        </span>
+                      <div className="d-flex align-center justify-between mb-2 flex-wrap gap-1">
+                        <div className="d-flex align-center gap-1 flex-wrap">
+                          <span className="badge badge-purple text-xs text-uppercase font-semibold">
+                            {evt.customEventType || (evt.eventType || 'Civic Activity').replace('_', ' ')}
+                          </span>
+                          {evt.chatPrivacy === 'members_only' && (
+                            <span className="badge badge-secondary text-xs" title="Coordination chat is restricted to attendees" style={{ fontSize: '0.62rem' }}>
+                              🔒 Chat
+                            </span>
+                          )}
+                          {evt.attendeePrivacy === 'members_only' && (
+                            <span className="badge badge-secondary text-xs" title="Attendee roster is restricted to attendees" style={{ fontSize: '0.62rem' }}>
+                              🔒 Roster
+                            </span>
+                          )}
+                        </div>
                         <div className="d-flex align-center gap-1">
                           <button
                             type="button"
@@ -639,7 +678,20 @@ export const CollaborateView = () => {
                         </div>
                         <div className="d-flex align-center gap-1.5">
                           <Users size={12} className="text-purple flex-shrink-0" />
-                          <span>Organized by {evt.organizer?.name || 'Community Member'}</span>
+                          {evt.organizer ? (
+                            <span 
+                              className="user-profile-trigger cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewUserProfile(evt.organizer);
+                              }}
+                              title={`View ${evt.organizer.name}'s profile`}
+                            >
+                              Organized by <strong className="user-profile-name">{evt.organizer.name}</strong>
+                            </span>
+                          ) : (
+                            <span>Organized by Community Member</span>
+                          )}
                         </div>
                       </div>
                     </div>

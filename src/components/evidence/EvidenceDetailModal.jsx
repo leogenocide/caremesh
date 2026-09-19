@@ -187,13 +187,17 @@ export const EvidenceDetailModal = () => {
             <span 
               className="user-profile-trigger"
               onClick={() => {
-                if (evidence.authorId) {
-                  viewUserProfile({ id: evidence.authorId, name: evidence.author });
+                const target = evidence.authorId || evidence.author_id
+                  ? { id: evidence.authorId || evidence.author_id, name: typeof evidence.author === 'string' ? evidence.author : evidence.author?.name }
+                  : evidence.author;
+                if (target) {
+                  closeEvidenceDetailModal();
+                  viewUserProfile(target);
                 }
               }}
-              title={`View ${evidence.author}'s profile`}
+              title={`View ${typeof evidence.author === 'string' ? evidence.author : evidence.author?.name || 'Author'}'s profile`}
             >
-              Author: <strong className="user-profile-name">{evidence.author}</strong>
+              Author: <strong className="user-profile-name">{typeof evidence.author === 'string' ? evidence.author : evidence.author?.name || 'Community Member'}</strong>
             </span>
             <span>•</span>
             <span className="d-flex align-center gap-1">
