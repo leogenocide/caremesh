@@ -156,12 +156,12 @@ export const PlansView = () => {
           return (
             <div
               key={plan.id}
-              className="card p-4 card-interactive cursor-pointer"
+              className="card p-3 p-sm-4 card-interactive cursor-pointer"
               onClick={() => viewPlanDetail(plan)}
             >
               {/* Card Header */}
               <div className="d-flex align-center justify-between mb-2 flex-wrap gap-2">
-                <div className="d-flex align-center gap-2">
+                <div className="d-flex align-center gap-1.5 flex-wrap">
                   <span className="badge badge-primary font-bold text-xs">
                     {plan.currentVersion || 'v1.0'}
                   </span>
@@ -219,17 +219,17 @@ export const PlansView = () => {
               {/* Evaluated Outcome Snapshot (if completed/evaluated) */}
               {plan.outcomeReport && (
                 <div 
-                  className="d-flex align-center justify-between p-2.5 px-3.5 mb-3 rounded gap-2"
+                  className="d-flex align-center justify-between p-2.5 px-3 mb-3 rounded gap-2 flex-wrap"
                   style={{ 
                     background: plan.outcomeReport.outcomeStatus === 'achieved' ? 'rgba(220, 252, 231, 0.45)' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? 'rgba(254, 249, 195, 0.45)' : 'rgba(254, 226, 226, 0.45)', 
                     border: '1px solid var(--border-light)' 
                   }}
                 >
-                  <div className="d-flex align-center gap-2 text-xs text-primary min-w-0">
+                  <div className="d-flex align-start gap-1.5 flex-wrap text-xs text-primary min-w-0 flex-1">
                     <span className="font-bold text-xs flex-shrink-0" style={{ color: plan.outcomeReport.outcomeStatus === 'achieved' ? '#166534' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? '#854d0e' : '#991b1b' }}>
                       {plan.outcomeReport.outcomeStatus === 'achieved' ? '🟢 Verified Result:' : plan.outcomeReport.outcomeStatus === 'partially_achieved' ? '🟡 Partial Result:' : '🔴 Outcome:'}
                     </span>
-                    <span className="text-secondary text-truncate font-medium">{plan.outcomeReport.actualResults?.[0] || plan.outcomesEvaluation}</span>
+                    <span className="text-secondary font-medium" style={{ wordBreak: 'break-word', lineHeight: '1.4' }}>{plan.outcomeReport.actualResults?.[0] || plan.outcomesEvaluation}</span>
                   </div>
                   <span className="text-xs text-brand font-semibold flex-shrink-0 d-none d-sm-inline">Full Evaluation →</span>
                 </div>

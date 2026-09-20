@@ -16,7 +16,10 @@ import {
   Sparkles,
   User,
   Tag,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Crosshair
 } from 'lucide-react';
 
 // Text escape helper to prevent unsanitized HTML insertion into map markers/tooltips
@@ -107,7 +110,11 @@ export const CareMeshMap = ({
   initialWorldView = false,
   customPinFilter = null,
   onCustomPinFilterChange = null,
-  onOpenDetails = null
+  onOpenDetails = null,
+  pagination = null,
+  paginatedItemIds = null,
+  mapPaginationMode = 'page',
+  onToggleMapPaginationMode = null
 }) => {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -569,6 +576,14 @@ export const CareMeshMap = ({
     }
   }, [allLoadedItems, matchesQuery, matchesCustomPinMode, setCustomPinMode]);
 
+  // Evaluates whether an entity is included on the map under pagination settings
+  const isPointIncluded = useCallback((item) => {
+    if (mapPaginationMode === 'all') return true;
+    if (selectedEntity?.item?.id === item.id) return true; // Keep active selected entity visible
+    if (!paginatedItemIds) return true;
+    return paginatedItemIds.has(item.id);
+  }, [mapPaginationMode, paginatedItemIds, selectedEntity?.item?.id]);
+
   // Convert all items into GeoJSON Features for Supercluster
   const geojsonPoints = useMemo(() => {
     const points = [];
@@ -576,7 +591,7 @@ export const CareMeshMap = ({
     // 1. Observations
     if (activeFilter === 'all' || activeFilter === 'observations') {
       observations.forEach(obs => {
-        if (obs.location?.lat && obs.location?.lng && matchesQuery(obs, 'observation') && matchesCustomPinMode(obs, customPinMode)) {
+        if (obs.location?.lat && obs.location?.lng && matchesQuery(obs, 'observation') && matchesCustomPinMode(obs, customPinMode) && isPointIncluded(obs)) {
           const rel = getItemRelationship(obs);
           points.push({
             type: 'Feature',
@@ -600,7 +615,7 @@ export const CareMeshMap = ({
     // 2. Safety Reports
     if (activeFilter === 'all' || activeFilter === 'safety') {
       safetyReports.forEach(rep => {
-        if (rep.location?.lat && rep.location?.lng && matchesQuery(rep, 'safety') && matchesCustomPinMode(rep, customPinMode)) {
+        if (rep.location?.lat && rep.location?.lng && matchesQuery(rep, 'safety') && matchesCustomPinMode(rep, customPinMode) && isPointIncluded(rep)) {
           const rel = getItemRelationship(rep);
           points.push({
             type: 'Feature',
@@ -624,7 +639,7 @@ export const CareMeshMap = ({
     // 3. Requests
     if (activeFilter === 'all' || activeFilter === 'requests') {
       visibleRequests.forEach(req => {
-        if (req.location?.lat && req.location?.lng && matchesQuery(req, 'request') && matchesCustomPinMode(req, customPinMode)) {
+        if (req.location?.lat && req.location?.lng && matchesQuery(req, 'request') && matchesCustomPinMode(req, customPinMode) && isPointIncluded(req)) {
           const rel = getItemRelationship(req);
           points.push({
             type: 'Feature',
@@ -648,7 +663,7 @@ export const CareMeshMap = ({
     // 4. Resources
     if (activeFilter === 'all' || activeFilter === 'resources') {
       resources.forEach(res => {
-        if (res.location?.lat && res.location?.lng && matchesQuery(res, 'resource') && matchesCustomPinMode(res, customPinMode)) {
+        if (res.location?.lat && res.location?.lng && matchesQuery(res, 'resource') && matchesCustomPinMode(res, customPinMode) && isPointIncluded(res)) {
           const rel = getItemRelationship(res);
           points.push({
             type: 'Feature',
@@ -670,7 +685,35 @@ export const CareMeshMap = ({
     }
 
     return points;
-  }, [activeFilter, matchesQuery, matchesCustomPinMode, customPinMode, getItemRelationship, observations, safetyReports, visibleRequests, resources]);
+  }, [activeFilter, matchesQuery, matchesCustomPinMode, customPinMode, getItemRelationship, observations, safetyReports, visibleRequests, resources, isPointIncluded]);
+
+  // Smoothly zoom and frame current page pins
+  const handleFitPagePins = useCallback(() => {
+    if (!mapInstanceRef.current || geojsonPoints.length === 0) return;
+    const latLngs = geojsonPoints.map(p => [p.geometry.coordinates[1], p.geometry.coordinates[0]]);
+    if (latLngs.length === 1) {
+      mapInstanceRef.current.flyTo(latLngs[0], 15, { animate: true, duration: 0.8 });
+    } else {
+      const bounds = L.latLngBounds(latLngs);
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true, duration: 0.8 });
+    }
+  }, [geojsonPoints]);
+
+  const prevPageRef = useRef(pagination?.currentPage);
+  useEffect(() => {
+    if (mapPaginationMode === 'page' && pagination?.currentPage !== undefined && pagination?.currentPage !== prevPageRef.current) {
+      prevPageRef.current = pagination.currentPage;
+      if (geojsonPoints.length > 0 && mapInstanceRef.current) {
+        const latLngs = geojsonPoints.map(p => [p.geometry.coordinates[1], p.geometry.coordinates[0]]);
+        if (latLngs.length === 1) {
+          mapInstanceRef.current.flyTo(latLngs[0], 14.5, { animate: true, duration: 0.6 });
+        } else {
+          const bounds = L.latLngBounds(latLngs);
+          mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true, duration: 0.6 });
+        }
+      }
+    }
+  }, [pagination?.currentPage, mapPaginationMode, geojsonPoints]);
 
   // Function to render clustered & individual markers based on current viewport
   const renderClusters = useCallback(() => {
@@ -1378,6 +1421,14 @@ export const CareMeshMap = ({
         </div>
 
         <div className="text-xs text-muted d-flex align-center gap-2 map-filter-hint">
+          {mapPaginationMode === 'page' && pagination && pagination.totalPages > 1 && (
+            <span 
+              className="badge badge-primary animate-fade-in"
+              style={{ padding: '2px 8px', fontSize: '0.72rem', borderRadius: '12px' }}
+            >
+              📄 Page {pagination.currentPage} of {pagination.totalPages} ({geojsonPoints.length} pins)
+            </span>
+          )}
           {currentZoom <= 11 && (
             <span 
               className="badge badge-brand animate-fade-in"
@@ -1865,6 +1916,114 @@ export const CareMeshMap = ({
                 <span>Report Hazard</span>
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Map Floating Pagination Panel */}
+        {pagination && (
+          <div 
+            className="map-pagination-panel animate-fade-in"
+            style={clickedLocation ? { bottom: '85px' } : {}}
+          >
+            {/* Mode Switcher: Page vs All Pins */}
+            <button
+              type="button"
+              className={`map-control-btn ${mapPaginationMode === 'page' ? 'active' : ''}`}
+              onClick={() => onToggleMapPaginationMode && onToggleMapPaginationMode('page')}
+              title="Display pins for current page"
+              style={{ padding: '3px 7px', fontSize: '0.72rem' }}
+            >
+              <span>Page {pagination.currentPage}</span>
+              <span 
+                style={{
+                  fontSize: '0.65rem',
+                  padding: '1px 5px',
+                  borderRadius: '8px',
+                  background: mapPaginationMode === 'page' ? 'rgba(255,255,255,0.25)' : 'var(--bg-muted, #f1f5f9)',
+                  color: mapPaginationMode === 'page' ? '#ffffff' : 'var(--text-secondary, #64748b)'
+                }}
+              >
+                {geojsonPoints.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`map-control-btn ${mapPaginationMode === 'all' ? 'active' : ''}`}
+              onClick={() => onToggleMapPaginationMode && onToggleMapPaginationMode('all')}
+              title="Display all matching pins on map"
+              style={{ padding: '3px 7px', fontSize: '0.72rem' }}
+            >
+              <span>All Pins</span>
+              <span 
+                style={{
+                  fontSize: '0.65rem',
+                  padding: '1px 5px',
+                  borderRadius: '8px',
+                  background: mapPaginationMode === 'all' ? 'rgba(255,255,255,0.25)' : 'var(--bg-muted, #f1f5f9)',
+                  color: mapPaginationMode === 'all' ? '#ffffff' : 'var(--text-secondary, #64748b)'
+                }}
+              >
+                {pagination.totalItems}
+              </span>
+            </button>
+
+            {mapPaginationMode === 'page' && pagination.totalPages > 1 && (
+              <>
+                <div className="map-control-divider" />
+
+                {/* Previous Page */}
+                <button
+                  type="button"
+                  className="map-control-btn"
+                  disabled={pagination.currentPage <= 1}
+                  onClick={() => pagination.setPage(Math.max(1, pagination.currentPage - 1))}
+                  title="Previous Page of Pins"
+                  style={{ opacity: pagination.currentPage <= 1 ? 0.45 : 1, cursor: pagination.currentPage <= 1 ? 'not-allowed' : 'pointer' }}
+                >
+                  <ChevronLeft size={13} />
+                  <span className="d-none d-sm-inline">Prev</span>
+                </button>
+
+                {/* Page Indicator */}
+                <span 
+                  className="font-bold text-primary px-1" 
+                  style={{ fontSize: '0.72rem', whiteSpace: 'nowrap' }}
+                >
+                  {pagination.currentPage} / {pagination.totalPages}
+                </span>
+
+                {/* Next Page */}
+                <button
+                  type="button"
+                  className="map-control-btn"
+                  disabled={pagination.currentPage >= pagination.totalPages}
+                  onClick={() => pagination.setPage(Math.min(pagination.totalPages, pagination.currentPage + 1))}
+                  title="Next Page of Pins"
+                  style={{ opacity: pagination.currentPage >= pagination.totalPages ? 0.45 : 1, cursor: pagination.currentPage >= pagination.totalPages ? 'not-allowed' : 'pointer' }}
+                >
+                  <span className="d-none d-sm-inline">Next</span>
+                  <ChevronRight size={13} />
+                </button>
+
+                {/* Fit Current Page Pins */}
+                {geojsonPoints.length > 0 && (
+                  <>
+                    <div className="map-control-divider" />
+                    <button
+                      type="button"
+                      className="map-control-btn text-brand"
+                      onClick={handleFitPagePins}
+                      title="Zoom to fit current page pins"
+                      style={{ color: 'var(--primary-600, #2563eb)' }}
+                    >
+                      <Crosshair size={12} />
+                      <span className="d-none d-md-inline">Fit Page</span>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
