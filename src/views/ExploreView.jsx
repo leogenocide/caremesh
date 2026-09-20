@@ -289,6 +289,8 @@ export const ExploreView = () => {
   const isVerifiedOnly = evidenceFilter === 'verified';
   const toggleVerifiedOnly = () => setEvidenceFilter(prev => prev === 'verified' ? 'all' : 'verified');
 
+  const [mapPaginationMode, setMapPaginationMode] = useState('page'); // 'page' | 'all'
+
   const {
     currentPage,
     pageSize,
@@ -301,6 +303,10 @@ export const ExploreView = () => {
     setPageSize,
     resetPage
   } = usePagination(filteredAndSortedItems, 6);
+
+  const paginatedItemIds = useMemo(() => {
+    return new Set(paginatedItems.map(i => i.id));
+  }, [paginatedItems]);
 
   // Reset page to 1 whenever any filter or sort changes
   useEffect(() => {
@@ -478,6 +484,20 @@ export const ExploreView = () => {
               initialWorldView={isWorldView}
               height={viewMode === 'map_only' ? '750px' : '600px'}
               onOpenDetails={openEntityDetails}
+              pagination={{
+                currentPage,
+                pageSize,
+                totalPages,
+                totalItems,
+                startIndex,
+                endIndex,
+                setPage,
+                setPageSize,
+                resetPage
+              }}
+              paginatedItemIds={paginatedItemIds}
+              mapPaginationMode={mapPaginationMode}
+              onToggleMapPaginationMode={setMapPaginationMode}
             />
 
           </div>

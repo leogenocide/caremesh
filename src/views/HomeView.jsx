@@ -644,7 +644,7 @@ export const HomeView = () => {
                     className="p-2.5 rounded border border-light bg-subtle card-interactive cursor-pointer"
                     onClick={() => viewPlanDetail(plan)}
                   >
-                    <div className="d-flex align-center justify-between mb-1.5">
+                    <div className="d-flex align-center justify-between mb-1.5 flex-wrap gap-1">
                       <LifecycleBadge stage={plan.lifecycleStage} />
                       <span className="text-xs text-muted">{completedCount}/{totalCount} Milestones</span>
                     </div>
