@@ -42,6 +42,7 @@ export const GroupPostCard = ({ post, community }) => {
     requests,
     resources = [],
     evidence = [],
+    safetyReports = [],
     plans,
     openReportModal,
     kickPostMember,
@@ -177,26 +178,62 @@ export const GroupPostCard = ({ post, community }) => {
   const isRestrictedFromPost = post.restrictedUserIds?.includes(currentUser?.id);
 
   const handleLinkedEntityClick = () => {
-    if (!post.linkedEntityType) return;
-    if (post.linkedEntityType === 'plan') {
-      const p = plans.find(plan => plan.id === post.linkedEntityId);
+    if (!post?.linkedEntityType) return;
+    const type = (post.linkedEntityType || '').toLowerCase();
+    const id = post.linkedEntityId;
+    const title = post.linkedEntityTitle;
+
+    const findEntity = (list) => {
+      if (!list || !Array.isArray(list)) return null;
+      if (id) {
+        const byId = list.find(item => item.id === id);
+        if (byId) return byId;
+      }
+      if (title) {
+        const byTitle = list.find(item => 
+          item.title?.toLowerCase() === title.toLowerCase() || 
+          item.name?.toLowerCase() === title.toLowerCase()
+        );
+        if (byTitle) return byTitle;
+      }
+      return null;
+    };
+
+    if (type === 'plan') {
+      const p = findEntity(plans);
       if (p) viewPlanDetail(p);
       else navigateTo('plans');
-    } else if (post.linkedEntityType === 'request') {
-      const r = requests.find(req => req.id === post.linkedEntityId);
+    } else if (type === 'request') {
+      const r = findEntity(requests);
       if (r) inspectEntity(r, 'request');
-      else navigateTo('collaborate', 'requests', post.linkedEntityId);
-    } else if (post.linkedEntityType === 'resource') {
-      const res = resources.find(item => item.id === post.linkedEntityId);
+      else navigateTo('collaborate', 'requests', id);
+    } else if (type === 'resource') {
+      const res = findEntity(resources);
       if (res) inspectEntity(res, 'resource');
-      else navigateTo('collaborate', 'resources', post.linkedEntityId);
-    } else if (post.linkedEntityType === 'evidence') {
-      const ev = evidence.find(item => item.id === post.linkedEntityId);
+      else navigateTo('collaborate', 'resources', id);
+    } else if (type === 'safety') {
+      const s = findEntity(safetyReports);
+      if (s) inspectEntity(s, 'safety');
+      else navigateTo('explore', null, id);
+    } else if (type === 'evidence') {
+      const ev = findEntity(evidence);
       if (ev) inspectEntity(ev, 'evidence');
-    } else if (post.linkedEntityType === 'observation') {
-      const o = observations.find(obs => obs.id === post.linkedEntityId);
+    } else if (type === 'observation') {
+      const o = findEntity(observations);
       if (o) inspectEntity(o, 'observation');
-      else navigateTo('explore', null, post.linkedEntityId);
+      else navigateTo('explore', null, id);
+    } else {
+      const allEntities = [
+        ...(observations || []),
+        ...(requests || []),
+        ...(resources || []),
+        ...(plans || []),
+        ...(safetyReports || [])
+      ];
+      const anyEntity = findEntity(allEntities);
+      if (anyEntity) {
+        inspectEntity(anyEntity, type);
+      }
     }
   };
 
@@ -533,6 +570,15 @@ export const GroupPostCard = ({ post, community }) => {
           className="card p-2 p-sm-3 mb-3 card-interactive cursor-pointer"
           style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-200)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
           onClick={handleLinkedEntityClick}
+          title={`Inspect linked ${post.linkedEntityType}: ${post.linkedEntityTitle || ''}`}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleLinkedEntityClick();
+            }
+          }}
         >
           <div className="d-flex align-center justify-between gap-2 min-w-0">
             <div className="d-flex align-center gap-2 min-w-0 flex-1 flex-wrap">

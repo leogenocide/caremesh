@@ -3834,18 +3834,28 @@ export const CareMeshProvider = ({ children }) => {
       if (post) {
         if (post.communityId) setSelectedCommunityId(post.communityId);
         // If post links directly to an entity, open that document
-        if (post.linkedEntityType === 'observation' && post.linkedEntityId) {
-          const linkedObs = observations.find(o => o.id === post.linkedEntityId);
+        const pType = (post.linkedEntityType || '').toLowerCase();
+        const pId = post.linkedEntityId;
+        const pTitle = post.linkedEntityTitle;
+
+        if (pType === 'observation' && (pId || pTitle)) {
+          const linkedObs = observations.find(o => (pId && o.id === pId) || (pTitle && o.title === pTitle));
           if (linkedObs) inspectEntity(linkedObs, 'observation');
-        } else if (post.linkedEntityType === 'request' && post.linkedEntityId) {
-          const linkedReq = requests.find(r => r.id === post.linkedEntityId);
+        } else if (pType === 'request' && (pId || pTitle)) {
+          const linkedReq = requests.find(r => (pId && r.id === pId) || (pTitle && r.title === pTitle));
           if (linkedReq) viewRequestDetail(linkedReq);
-        } else if (post.linkedEntityType === 'resource' && post.linkedEntityId) {
-          const linkedRes = resources.find(r => r.id === post.linkedEntityId);
+        } else if (pType === 'resource' && (pId || pTitle)) {
+          const linkedRes = resources.find(r => (pId && r.id === pId) || (pTitle && r.title === pTitle));
           if (linkedRes) viewResourceDetail(linkedRes);
-        } else if (post.linkedEntityType === 'plan' && post.linkedEntityId) {
-          const linkedPlan = plans.find(p => p.id === post.linkedEntityId);
+        } else if (pType === 'plan' && (pId || pTitle)) {
+          const linkedPlan = plans.find(p => (pId && p.id === pId) || (pTitle && p.title === pTitle));
           if (linkedPlan) viewPlanDetail(linkedPlan);
+        } else if (pType === 'safety' && (pId || pTitle)) {
+          const linkedSafety = safetyReports?.find(s => (pId && s.id === pId) || (pTitle && s.title === pTitle));
+          if (linkedSafety) viewSafetyDetail(linkedSafety);
+        } else if (pType === 'evidence' && (pId || pTitle)) {
+          const linkedEv = evidence?.find(e => (pId && e.id === pId) || (pTitle && e.title === pTitle));
+          if (linkedEv) viewEvidenceDetail(linkedEv);
         }
         setHighlightedEntityId(post.id);
         targetView = 'social';
