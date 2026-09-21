@@ -68,7 +68,7 @@ export const HomeView = () => {
   const [needsFilter, setNeedsFilter] = useState('all'); // 'all' | 'labor' | 'supplies' | 'equipment' | 'transport'
 
   // User skills for relevance calculation
-  const userSkills = useMemo(() => (currentUser.skills || []).map(s => s.toLowerCase()), [currentUser.skills]);
+  const userSkills = useMemo(() => (currentUser?.skills || []).map(s => s.toLowerCase()), [currentUser?.skills]);
 
   // Relevance scoring: skill matches (+30/match), neighborhood proximity (+20), urgency (+15/10/5)
   const calculateRelevanceScore = (req) => {
@@ -79,7 +79,7 @@ export const HomeView = () => {
     );
     score += matchingSkills.length * 30;
 
-    const userNeighborhood = (currentUser.location?.neighborhood || 'Maplewood').toLowerCase();
+    const userNeighborhood = (currentUser?.location?.neighborhood || 'Maplewood').toLowerCase();
     const address = ((req.location?.address || '') + ' ' + (req.location?.neighborhood || '')).toLowerCase();
     if (address.includes(userNeighborhood)) {
       score += 20;
@@ -143,11 +143,11 @@ export const HomeView = () => {
               </span>
               <span className="badge d-inline-flex align-center gap-1" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', fontSize: '0.75rem', padding: '0.3rem 0.65rem' }}>
                 <MapPin size={12} />
-                <span>{currentUser.location?.neighborhood || 'Maplewood North'} Hub</span>
+                <span>{currentUser?.location?.neighborhood || 'Maplewood North'} Hub</span>
               </span>
             </div>
 
-            {currentUser.badges && currentUser.badges.length > 0 && (
+            {currentUser?.badges && currentUser.badges.length > 0 && (
               <span className="badge d-none d-sm-inline-flex align-center gap-1" style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff', fontSize: '0.75rem' }}>
                 <ShieldCheck size={12} />
                 <span>{currentUser.badges[0]}</span>
@@ -157,7 +157,7 @@ export const HomeView = () => {
 
           {/* Greeting & Mission */}
           <h1 className="text-2xl font-bold mb-2 text-white" style={{ letterSpacing: '-0.02em' }}>
-            Welcome back, {currentUser.name}
+            {currentUser?.name ? `Welcome back, ${currentUser.name}` : 'Welcome to CareMesh'}
           </h1>
           <p className="text-sm opacity-90 mb-4" style={{ maxWidth: '680px', lineHeight: '1.6' }}>
             CareMesh connects real-world observations, challengeable field evidence, and transparent mutual resources to turn community challenges into verified collective action.
@@ -583,7 +583,7 @@ export const HomeView = () => {
         {/* Right Column: Community Digest & Personal Radar */}
         <div className="d-flex flex-column gap-4">
           {/* Card 1: Matched For You (Based on Verified Skills) */}
-          {matchedRequests.length > 0 && (
+          {currentUser && matchedRequests.length > 0 && (
             <div className="card p-3.5 matched-need-highlight" style={{ borderRadius: 'var(--radius-lg)' }}>
               <div className="d-flex align-center justify-between mb-2">
                 <span className="badge badge-primary text-xs font-bold d-flex align-center gap-1" style={{ fontSize: '0.7rem' }}>

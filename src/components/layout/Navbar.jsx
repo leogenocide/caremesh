@@ -670,176 +670,199 @@ export const Navbar = () => {
         </div>
 
         {/* User Account & Profile Menu */}
-        <div ref={userMenuRef} style={{ position: 'relative' }}>
-          <button 
-            type="button"
-            className="btn btn-ghost d-flex align-center gap-1.5"
-            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-            style={{ 
-              height: '38px', 
-              boxSizing: 'border-box',
-              borderRadius: 'var(--radius-full)', 
-              padding: '0 8px 0 3px', 
-              border: '1px solid var(--border-light)',
-              display: 'inline-flex',
-              alignItems: 'center'
-            }}
-            title={`Account: ${currentUser?.name || 'User'}`}
-            aria-label={`Account menu for ${currentUser?.name || 'User'}`}
-          >
-            <img
-              src={currentUser?.avatar}
-              alt={currentUser?.name || 'User'}
-              style={{ 
-                width: '30px', 
-                height: '30px', 
-                borderRadius: '50%', 
-                objectFit: 'cover', 
-                border: '1.5px solid var(--primary-500)', 
-                flexShrink: 0 
-              }}
-            />
-            <ChevronDown size={13} className="text-muted d-none d-sm-inline" />
-          </button>
-
-          {isUserMenuOpen && (
-            <div
-              className="dropdown-card p-0 animate-fade-in"
-              style={{
-                top: '44px',
-                right: 0,
-                width: '280px',
-                maxWidth: 'calc(100vw - 20px)'
-              }}
+        {!currentUser ? (
+          <div className="d-flex align-center gap-1.5">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm d-flex align-center gap-1.5"
+              onClick={() => openAuthModal('login')}
+              style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
             >
-              {/* Profile Overview */}
-              <div className="p-3 border-bottom" style={{ background: 'var(--bg-subtle)' }}>
-                <div className="d-flex align-center gap-2.5 mb-2">
-                  <img
-                    src={currentUser?.avatar}
-                    alt={currentUser?.name || 'User'}
-                    style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-500)' }}
-                  />
-                  <div className="min-w-0">
-                    <span className="font-bold text-xs text-primary text-truncate d-block">{currentUser?.name || 'Guest Explorer'}</span>
-                    <span className="text-xs font-semibold text-brand d-block">{currentUser?.handle || '@guest'}</span>
+              <LogIn size={14} />
+              <span>Sign In</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm d-none d-sm-inline-flex align-center gap-1.5"
+              onClick={() => openAuthModal('register')}
+              style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+            >
+              <UserPlus size={14} />
+              <span>Join</span>
+            </button>
+          </div>
+        ) : (
+          <div ref={userMenuRef} style={{ position: 'relative' }}>
+            <button 
+              type="button"
+              className="btn btn-ghost d-flex align-center gap-1.5"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              style={{ 
+                height: '38px', 
+                boxSizing: 'border-box',
+                borderRadius: 'var(--radius-full)', 
+                padding: '0 8px 0 3px', 
+                border: '1px solid var(--border-light)',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}
+              title={`Account: ${currentUser.name || 'User'}`}
+              aria-label={`Account menu for ${currentUser.name || 'User'}`}
+            >
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name || 'User'}
+                style={{ 
+                  width: '30px', 
+                  height: '30px', 
+                  borderRadius: '50%', 
+                  objectFit: 'cover', 
+                  border: '1.5px solid var(--primary-500)', 
+                  flexShrink: 0 
+                }}
+              />
+              <ChevronDown size={13} className="text-muted d-none d-sm-inline" />
+            </button>
+
+            {isUserMenuOpen && (
+              <div
+                className="dropdown-card p-0 animate-fade-in"
+                style={{
+                  top: '44px',
+                  right: 0,
+                  width: '280px',
+                  maxWidth: 'calc(100vw - 20px)'
+                }}
+              >
+                {/* Profile Overview */}
+                <div className="p-3 border-bottom" style={{ background: 'var(--bg-subtle)' }}>
+                  <div className="d-flex align-center gap-2.5 mb-2">
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name || 'User'}
+                      style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-500)' }}
+                    />
+                    <div className="min-w-0">
+                      <span className="font-bold text-xs text-primary text-truncate d-block">{currentUser.name || 'Resident'}</span>
+                      <span className="text-xs font-semibold text-brand d-block">{currentUser.handle || '@neighbor'}</span>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs w-100 mt-1 d-flex align-center justify-center gap-1"
+                    onClick={() => {
+                      navigate('/profile');
+                      navigateTo('profile');
+                      setIsUserMenuOpen(false);
+                    }}
+                  >
+                    <User size={13} />
+                    <span>View Full Profile</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-xs w-100 mt-1 d-flex align-center justify-center gap-1"
-                  onClick={() => {
-                    navigate('/profile');
-                    navigateTo('profile');
-                    setIsUserMenuOpen(false);
-                  }}
-                >
-                  <User size={13} />
-                  <span>View Full Profile</span>
-                </button>
-              </div>
 
-              {/* Platform Oversight & Readiness Tools */}
-              <div className="p-2 border-bottom d-flex flex-column gap-1">
-                <span className="text-xs font-bold text-secondary d-flex align-center gap-1 px-2 py-0.5" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <Globe size={12} className="text-blue-600" />
-                  <span>Platform Oversight</span>
-                </span>
+                {/* Platform Oversight & Readiness Tools */}
+                <div className="p-2 border-bottom d-flex flex-column gap-1">
+                  <span className="text-xs font-bold text-secondary d-flex align-center gap-1 px-2 py-0.5" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <Globe size={12} className="text-blue-600" />
+                    <span>Platform Oversight</span>
+                  </span>
 
-                {isSystemAdminUser && (
+                  {isSystemAdminUser && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
+                      style={{ background: 'rgba(2, 132, 199, 0.08)', color: '#0369a1', fontWeight: 'bold' }}
+                      onClick={() => {
+                        navigate('/admin');
+                        setIsUserMenuOpen(false);
+                      }}
+                    >
+                      <div className="d-flex align-center gap-2">
+                        <ShieldCheck size={14} className="text-blue-600" />
+                        <span>System Governance & Vault</span>
+                      </div>
+                      <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', background: '#0284c7', color: '#fff' }}>Admin</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
-                    style={{ background: 'rgba(2, 132, 199, 0.08)', color: '#0369a1', fontWeight: 'bold' }}
                     onClick={() => {
-                      navigate('/admin');
+                      openPublicRecordsModModal();
                       setIsUserMenuOpen(false);
                     }}
                   >
                     <div className="d-flex align-center gap-2">
-                      <ShieldCheck size={14} className="text-blue-600" />
-                      <span>System Governance & Vault</span>
+                      <Globe size={14} className="text-blue-600" />
+                      <span>Public Records Moderation</span>
                     </div>
-                    <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem', background: '#0284c7', color: '#fff' }}>Admin</span>
+                    {(currentUser?.isPublicModerator || currentUser?.isAdmin || isSystemAdminUser) && (
+                      <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem' }}>Mod</span>
+                    )}
                   </button>
-                )}
 
-                <button
-                  type="button"
-                  className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
-                  onClick={() => {
-                    openPublicRecordsModModal();
-                    setIsUserMenuOpen(false);
-                  }}
-                >
-                  <div className="d-flex align-center gap-2">
-                    <Globe size={14} className="text-blue-600" />
-                    <span>Public Records Moderation</span>
-                  </div>
-                  {(currentUser?.isPublicModerator || currentUser?.isAdmin || isSystemAdminUser) && (
-                    <span className="badge badge-primary text-xs" style={{ fontSize: '0.62rem' }}>Mod</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
+                    onClick={() => {
+                      openReadinessModal();
+                      setIsUserMenuOpen(false);
+                    }}
+                  >
+                    <div className="d-flex align-center gap-2">
+                      <UserCheck size={14} className="text-brand" />
+                      <span>Member Readiness Checker</span>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Auth Actions */}
+                <div className="p-1.5 d-flex flex-column gap-1">
+                  <button
+                    type="button"
+                    className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs"
+                    onClick={() => {
+                      openAuthModal('login');
+                      setIsUserMenuOpen(false);
+                    }}
+                  >
+                    <LogIn size={14} className="text-primary" />
+                    <span>Sign In with Another Account</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs"
+                    onClick={() => {
+                      openAuthModal('register');
+                      setIsUserMenuOpen(false);
+                    }}
+                  >
+                    <UserPlus size={14} className="text-brand" />
+                    <span>Create New Account</span>
+                  </button>
+                  {currentUser?.id && (
+                    <>
+                      <div className="border-top my-1" />
+                      <button
+                        type="button"
+                        className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs text-rose"
+                        onClick={() => {
+                          logoutUser();
+                          setIsUserMenuOpen(false);
+                        }}
+                      >
+                        <LogOut size={14} className="text-rose" />
+                        <span>Log Out</span>
+                      </button>
+                    </>
                   )}
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-ghost text-left p-1.5 rounded d-flex align-center justify-between w-100 text-xs"
-                  onClick={() => {
-                    openReadinessModal();
-                    setIsUserMenuOpen(false);
-                  }}
-                >
-                  <div className="d-flex align-center gap-2">
-                    <UserCheck size={14} className="text-brand" />
-                    <span>Member Readiness Checker</span>
-                  </div>
-                </button>
+                </div>
               </div>
-
-              {/* Auth Actions */}
-              <div className="p-1.5 d-flex flex-column gap-1">
-                <button
-                  type="button"
-                  className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs"
-                  onClick={() => {
-                    openAuthModal('login');
-                    setIsUserMenuOpen(false);
-                  }}
-                >
-                  <LogIn size={14} className="text-primary" />
-                  <span>Sign In with Password</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs"
-                  onClick={() => {
-                    openAuthModal('register');
-                    setIsUserMenuOpen(false);
-                  }}
-                >
-                  <UserPlus size={14} className="text-brand" />
-                  <span>Create New Account</span>
-                </button>
-                {currentUser?.id && currentUser.id !== 'usr_guest' && (
-                  <>
-                    <div className="border-top my-1" />
-                    <button
-                      type="button"
-                      className="btn btn-ghost text-left p-2 rounded d-flex align-center gap-2 w-100 text-xs text-rose"
-                      onClick={() => {
-                        logoutUser();
-                        setIsUserMenuOpen(false);
-                      }}
-                    >
-                      <LogOut size={14} className="text-rose" />
-                      <span>Log Out</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

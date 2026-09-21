@@ -452,6 +452,7 @@ CREATE TABLE IF NOT EXISTS communities (
   rules TEXT DEFAULT '[]',
   media_gallery TEXT DEFAULT '[]',
   files TEXT DEFAULT '[]',
+  creator_id TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
