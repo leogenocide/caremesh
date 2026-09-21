@@ -143,8 +143,9 @@ class ApiClient {
       method: 'PATCH',
       body: JSON.stringify(data)
     }),
-    togglePublicModerator: async (id) => this.request(`/users/${id}/toggle-public-moderator`, {
-      method: 'POST'
+    togglePublicModerator: async (id, data = {}) => this.request(`/admin/users/${id}/toggle-public-moderator`, {
+      method: 'POST',
+      body: JSON.stringify(data)
     }),
     restrict: async (id, data = {}) => this.request(`/users/${id}/restrict`, {
       method: 'POST',
@@ -153,6 +154,9 @@ class ApiClient {
     unrestrict: async (id, data = {}) => this.request(`/users/${id}/unrestrict`, {
       method: 'POST',
       body: JSON.stringify(data)
+    }),
+    delete: async (id) => this.request(`/users/${id}`, {
+      method: 'DELETE'
     })
   };
 
@@ -390,6 +394,9 @@ class ApiClient {
     update: async (id, data) => this.request(`/communities/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data)
+    }),
+    delete: async (id) => this.request(`/communities/${id}`, {
+      method: 'DELETE'
     }),
     addMedia: async (id, mediaData) => this.request(`/communities/${id}/media`, {
       method: 'POST',

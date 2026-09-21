@@ -26,7 +26,6 @@ export const PublicRecordsModerationModal = () => {
     currentUser,
     reports,
     resolveReport,
-    togglePublicModerator,
     observations,
     requests,
     resources
@@ -179,16 +178,15 @@ export const PublicRecordsModerationModal = () => {
           </div>
 
           <div className="d-flex align-center gap-2">
-            <button
-              type="button"
-              className={`btn btn-xs ${isPublicMod ? 'btn-secondary text-brand font-bold' : 'btn-ghost text-white'}`}
-              style={{ fontSize: '0.72rem', border: '1px solid rgba(255,255,255,0.25)' }}
-              onClick={() => currentUser?.id && togglePublicModerator(currentUser.id)}
-              title="Toggle Public Moderator credentials for current account"
-            >
-              <ShieldCheck size={12} className="mr-1" />
-              {isPublicMod ? 'Moderator Active' : 'Enable Mod Role'}
-            </button>
+            {isPublicMod && (
+              <span
+                className="badge btn-xs d-inline-flex align-center gap-1 font-semibold"
+                style={{ fontSize: '0.72rem', background: '#0284c7', color: '#ffffff', padding: '0.25rem 0.5rem' }}
+              >
+                <ShieldCheck size={12} />
+                <span>Moderator Active</span>
+              </span>
+            )}
 
             <button 
               type="button" 
@@ -208,14 +206,10 @@ export const PublicRecordsModerationModal = () => {
             <p className="text-xs text-muted mb-3" style={{ maxWidth: '440px' }}>
               Public Records Moderators oversee verified claims, environmental observations, and inspect quarantined evidence across community circles platform-wide.
             </p>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm d-flex align-center gap-2"
-              onClick={() => currentUser?.id && togglePublicModerator(currentUser.id)}
-            >
-              <ShieldCheck size={15} />
-              <span>Assume Public Records Moderator Role (Demo)</span>
-            </button>
+            <div className="p-3 bg-subtle rounded text-xs text-secondary border d-inline-flex align-center gap-2" style={{ maxWidth: '440px' }}>
+              <ShieldCheck size={16} className="text-brand flex-shrink-0" />
+              <span>Public Records Moderator status can only be granted by the platform System Administrator.</span>
+            </div>
           </div>
         ) : (
           <div className="d-flex flex-column flex-1 overflow-hidden" style={{ minHeight: 0 }}>

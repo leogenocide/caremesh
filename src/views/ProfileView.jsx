@@ -22,7 +22,9 @@ import {
   Radio,
   Search,
   X,
-  Eye
+  Eye,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { ChangeAvatarModal } from '../components/profile/ChangeAvatarModal';
 import { EditBioModal } from '../components/profile/EditBioModal';
@@ -57,8 +59,14 @@ export const ProfileView = () => {
     showToast,
     restrictUser,
     unrestrictUser,
-    changePassword
+    changePassword,
+    deleteUserAccount
   } = useCareMesh();
+
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
 
   const [activeSubTab, setActiveSubTab] = useState('requests'); // 'requests' | 'events' | 'plans' | 'resources' | 'observations' | 'privacy'
   const [profileSearch, setProfileSearch] = useState('');
@@ -320,6 +328,29 @@ export const ProfileView = () => {
       scope: 'community'
     });
   };
+
+  if (isSelf && !currentUser) {
+    return (
+      <div className="card p-5 text-center d-flex flex-column align-center gap-3 my-5" style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(5, 150, 105, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+          <LogIn size={28} />
+        </div>
+        <h3 className="text-lg font-bold text-primary mb-1">Sign In to View Your Profile</h3>
+        <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.5 }}>
+          Sign in or create an account to view and manage your community contributions, saved resources, and privacy preferences.
+        </p>
+        <div className="d-flex gap-2">
+          <button type="button" className="btn btn-primary btn-sm d-flex align-center gap-1.5" onClick={() => openAuthModal('login')}>
+            <LogIn size={14} />
+            <span>Sign In</span>
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => openAuthModal('register')}>
+            Create Account
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="d-flex flex-column gap-4" style={{ maxWidth: '920px', margin: '0 auto', width: '100%' }}>
@@ -1438,6 +1469,38 @@ export const ProfileView = () => {
             )}
           </div>
 
+          {/* Danger Zone: Permanent Account Deletion */}
+          <div className="p-3 rounded mb-3" style={{ background: '#fffafb', border: '1px solid #fecaca' }}>
+            <div className="d-flex align-center justify-between flex-wrap gap-2">
+              <div>
+                <span className="font-bold text-xs text-rose d-flex align-center gap-1.5 mb-0.5" style={{ color: 'var(--rose-600)' }}>
+                  <Trash2 size={13} />
+                  <span>Danger Zone: Permanent Account Deletion</span>
+                </span>
+                <span className="text-xs text-secondary">
+                  {currentUser?.email?.trim().toLowerCase() === 'caleb.zothansanga@gmail.com'
+                    ? 'The primary System Administrator account is protected and cannot be deleted.' 
+                    : 'Permanently delete your profile, credentials, and personal data from CareMesh.'}
+                </span>
+              </div>
+              {currentUser?.email?.trim().toLowerCase() !== 'caleb.zothansanga@gmail.com' && (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-xs d-flex align-center gap-1"
+                  style={{ background: 'var(--rose-600)', color: '#ffffff' }}
+                  onClick={() => {
+                    setDeleteConfirmationText('');
+                    setDeleteAccountError('');
+                    setIsDeleteAccountModalOpen(true);
+                  }}
+                >
+                  <Trash2 size={12} />
+                  <span>Delete My Account</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Reset Prototype Data Button */}
           <div className="mt-1 pt-3 border-top d-flex align-center justify-between">
             <div>
@@ -1457,6 +1520,91 @@ export const ProfileView = () => {
               <RefreshCw size={14} />
               <span>Reset to Seed Data</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {isDeleteAccountModalOpen && (
+        <div 
+          className="modal-overlay d-flex align-center justify-center p-3" 
+          style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)' }}
+          onClick={() => !isDeletingAccount && setIsDeleteAccountModalOpen(false)}
+        >
+          <div 
+            className="modal-content card p-4 animate-scale-in" 
+            style={{ maxWidth: '460px', width: '100%', background: '#ffffff' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-center gap-2 mb-3 text-rose">
+              <AlertTriangle size={22} />
+              <h3 className="font-bold text-md text-primary mb-0">Delete Account Permanently?</h3>
+            </div>
+            <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.55' }}>
+              Are you sure you want to permanently delete your account for <strong>{currentUser?.name}</strong> ({currentUser?.handle})?
+            </p>
+            <div className="p-3 rounded mb-3 text-xs" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
+              <p className="mb-1 font-semibold">⚠️ All of the following data will be permanently wiped:</p>
+              <ul className="mb-0 pl-3">
+                <li>Your profile credentials, authentication tokens, and passwords.</li>
+                <li>Your direct messages, notification logs, and private conversations.</li>
+                <li>Your posted requests, shared resources, events, and community posts.</li>
+              </ul>
+            </div>
+
+            {deleteAccountError && (
+              <div className="p-2 mb-3 rounded text-xs bg-rose-50 text-rose border border-rose-200">
+                {deleteAccountError}
+              </div>
+            )}
+
+            <div className="mb-3">
+              <label className="form-label text-xs mb-1 font-semibold">
+                To confirm, type <span className="font-mono text-rose font-bold" style={{ color: 'var(--rose-600)' }}>DELETE</span> below:
+              </label>
+              <input
+                type="text"
+                className="form-input text-xs"
+                placeholder="Type DELETE to confirm"
+                value={deleteConfirmationText}
+                onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                disabled={isDeletingAccount}
+              />
+            </div>
+
+            <div className="d-flex justify-end gap-2 pt-2 border-top">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setIsDeleteAccountModalOpen(false)}
+                disabled={isDeletingAccount}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm d-flex align-center gap-1.5"
+                style={{ background: 'var(--rose-600)', color: '#ffffff' }}
+                disabled={isDeletingAccount || deleteConfirmationText !== 'DELETE'}
+                onClick={async () => {
+                  if (deleteConfirmationText !== 'DELETE') return;
+                  setIsDeletingAccount(true);
+                  setDeleteAccountError('');
+                  try {
+                    await deleteUserAccount(currentUser.id);
+                    setIsDeleteAccountModalOpen(false);
+                    navigate('/');
+                  } catch (err) {
+                    setDeleteAccountError(err.message || 'Failed to delete account. Please try again.');
+                  } finally {
+                    setIsDeletingAccount(false);
+                  }
+                }}
+              >
+                <Trash2 size={14} />
+                <span>{isDeletingAccount ? 'Deleting Account...' : 'Permanently Delete Account'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

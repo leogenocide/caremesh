@@ -56,6 +56,8 @@ export function formatCommunity(row, currentUserId = null) {
     rules: JSON.parse(row.rules || '[]'),
     mediaGallery: JSON.parse(row.media_gallery || '[]'),
     files: JSON.parse(row.files || '[]'),
+    creatorId: row.creator_id || adminIds[0] || null,
+    isCreator: Boolean(currentUserId && (row.creator_id ? row.creator_id === currentUserId : adminIds[0] === currentUserId)),
     isJoined,
     linkedPlanIds: [],
     linkedEventIds: [],
@@ -141,8 +143,8 @@ router.post('/', optionalAuth, (req, res) => {
 
   const tx = db.transaction(() => {
     db.prepare(`
-      INSERT INTO communities (id, name, handle, category, privacy, privacy_label, description, location, member_count, avatar, banner, created_date, rules, media_gallery, files)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=200&auto=format&fit=crop&q=80', 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80', 'Formed Today', '[]', '[]', '[]')
+      INSERT INTO communities (id, name, handle, category, privacy, privacy_label, description, location, member_count, avatar, banner, created_date, rules, media_gallery, files, creator_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=200&auto=format&fit=crop&q=80', 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80', 'Formed Today', '[]', '[]', '[]', ?)
     `).run(
       id,
       name,
@@ -151,7 +153,8 @@ router.post('/', optionalAuth, (req, res) => {
       privacy,
       `${privacy === 'public' ? 'Public Group' : 'Private Circle'} · 1 member`,
       description,
-      location || 'Maplewood Corridor'
+      location || 'Maplewood Corridor',
+      creatorId
     );
 
     db.prepare(`
@@ -847,6 +850,79 @@ router.patch('/:id', optionalAuth, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM communities WHERE id = ?').get(req.params.id);
   res.json(formatCommunity(updated, currentUserId));
+});
+
+// DELETE /api/communities/:id - Permanently delete community circle (creator or system administrator only)
+router.delete('/:id', optionalAuth, (req, res) => {
+  const currentUserId = req.user?.id || req.body?.currentUserId;
+  if (!currentUserId) {
+    return res.status(401).json({ error: 'Authentication required to delete a community circle.' });
+  }
+
+  const comm = db.prepare('SELECT * FROM communities WHERE id = ?').get(req.params.id);
+  if (!comm) {
+    return res.status(404).json({ error: 'Community circle not found.' });
+  }
+
+  const callingUser = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId);
+  const isSysAdmin = callingUser && isSystemAdmin(callingUser);
+
+  const memberRows = db.prepare(`
+    SELECT user_id, role FROM community_members WHERE community_id = ?
+  `).all(comm.id);
+  const adminIds = memberRows.filter(m => m.role === 'admin').map(m => m.user_id);
+  const isCreator = comm.creator_id ? (comm.creator_id === currentUserId) : (adminIds.includes(currentUserId));
+
+  if (!isCreator && !isSysAdmin) {
+    return res.status(403).json({ error: 'Access forbidden: only the community creator or a system administrator can delete this community circle.' });
+  }
+
+  const tx = db.transaction(() => {
+    // 1. Clean up votes and elections
+    db.prepare('DELETE FROM moderator_votes WHERE community_id = ?').run(comm.id);
+    db.prepare('DELETE FROM moderator_elections WHERE community_id = ?').run(comm.id);
+
+    // 2. Clean up readiness checks & responses
+    db.prepare(`
+      DELETE FROM readiness_responses 
+      WHERE readiness_check_id IN (SELECT id FROM readiness_checks WHERE community_id = ?)
+    `).run(comm.id);
+    db.prepare('DELETE FROM readiness_checks WHERE community_id = ?').run(comm.id);
+
+    // 3. Clean up feed comments & posts
+    db.prepare(`
+      DELETE FROM post_comments 
+      WHERE post_id IN (SELECT id FROM posts WHERE community_id = ?)
+    `).run(comm.id);
+    db.prepare('DELETE FROM posts WHERE community_id = ?').run(comm.id);
+
+    // 4. Reports associated with community
+    db.prepare('DELETE FROM reports WHERE community_id = ?').run(comm.id);
+
+    // 5. Disassociate any linked requests
+    db.prepare('UPDATE requests SET community_id = NULL WHERE community_id = ?').run(comm.id);
+
+    // 6. Community members
+    db.prepare('DELETE FROM community_members WHERE community_id = ?').run(comm.id);
+
+    // 7. Finally delete the community
+    db.prepare('DELETE FROM communities WHERE id = ?').run(comm.id);
+  });
+  tx();
+
+  logModerationAudit(db, {
+    moderatorId: currentUserId,
+    moderatorRole: isSysAdmin ? (callingUser?.role || 'admin') : 'Community Creator',
+    communityId: comm.id,
+    actionType: 'delete_community',
+    targetType: 'community',
+    targetId: comm.id,
+    targetAuthorId: comm.creator_id || currentUserId,
+    reason: req.body?.reason || 'Community circle permanently deleted by creator',
+    notes: `Permanently removed community circle ${comm.name} (${comm.handle}) and all associated circle discussions.`
+  });
+
+  res.json({ success: true, message: `Community circle '${comm.name}' deleted successfully.` });
 });
 
 // POST /api/communities/:id/media - Upload/add a photo to group media gallery

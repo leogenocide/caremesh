@@ -24,7 +24,7 @@ async function runTests() {
   const bootRes = await fetch(`${BASE_URL}/bootstrap`);
   assert.strictEqual(bootRes.status, 200, 'Bootstrap should return 200');
   const bootData = await bootRes.json();
-  assert(bootData.currentUser, 'Should contain currentUser');
+  assert.strictEqual(bootData.currentUser, null, 'Unauthenticated bootstrap must return null currentUser');
   assert(bootData.plans.length > 0, 'Should contain plans');
   assert(bootData.observations.length > 0, 'Should contain observations');
   assert(bootData.matchingFactors.length > 0, 'Should contain matching factors');
@@ -2034,6 +2034,40 @@ async function runTests() {
   assert.strictEqual(adminStatusRes.status, 200);
   const statusResults = await adminStatusRes.json();
   assert.ok(statusResults.every(u => u.status === 'active'), 'Status filter must only return active users');
+
+  // Public Moderator Access Control
+  // 1. Legacy unauthenticated /api/users/:id/toggle-public-moderator is removed -> 404
+  const insecureToggleRes = await fetch(`${BASE_URL}/users/usr_marcus/toggle-public-moderator`, {
+    method: 'POST',
+    headers: marcusHeaders
+  });
+  assert.strictEqual(insecureToggleRes.status, 404, 'Legacy /api/users/:id/toggle-public-moderator must return 404');
+
+  // 2. Non-admin calling /api/admin/users/:id/toggle-public-moderator -> 403
+  const unauthorizedModToggle = await fetch(`${BASE_URL}/admin/users/usr_marcus/toggle-public-moderator`, {
+    method: 'POST',
+    headers: { ...marcusHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isPublicModerator: true })
+  });
+  assert.strictEqual(unauthorizedModToggle.status, 403, 'Non-admin toggling public moderator must return 403');
+
+  // 3. System Admin toggling public moderator -> 200
+  const adminModToggle = await fetch(`${BASE_URL}/admin/users/usr_marcus/toggle-public-moderator`, {
+    method: 'POST',
+    headers: { ...calebHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isPublicModerator: true })
+  });
+  assert.strictEqual(adminModToggle.status, 200, 'System admin toggling public moderator must return 200');
+  const modToggledUser = await adminModToggle.json();
+  assert.strictEqual(modToggledUser.isPublicModerator, true, 'User must be promoted to public moderator');
+
+  // Clean up: revoke public moderator
+  await fetch(`${BASE_URL}/admin/users/usr_marcus/toggle-public-moderator`, {
+    method: 'POST',
+    headers: { ...calebHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isPublicModerator: false })
+  });
+
   console.log('   ✓ Multi-attribute user search & RBAC authorization verified.');
 
   // B. User Incident & Historical Report Dossier
@@ -2351,7 +2385,125 @@ async function runTests() {
 
   console.log('   ✓ Gmail 6-digit OTP reset, code expiration, single-use, & Google 1-click reset verified.\n');
 
-  console.log('🎉 ALL CAREMESH BACKEND TESTS PASSED CLEANLY (25/25)!\n');
+  // =========================================================================
+  // 26. Testing Community Creator Deletion & User Self-Service Account Deletion
+  // =========================================================================
+  console.log('26. Testing Community Creator Deletion & User Self-Service Account Deletion...');
+
+  // 1. Community Creator Deletion
+  db.prepare("DELETE FROM communities WHERE handle LIKE '@tempcircle%'").run();
+  const testHandle = `@tempcircle_${Date.now()}`;
+  const testCommRes = await fetch(`${BASE_URL}/communities`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Temporary Deletable Circle',
+      handle: testHandle,
+      category: 'resilience',
+      privacy: 'public',
+      description: 'Circle created to test permanent creator deletion cascade.',
+      creatorId: 'usr_elena'
+    })
+  });
+  assert.strictEqual(testCommRes.status, 201, 'Community creation must return 201');
+  const testComm = await testCommRes.json();
+  assert.strictEqual(testComm.isCreator, true, 'Elena must be recognized as creator');
+
+  // Add post inside the circle
+  const commPostRes = await fetch(`${BASE_URL}/communities/feed/posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      communityId: testComm.id,
+      authorId: 'usr_elena',
+      content: 'Welcome to this temporary circle which will soon be deleted.'
+    })
+  });
+  assert.strictEqual(commPostRes.status, 201);
+  const commPost = await commPostRes.json();
+
+  // Non-creator unauthorized deletion attempt
+  const nonCreatorDelRes = await fetch(`${BASE_URL}/communities/${testComm.id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentUserId: 'usr_dave' })
+  });
+  assert.strictEqual(nonCreatorDelRes.status, 403, 'Non-creator must be rejected with 403 Forbidden');
+
+  // Creator deletion
+  const creatorDelRes = await fetch(`${BASE_URL}/communities/${testComm.id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentUserId: 'usr_elena' })
+  });
+  assert.strictEqual(creatorDelRes.status, 200, 'Creator deletion must return 200 OK');
+  const creatorDelData = await creatorDelRes.json();
+  assert.strictEqual(creatorDelData.success, true);
+
+  // Assert community and circle posts are purged
+  const commInDb = db.prepare('SELECT * FROM communities WHERE id = ?').get(testComm.id);
+  assert.strictEqual(commInDb, undefined, 'Deleted community must not exist in database');
+  const postInDb = db.prepare('SELECT * FROM posts WHERE id = ?').get(commPost.id);
+  assert.strictEqual(postInDb, undefined, 'Posts in deleted community must be purged');
+
+  console.log('   ✓ Community creator deletion, unauthorized 403 rejection & cascading post cleanup verified.');
+
+  // 2. User Account Self-Deletion
+  // Non-owner unauthorized deletion attempt
+  const nonOwnerUserDelRes = await fetch(`${BASE_URL}/users/usr_elena`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentUserId: 'usr_dave' })
+  });
+  assert.strictEqual(nonOwnerUserDelRes.status, 403, 'Non-owner delete attempt must return 403 Forbidden');
+
+  // Attempt to delete System Administrator root account
+  const sysAdminRow = db.prepare("SELECT id FROM users WHERE email = 'caleb.zothansanga@gmail.com'").get();
+  assert.ok(sysAdminRow, 'System admin row must exist');
+  const adminDelAttempt = await fetch(`${BASE_URL}/users/${sysAdminRow.id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentUserId: sysAdminRow.id })
+  });
+  assert.strictEqual(adminDelAttempt.status, 400, 'System Administrator account must be protected against deletion (400)');
+
+  // Create temporary member to test full account deletion cascade
+  db.prepare("DELETE FROM requests WHERE requester_id IN (SELECT id FROM users WHERE email LIKE 'temp.del%')").run();
+  db.prepare("DELETE FROM users WHERE email LIKE 'temp.del%'").run();
+  const tempUserId = `usr_temp_del_${Date.now()}`;
+  const tempEmail = `temp.del_${Date.now()}@example.com`;
+  const tempHandle = `@tempuser_del_${Date.now()}`;
+  db.prepare(`
+    INSERT INTO users (id, name, handle, email, password_hash, role)
+    VALUES (?, 'Temporary Test User', ?, ?, 'hash', 'Community Member')
+  `).run(tempUserId, tempHandle, tempEmail);
+
+  // Add temporary user request
+  const tempReqId = `req_temp_del_${Date.now()}`;
+  db.prepare(`
+    INSERT INTO requests (id, title, category, urgency, description, requester_id, status)
+    VALUES (?, 'Temp Request to Delete', 'food_water', 'medium', 'Needs bread', ?, 'open')
+  `).run(tempReqId, tempUserId);
+
+  // Delete account as owner
+  const selfDelRes = await fetch(`${BASE_URL}/users/${tempUserId}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentUserId: tempUserId })
+  });
+  assert.strictEqual(selfDelRes.status, 200, 'Self-service account deletion must return 200 OK');
+  const selfDelData = await selfDelRes.json();
+  assert.strictEqual(selfDelData.success, true);
+
+  // Assert user and associated request are completely cleaned up
+  const userInDb = db.prepare('SELECT * FROM users WHERE id = ?').get(tempUserId);
+  assert.strictEqual(userInDb, undefined, 'User record must be permanently purged');
+  const reqInDb = db.prepare('SELECT * FROM requests WHERE id = ?').get(tempReqId);
+  assert.strictEqual(reqInDb, undefined, 'User requests must be purged with account');
+
+  console.log('   ✓ Profile self-deletion, unauthorized 403 protection, System Admin root guard, & cascade verified.\n');
+
+  console.log('🎉 ALL CAREMESH BACKEND TESTS PASSED CLEANLY (26/26)!\n');
 }
 
 runTests().catch(err => {

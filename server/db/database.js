@@ -204,6 +204,24 @@ export function initDatabase() {
       db.prepare("ALTER TABLE evidence ADD COLUMN parent_observation_id TEXT").run();
     }
 
+    const commCols = db.prepare("PRAGMA table_info(communities)").all();
+    if (!commCols.some(c => c.name === 'creator_id')) {
+      db.prepare("ALTER TABLE communities ADD COLUMN creator_id TEXT").run();
+      try {
+        db.prepare(`
+          UPDATE communities
+          SET creator_id = (
+            SELECT user_id FROM community_members
+            WHERE community_id = communities.id AND role = 'admin'
+            ORDER BY joined_at ASC LIMIT 1
+          )
+          WHERE creator_id IS NULL
+        `).run();
+      } catch {
+        // Ignore if community_members isn't ready
+      }
+    }
+
     db.prepare(`
       CREATE TABLE IF NOT EXISTS password_reset_codes (
         id TEXT PRIMARY KEY,

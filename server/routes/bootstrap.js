@@ -23,9 +23,9 @@ const router = express.Router();
 // GET /api/bootstrap
 // Returns full normalized state for instant client-side synchronization
 router.get('/', optionalAuth, (req, res) => {
-  const currentUserId = req.user ? req.user.id : 'usr_me';
-  const currentUserRow = db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId) || db.prepare('SELECT * FROM users WHERE id = ?').get('usr_me');
-  const user = formatUser(currentUserRow);
+  const currentUserId = req.user ? req.user.id : null;
+  const currentUserRow = currentUserId ? db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId) : null;
+  const user = currentUserRow ? formatUser(currentUserRow) : null;
 
   const isGlobalMod = currentUserRow && (currentUserRow.role === 'admin' || Boolean(currentUserRow.is_public_moderator));
 
@@ -38,45 +38,66 @@ router.get('/', optionalAuth, (req, res) => {
   const events = db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all().map(formatProject);
   
   // Isolated requests: public OR authored by user OR in user's communities
-  const requests = db.prepare(`
-    SELECT * FROM requests
-    WHERE (visibility IS NULL OR visibility = 'public')
-    OR requester_id = ?
-    OR (community_id IS NOT NULL AND community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
-    ORDER BY created_at DESC
-  `).all(currentUserId, currentUserId).map(formatRequest);
+  const requests = currentUserId
+    ? db.prepare(`
+        SELECT * FROM requests
+        WHERE (visibility IS NULL OR visibility = 'public')
+        OR requester_id = ?
+        OR (community_id IS NOT NULL AND community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
+        ORDER BY created_at DESC
+      `).all(currentUserId, currentUserId).map(formatRequest)
+    : db.prepare(`
+        SELECT * FROM requests
+        WHERE (visibility IS NULL OR visibility = 'public')
+        ORDER BY created_at DESC
+      `).all().map(formatRequest);
 
   const resources = db.prepare('SELECT * FROM resources ORDER BY created_at DESC').all().map(formatResource);
   const communities = db.prepare('SELECT * FROM communities ORDER BY created_at DESC').all().map(r => formatCommunity(r, currentUserId));
   
   // Isolated posts: public communities OR private communities where user is a member
-  const posts = db.prepare(`
-    SELECT * FROM posts
-    WHERE (is_quarantined = 0 OR is_quarantined IS NULL)
-    AND community_id IN (
-      SELECT id FROM communities WHERE privacy != 'private'
-      OR id IN (SELECT community_id FROM community_members WHERE user_id = ?)
-    )
-    ORDER BY is_pinned DESC, created_at DESC
-  `).all(currentUserId).map(formatPost);
+  const posts = currentUserId
+    ? db.prepare(`
+        SELECT * FROM posts
+        WHERE (is_quarantined = 0 OR is_quarantined IS NULL)
+        AND community_id IN (
+          SELECT id FROM communities WHERE privacy != 'private'
+          OR id IN (SELECT community_id FROM community_members WHERE user_id = ?)
+        )
+        ORDER BY is_pinned DESC, created_at DESC
+      `).all(currentUserId).map(formatPost)
+    : db.prepare(`
+        SELECT * FROM posts
+        WHERE (is_quarantined = 0 OR is_quarantined IS NULL)
+        AND community_id IN (
+          SELECT id FROM communities WHERE privacy != 'private'
+        )
+        ORDER BY is_pinned DESC, created_at DESC
+      `).all().map(formatPost);
 
   // Isolated notifications: strictly for current user
-  const notifications = db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC').all(currentUserId).map(formatNotification);
+  const notifications = currentUserId
+    ? db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC').all(currentUserId).map(formatNotification)
+    : [];
 
   // Isolated conversations: strictly where current user is user1 or user2
-  const conversations = db.prepare('SELECT * FROM conversations WHERE user1_id = ? OR user2_id = ? ORDER BY created_at DESC').all(currentUserId, currentUserId).map(r => formatConversation(r, currentUserId));
+  const conversations = currentUserId
+    ? db.prepare('SELECT * FROM conversations WHERE user1_id = ? OR user2_id = ? ORDER BY created_at DESC').all(currentUserId, currentUserId).map(r => formatConversation(r, currentUserId))
+    : [];
 
   // Isolated moderation reports: only admins/moderators OR reports filed by user
   const reportsQuery = isGlobalMod
     ? db.prepare('SELECT * FROM reports ORDER BY created_at DESC').all()
-    : db.prepare(`
-        SELECT * FROM reports
-        WHERE reporter_id = ?
-        OR (community_id IS NOT NULL AND community_id IN (
-          SELECT community_id FROM community_members WHERE user_id = ? AND role IN ('admin', 'moderator')
-        ))
-        ORDER BY created_at DESC
-      `).all(currentUserId, currentUserId);
+    : (currentUserId
+        ? db.prepare(`
+            SELECT * FROM reports
+            WHERE reporter_id = ?
+            OR (community_id IS NOT NULL AND community_id IN (
+              SELECT community_id FROM community_members WHERE user_id = ? AND role IN ('admin', 'moderator')
+            ))
+            ORDER BY created_at DESC
+          `).all(currentUserId, currentUserId)
+        : []);
   const reports = reportsQuery.map(formatReport);
 
   const readinessChecks = db.prepare('SELECT * FROM readiness_checks ORDER BY created_at DESC').all().map(formatReadinessCheck);

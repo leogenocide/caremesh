@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { CareMeshContext } from './careMeshContextInstance';
 import api from '../api/client';
 import {
-  currentUser as initialCurrentUser,
   mockUsers,
   mockEvidence as initialEvidence,
   mockClaims as initialClaims,
@@ -104,7 +103,13 @@ export const CareMeshProvider = ({ children }) => {
   // Core Data Collections with Local Storage or in-memory fallback
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('caremesh_user');
-    return saved ? JSON.parse(saved) : initialCurrentUser;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id && parsed.id !== 'usr_guest') return parsed;
+      } catch { /* ignore */ }
+    }
+    return null;
   });
 
   const [observations, setObservations] = useState(() => {
@@ -190,21 +195,37 @@ export const CareMeshProvider = ({ children }) => {
   });
 
   const [notifications, setNotifications] = useState(() => {
-    const activeId = initialCurrentUser?.id || 'usr_me';
+    const savedUser = localStorage.getItem('caremesh_user');
+    let activeId = null;
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id && parsed.id !== 'usr_guest') activeId = parsed.id;
+      } catch { /* ignore */ }
+    }
+    if (!activeId) return [];
     const saved = localStorage.getItem(`caremesh_notifs_${activeId}`);
     if (saved) {
       try { return JSON.parse(saved); } catch { /* ignore */ }
     }
-    return initialNotifications.filter(n => !n.userId || n.userId === activeId);
+    return initialNotifications.filter(n => n.userId === activeId);
   });
 
   const [conversations, setConversations] = useState(() => {
-    const activeId = initialCurrentUser?.id || 'usr_me';
+    const savedUser = localStorage.getItem('caremesh_user');
+    let activeId = null;
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id && parsed.id !== 'usr_guest') activeId = parsed.id;
+      } catch { /* ignore */ }
+    }
+    if (!activeId) return [];
     const saved = localStorage.getItem(`caremesh_convos_${activeId}`);
     if (saved) {
       try { return JSON.parse(saved); } catch { /* ignore */ }
     }
-    return initialConversations.filter(c => !c.user1Id || c.user1Id === activeId || c.user2Id === activeId);
+    return initialConversations.filter(c => c.user1Id === activeId || c.user2Id === activeId);
   });
 
   const [reports, setReports] = useState(() => {
@@ -240,8 +261,13 @@ export const CareMeshProvider = ({ children }) => {
     try {
       const data = await api.bootstrap();
       if (!data) return null;
-      if (data.currentUser) setCurrentUser(data.currentUser);
-      else if (newUser) setCurrentUser(newUser);
+      if (data.currentUser) {
+        setCurrentUser(data.currentUser);
+      } else if (newUser) {
+        setCurrentUser(newUser);
+      } else if (!localStorage.getItem('caremesh_token')) {
+        setCurrentUser(null);
+      }
 
       if (data.observations?.length) setObservations(data.observations);
       if (data.claims?.length) setClaims(data.claims);
@@ -263,7 +289,12 @@ export const CareMeshProvider = ({ children }) => {
       return data;
     } catch (err) {
       console.warn('Backend API bootstrap unavailable, running in local fallback mode:', err.message);
-      const targetId = newUser?.id || currentUser?.id || 'usr_me';
+      const targetId = newUser?.id || currentUser?.id;
+      if (!targetId || targetId === 'usr_guest') {
+        setNotifications([]);
+        setConversations([]);
+        return null;
+      }
       const savedNotifs = localStorage.getItem(`caremesh_notifs_${targetId}`);
       if (savedNotifs) {
         try { setNotifications(JSON.parse(savedNotifs)); } catch { /* ignore */ }
@@ -284,7 +315,11 @@ export const CareMeshProvider = ({ children }) => {
       try {
         const data = await api.bootstrap();
         if (!isMounted || !data) return;
-        if (data.currentUser) setCurrentUser(data.currentUser);
+        if (data.currentUser) {
+          setCurrentUser(data.currentUser);
+        } else if (!localStorage.getItem('caremesh_token')) {
+          setCurrentUser(null);
+        }
         if (data.observations?.length) setObservations(data.observations);
         if (data.claims?.length) setClaims(data.claims);
         if (data.disputes?.length) setDisputes(data.disputes);
@@ -313,7 +348,11 @@ export const CareMeshProvider = ({ children }) => {
   // Sync back to local storage
   useEffect(() => {
     try {
-      localStorage.setItem('caremesh_user', JSON.stringify(currentUser));
+      if (currentUser && currentUser.id !== 'usr_guest') {
+        localStorage.setItem('caremesh_user', JSON.stringify(currentUser));
+      } else {
+        localStorage.removeItem('caremesh_user');
+      }
       localStorage.setItem('caremesh_observations', JSON.stringify(observations));
       localStorage.setItem('caremesh_claims', JSON.stringify(claims));
       localStorage.setItem('caremesh_disputes', JSON.stringify(disputes));
@@ -390,6 +429,11 @@ export const CareMeshProvider = ({ children }) => {
 
   // Creation modal handlers
   const openCreateModal = (type = 'observation', prefill = null) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast?.('Please sign in or create an account to contribute.', 'info');
+      return;
+    }
     setCreateModalType(type);
     setCreateModalPrefill(prefill);
     setIsCreateModalOpen(true);
@@ -604,7 +648,7 @@ export const CareMeshProvider = ({ children }) => {
 
   const startDirectMessage = useCallback((targetUser) => {
     if (!targetUser) return;
-    if (currentUser?.id === 'usr_guest') {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
       openAuthModal('login');
       showToast('Please sign in or create an account to send direct messages.', 'info');
       return;
@@ -1065,6 +1109,11 @@ export const CareMeshProvider = ({ children }) => {
 
   // Explicit Social Sharing Action (Decoupled from creation)
   const shareObservationToSocial = (observationId, userNote = '') => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to share observations.', 'info');
+      return;
+    }
     const obs = observations.find(o => o.id === observationId);
     if (!obs) return;
 
@@ -1102,6 +1151,11 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const createPost = (content, linkedEntity = null, communityId = null, extraData = {}) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast?.('Please sign in or create an account to post.', 'info');
+      return null;
+    }
     const newPost = {
       id: `post_${Date.now()}`,
       communityId: communityId || extraData.communityId || null,
@@ -1700,7 +1754,7 @@ export const CareMeshProvider = ({ children }) => {
 
   // Interaction Actions
   const respondToRequest = (requestId, role = 'Volunteer') => {
-    if (currentUser?.id === 'usr_guest') {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
       openAuthModal('login');
       showToast('Please sign in or create an account to volunteer.', 'info');
       return;
@@ -1761,7 +1815,7 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const joinEvent = (eventId) => {
-    if (currentUser?.id === 'usr_guest') {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
       openAuthModal('login');
       showToast('Please sign in or create an account to join activities.', 'info');
       return;
@@ -1799,6 +1853,11 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const sendEventChatMessage = (eventId, text) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to send messages.', 'info');
+      return;
+    }
     if (!text || !text.trim()) return;
 
     const targetEvent = (events || []).find(e => e.id === eventId);
@@ -2178,7 +2237,8 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const endorseMatch = (matchId) => {
-    if (!currentUser?.id) {
+    if (!currentUser?.id || currentUser.id === 'usr_guest') {
+      openAuthModal('login');
       showToast('Please sign in to endorse matches.', 'info');
       return;
     }
@@ -2219,6 +2279,12 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const toggleJoinCommunity = (communityId) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to join community circles.', 'info');
+      return;
+    }
+
     setCommunities(prev => prev.map(c => {
       if (c.id === communityId) {
         const nextState = !c.isJoined;
@@ -2241,11 +2307,16 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const createCommunity = (data) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to start a community circle.', 'info');
+      return;
+    }
     const newId = `com_${Date.now()}`;
     const coords = resolveCoordinates(data);
     const locAddress = typeof data.location === 'object'
       ? (data.location?.address || 'Maplewood District')
-      : (data.location ? String(data.location).trim() : `${currentUser.location?.neighborhood || 'Maplewood'}, Maplewood`);
+      : (data.location ? String(data.location).trim() : `${currentUser?.location?.neighborhood || 'Maplewood'}, Maplewood`);
 
     const newCommunity = {
       id: newId,
@@ -2293,13 +2364,36 @@ export const CareMeshProvider = ({ children }) => {
     showToast('Community details updated successfully.', 'success');
   };
 
+  const deleteCommunity = async (communityId) => {
+    try {
+      await api.communities.delete(communityId);
+    } catch (err) {
+      console.warn('Backend deleteCommunity error:', err);
+    }
+    setCommunities(prev => prev.filter(c => c.id !== communityId));
+    setSelectedCommunityId(prev => {
+      if (prev === communityId) {
+        const remaining = communities.filter(c => c.id !== communityId);
+        return remaining[0]?.id || 'com_01';
+      }
+      return prev;
+    });
+    setPosts(prev => prev.filter(p => p.communityId !== communityId));
+    showToast('Community circle permanently deleted.', 'info');
+  };
+
   const uploadCommunityMedia = (communityId, mediaItem) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to upload photos.', 'info');
+      return null;
+    }
     const newMedia = {
       id: `media_${Date.now()}`,
       url: mediaItem.url,
       title: mediaItem.title || 'Field Photo',
       date: 'Today',
-      uploader: currentUser.name,
+      uploader: currentUser?.name || 'Community Member',
       ...mediaItem
     };
     setCommunities(prev => prev.map(c => {
@@ -2318,6 +2412,11 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const voteOnPoll = (postId, optionId) => {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
+      openAuthModal('login');
+      showToast('Please sign in or create an account to vote on polls.', 'info');
+      return;
+    }
     setPosts(prev => prev.map(p => {
       if (p.id === postId && p.poll) {
         const updatedOptions = p.poll.options.map(opt => {
@@ -2366,7 +2465,7 @@ export const CareMeshProvider = ({ children }) => {
 
   const addCommentToPost = (postId, text) => {
     if (!text || !text.trim()) return;
-    if (currentUser?.id === 'usr_guest') {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
       openAuthModal('login');
       showToast('Please sign in or create an account to comment.', 'info');
       return;
@@ -2415,7 +2514,7 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const endorsePost = (postId) => {
-    if (currentUser?.id === 'usr_guest') {
+    if (!currentUser || currentUser?.id === 'usr_guest') {
       openAuthModal('login');
       showToast('Please sign in or create an account to corroborate posts.', 'info');
       return;
@@ -3071,36 +3170,12 @@ export const CareMeshProvider = ({ children }) => {
   const logoutUser = async () => {
     api.setToken(null);
     localStorage.removeItem('caremesh_token');
-    const guestUser = {
-      id: 'usr_guest',
-      name: 'Guest Neighbor',
-      handle: '@guest',
-      role: 'Community Observer',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      bio: 'Exploring CareMesh community coordination.',
-      location: { address: 'Maplewood, CA', neighborhood: 'Maplewood', lat: 37.7749, lng: -122.4194 },
-      skills: [],
-      badges: [],
-      privacySettings: { showExactLocation: false, allowDirectMessages: false, publicContributionHistory: false },
-      stats: { contributions: 0, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 }
-    };
-    setCurrentUser(guestUser);
-    localStorage.setItem('caremesh_user', JSON.stringify(guestUser));
+    localStorage.removeItem('caremesh_user');
+    setCurrentUser(null);
     setNotifications([]);
     setConversations([]);
-    await refreshUserData(guestUser);
-    const notif = {
-      id: `notif_${Date.now()}`,
-      userId: 'usr_guest',
-      type: 'auth_logout',
-      title: 'Signed Out',
-      body: 'You have been safely signed out. Sign in anytime to coordinate.',
-      timestamp: 'Just now',
-      isRead: false,
-      targetView: 'home',
-      targetEntityId: 'usr_guest'
-    };
-    setNotifications([notif]);
+    showToast?.('You have been signed out.', 'info');
+    await refreshUserData();
   };
 
   const switchUser = async () => {
@@ -3142,6 +3217,16 @@ export const CareMeshProvider = ({ children }) => {
       console.warn('updateUserProfile error:', err);
       throw err;
     }
+  };
+
+  const deleteUserAccount = async (userId) => {
+    const targetId = userId || currentUser.id;
+    if (!targetId || targetId === 'usr_guest') {
+      throw new Error('Cannot delete guest account.');
+    }
+    await api.users.delete(targetId);
+    await logoutUser();
+    showToast('Your CareMesh account has been permanently deleted.', 'info');
   };
 
   // Modal handlers for Report, Readiness, and Public Records Moderation
@@ -3913,9 +3998,9 @@ export const CareMeshProvider = ({ children }) => {
     setSafetyReports(initialSafetyReports);
     setPosts(initialPosts);
     setCommunities(initialCommunities);
-    setNotifications(initialNotifications);
-    setConversations(initialConversations);
-    setCurrentUser(initialCurrentUser);
+    setNotifications([]);
+    setConversations([]);
+    setCurrentUser(null);
   };
 
   return (
@@ -4127,6 +4212,7 @@ export const CareMeshProvider = ({ children }) => {
       endorseMatch,
       toggleJoinCommunity,
       updateCommunity,
+      deleteCommunity,
       uploadCommunityMedia,
 
       // Auth Modals & Actions
@@ -4144,6 +4230,7 @@ export const CareMeshProvider = ({ children }) => {
       logoutUser,
       switchUserAccount,
       updateUserProfile,
+      deleteUserAccount,
 
       sendDirectMessage,
       startDirectMessage,
