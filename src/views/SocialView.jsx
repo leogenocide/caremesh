@@ -43,6 +43,10 @@ export const SocialView = () => {
     plans,
     observations,
     requests,
+    resources = [],
+    evidence = [],
+    safetyReports = [],
+    inspectEntity,
     viewPlanDetail,
     navigateTo,
     currentSubTab,
@@ -120,21 +124,112 @@ export const SocialView = () => {
 
     let linked = null;
     if (feedLinkedEntity) {
-      if (feedLinkedEntity.startsWith('obs_')) {
-        const o = observations.find(obs => obs.id === feedLinkedEntity);
-        if (o) linked = { type: 'observation', id: o.id, title: o.title };
-      } else if (feedLinkedEntity.startsWith('plan_')) {
-        const p = plans.find(plan => plan.id === feedLinkedEntity);
-        if (p) linked = { type: 'plan', id: p.id, title: p.title };
-      } else if (feedLinkedEntity.startsWith('req_')) {
-        const r = requests.find(req => req.id === feedLinkedEntity);
-        if (r) linked = { type: 'request', id: r.id, title: r.title };
+      const o = observations?.find(obs => obs.id === feedLinkedEntity);
+      if (o) {
+        linked = { type: 'observation', id: o.id, title: o.title };
+      } else {
+        const p = plans?.find(plan => plan.id === feedLinkedEntity);
+        if (p) {
+          linked = { type: 'plan', id: p.id, title: p.title };
+        } else {
+          const r = requests?.find(req => req.id === feedLinkedEntity);
+          if (r) {
+            linked = { type: 'request', id: r.id, title: r.title };
+          } else {
+            const res = resources?.find(item => item.id === feedLinkedEntity);
+            if (res) {
+              linked = { type: 'resource', id: res.id, title: res.title };
+            } else {
+              const s = safetyReports?.find(report => report.id === feedLinkedEntity);
+              if (s) {
+                linked = { type: 'safety', id: s.id, title: s.title };
+              }
+            }
+          }
+        }
       }
     }
 
     createPost(newFeedPostText.trim(), linked);
     setNewFeedPostText('');
     setFeedLinkedEntity('');
+  };
+
+  const handleOpenLinkedEntity = (post) => {
+    if (!post?.linkedEntityType) return;
+    const type = (post.linkedEntityType || '').toLowerCase();
+    const id = post.linkedEntityId;
+    const title = post.linkedEntityTitle;
+
+    const findEntity = (list) => {
+      if (!list || !Array.isArray(list)) return null;
+      if (id) {
+        const byId = list.find(item => item.id === id);
+        if (byId) return byId;
+      }
+      if (title) {
+        const byTitle = list.find(item => 
+          item.title?.toLowerCase() === title.toLowerCase() || 
+          item.name?.toLowerCase() === title.toLowerCase()
+        );
+        if (byTitle) return byTitle;
+      }
+      return null;
+    };
+
+    if (type === 'plan') {
+      const p = findEntity(plans);
+      if (p) {
+        viewPlanDetail(p);
+      } else {
+        navigateTo('plans');
+      }
+    } else if (type === 'request') {
+      const r = findEntity(requests);
+      if (r) {
+        inspectEntity(r, 'request');
+      } else {
+        navigateTo('collaborate', 'requests', id);
+      }
+    } else if (type === 'resource') {
+      const res = findEntity(resources);
+      if (res) {
+        inspectEntity(res, 'resource');
+      } else {
+        navigateTo('collaborate', 'resources', id);
+      }
+    } else if (type === 'safety') {
+      const s = findEntity(safetyReports);
+      if (s) {
+        inspectEntity(s, 'safety');
+      } else {
+        navigateTo('explore', null, id);
+      }
+    } else if (type === 'evidence') {
+      const ev = findEntity(evidence);
+      if (ev) {
+        inspectEntity(ev, 'evidence');
+      }
+    } else if (type === 'observation') {
+      const o = findEntity(observations);
+      if (o) {
+        inspectEntity(o, 'observation');
+      } else {
+        navigateTo('explore', null, id);
+      }
+    } else {
+      const allEntities = [
+        ...(observations || []),
+        ...(requests || []),
+        ...(resources || []),
+        ...(plans || []),
+        ...(safetyReports || [])
+      ];
+      const anyEntity = findEntity(allEntities);
+      if (anyEntity) {
+        inspectEntity(anyEntity, type);
+      }
+    }
   };
 
   const handleSendDirectMessage = (e) => {
@@ -499,6 +594,16 @@ export const SocialView = () => {
                       <option key={r.id} value={r.id}>Need: {r.title}</option>
                     ))}
                   </optgroup>
+                  <optgroup label="Resources & Equipment">
+                    {(resources || []).map(res => (
+                      <option key={res.id} value={res.id}>Resource: {res.title}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Safety Hazards">
+                    {(safetyReports || []).map(s => (
+                      <option key={s.id} value={s.id}>Hazard: {s.title}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 
@@ -557,12 +662,14 @@ export const SocialView = () => {
                   <div 
                     className="card p-2 p-sm-3 mb-3 card-interactive cursor-pointer"
                     style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
-                    onClick={() => {
-                      if (post.linkedEntityType === 'plan') {
-                        const p = plans.find(plan => plan.id === post.linkedEntityId);
-                        if (p) viewPlanDetail(p);
-                      } else {
-                        navigateTo(post.linkedEntityType === 'request' ? 'collaborate' : 'explore');
+                    onClick={() => handleOpenLinkedEntity(post)}
+                    title={`Inspect linked ${post.linkedEntityType}: ${post.linkedEntityTitle || ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleOpenLinkedEntity(post);
                       }
                     }}
                   >
