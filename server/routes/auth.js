@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db/database.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { SYSTEM_ADMIN_EMAIL } from './communities.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer.js';
 
 const router = express.Router();
 
@@ -40,7 +41,7 @@ export function formatUser(row) {
 }
 
 // POST /api/auth/send-verification-code (Send 6-digit registration email verification code)
-router.post('/send-verification-code', (req, res) => {
+router.post('/send-verification-code', async (req, res) => {
   const { email, handle } = req.body;
   if (!email || typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email address is required.' });
@@ -78,11 +79,15 @@ router.post('/send-verification-code', (req, res) => {
     VALUES (?, ?, ?, ?, 0)
   `).run(codeId, targetEmail, codeHash, expiresAt);
 
-  console.log(`[AUTH] Registration email verification code for ${targetEmail}: ${code} (Expires: ${expiresAt})`);
+  // Dispatch real email via SMTP transporter
+  const emailResult = await sendVerificationEmail(targetEmail, code);
 
   return res.json({
     success: true,
-    message: `A 6-digit verification code has been sent to ${targetEmail}. Please check your inbox and enter the code to verify your account.`
+    emailDispatched: emailResult.sent,
+    message: emailResult.sent 
+      ? `A 6-digit verification code has been sent to ${targetEmail}. Please check your inbox and enter the code to verify your account.`
+      : `Verification code generated for ${targetEmail}. (Check server console or configure SMTP_USER & SMTP_PASS in .env to deliver real emails to inbox).`
   });
 });
 
@@ -392,7 +397,7 @@ router.post('/change-password', requireAuth, (req, res) => {
 });
 
 // POST /api/auth/forgot-password (Generate 6-digit Gmail reset code)
-router.post('/forgot-password', (req, res) => {
+router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
   if (!email || typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email address is required.' });
@@ -425,14 +430,18 @@ router.post('/forgot-password', (req, res) => {
     VALUES (?, ?, ?, ?, ?, 0)
   `).run(resetId, user.id, targetEmail, codeHash, expiresAt);
 
-  console.log(`[AUTH] Password reset code generated for ${targetEmail}: ${code} (Expires: ${expiresAt})`);
+  // Dispatch real email via SMTP transporter
+  const emailResult = await sendPasswordResetEmail(targetEmail, code);
 
   const responsePayload = {
     success: true,
-    message: 'A 6-digit password reset code has been sent to your Gmail address. It is valid for 15 minutes.'
+    emailDispatched: emailResult.sent,
+    message: emailResult.sent
+      ? 'A 6-digit password reset code has been sent to your Gmail address. It is valid for 15 minutes.'
+      : 'Password reset code generated. (Check server console or configure SMTP_USER & SMTP_PASS in .env to deliver real emails to inbox).'
   };
 
-  // In development / test mode, provide devCode for ease of testing
+  // In development / test mode, provide devCode for ease of testing password reset
   if (process.env.NODE_ENV !== 'production') {
     responsePayload.devCode = code;
   }
