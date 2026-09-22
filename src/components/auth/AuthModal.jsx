@@ -12,8 +12,10 @@ import {
   Info,
   Mail,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
+import { CARTOON_AVATAR_PRESETS, DEFAULT_CARTOON_AVATAR } from '../../data/avatarPresets';
 
 export const AuthModal = () => {
   const {
@@ -22,6 +24,7 @@ export const AuthModal = () => {
     closeAuthModal,
     loginUser,
     registerUser,
+    sendRegistrationVerificationCode,
     loginWithGoogle,
     forgotPassword,
     resetPassword,
@@ -55,9 +58,22 @@ export const AuthModal = () => {
   const [regNeighborhood, setRegNeighborhood] = useState('Maplewood Central');
   const [regBio, setRegBio] = useState('');
   const [regSkills, setRegSkills] = useState('Community Logistics, First Aid');
+  const [regAvatar, setRegAvatar] = useState(DEFAULT_CARTOON_AVATAR);
+  const [regStep, setRegStep] = useState(1); // 1 = Details & Avatar, 2 = Verify Email OTP
+  const [regVerificationCode, setRegVerificationCode] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const googleButtonRef = useRef(null);
   const googleClientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
+
+  // Timer for registration OTP resend cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Initialize Google Identity Services if loaded and client ID configured
   useEffect(() => {
@@ -299,12 +315,73 @@ export const AuthModal = () => {
     }
   };
 
-  const handleRegisterSubmit = async (e) => {
+  const handleRequestVerificationCode = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
 
     if (!regName.trim() || !regHandle.trim() || !regEmail.trim() || !regPassword) {
       setErrorMsg('Name, handle, email, and password are required.');
+      return;
+    }
+
+    if (regPassword.length < 8) {
+      setErrorMsg('Password must be at least 8 characters long.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formattedHandle = regHandle.trim().startsWith('@') 
+        ? regHandle.trim() 
+        : `@${regHandle.trim()}`;
+
+      await sendRegistrationVerificationCode({
+        email: regEmail.trim(),
+        handle: formattedHandle
+      });
+
+      setRegStep(2);
+      setResendCooldown(60);
+      setSuccessMsg(`A 6-digit verification code has been sent to ${regEmail.trim()}. Please enter it below to activate your account.`);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to send verification code. Email or handle may already be in use.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerificationCode = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    setLoading(true);
+    try {
+      const formattedHandle = regHandle.trim().startsWith('@') 
+        ? regHandle.trim() 
+        : `@${regHandle.trim()}`;
+
+      await sendRegistrationVerificationCode({
+        email: regEmail.trim(),
+        handle: formattedHandle
+      });
+
+      setResendCooldown(60);
+      setSuccessMsg(`A fresh verification code has been sent to ${regEmail.trim()}.`);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to resend verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyAndRegister = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!regVerificationCode.trim() || regVerificationCode.trim().length !== 6) {
+      setErrorMsg('Please enter the 6-digit verification code sent to your email.');
       return;
     }
 
@@ -324,6 +401,8 @@ export const AuthModal = () => {
         handle: formattedHandle,
         email: regEmail.trim(),
         password: regPassword,
+        verificationCode: regVerificationCode.trim(),
+        avatar: regAvatar,
         bio: regBio.trim() || `Community member in ${regNeighborhood}.`,
         location: {
           address: `${regNeighborhood}, Maplewood`,
@@ -331,9 +410,12 @@ export const AuthModal = () => {
         },
         skills: skillsArray
       });
+
+      setRegStep(1);
+      setRegVerificationCode('');
       closeAuthModal();
     } catch (err) {
-      setErrorMsg(err.message || 'Registration failed. Handle or email may already be in use.');
+      setErrorMsg(err.message || 'Verification failed. Please check the code and try again.');
     } finally {
       setLoading(false);
     }
@@ -342,7 +424,13 @@ export const AuthModal = () => {
   return (
     <Modal
       isOpen={isAuthModalOpen}
-      onClose={closeAuthModal}
+      onClose={() => {
+        setRegStep(1);
+        setRegVerificationCode('');
+        setErrorMsg('');
+        setSuccessMsg('');
+        closeAuthModal();
+      }}
       title={
         forgotMode
           ? 'Reset Password via Gmail'
@@ -350,7 +438,9 @@ export const AuthModal = () => {
             ? 'Single Sign-On with Google' 
             : activeTab === 'login' 
               ? 'Sign In to CareMesh' 
-              : 'Create CareMesh Account'
+              : regStep === 2
+                ? 'Verify Your Email Address'
+                : 'Create CareMesh Account'
       }
       maxWidth="500px"
       zIndex={1150}
@@ -784,114 +874,295 @@ export const AuthModal = () => {
 
         {/* CREATE ACCOUNT TAB */}
         {!googleInfoMode && !forgotMode && activeTab === 'register' && (
-          <form onSubmit={handleRegisterSubmit} className="d-flex flex-column gap-2.5">
-            <div className="d-flex gap-2">
-              <div className="form-group flex-1">
-                <label className="form-label text-xs font-bold text-secondary">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  className="form-input text-xs"
-                  placeholder="e.g. Jordan Rivera"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  required
-                />
-              </div>
+          <div>
+            {/* Step 1: Account Information & Cartoon Avatar Selection */}
+            {regStep === 1 && (
+              <form onSubmit={handleRequestVerificationCode} className="d-flex flex-column gap-2.5">
+                {/* Cartoon Avatar Picker */}
+                <div className="p-2.5 rounded border mb-1" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border-light)' }}>
+                  <div className="d-flex align-center justify-between mb-2">
+                    <label className="text-xs font-bold text-secondary text-uppercase d-flex align-center gap-1 m-0">
+                      <Sparkles size={13} className="text-amber" />
+                      <span>Choose Your Cartoon Persona</span>
+                    </label>
+                    <span className="text-xs text-muted" style={{ fontSize: '0.72rem' }}>
+                      {CARTOON_AVATAR_PRESETS.find(p => p.url === regAvatar)?.label || 'Custom Cartoon'}
+                    </span>
+                  </div>
+                  <div 
+                    className="d-flex gap-2 flex-wrap justify-between" 
+                    style={{ maxHeight: '130px', overflowY: 'auto', padding: '2px' }}
+                  >
+                    {CARTOON_AVATAR_PRESETS.map(preset => {
+                      const isSelected = regAvatar === preset.url;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          className="btn btn-ghost p-0 cursor-pointer"
+                          style={{
+                            position: 'relative',
+                            borderRadius: '50%',
+                            border: isSelected ? '2.5px solid var(--primary-600)' : '2px solid transparent',
+                            padding: '2px',
+                            background: isSelected ? 'rgba(2, 132, 199, 0.12)' : 'transparent',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onClick={() => setRegAvatar(preset.url)}
+                          title={`${preset.label} • ${preset.role}`}
+                        >
+                          <img
+                            src={preset.url}
+                            alt={preset.label}
+                            style={{
+                              width: '42px',
+                              height: '42px',
+                              borderRadius: '50%',
+                              objectFit: 'cover'
+                            }}
+                          />
+                          {isSelected && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                bottom: '-2px',
+                                right: '-2px',
+                                background: 'var(--primary-600)',
+                                color: '#ffffff',
+                                borderRadius: '50%',
+                                width: '15px',
+                                height: '15px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.55rem'
+                              }}
+                            >
+                              ✓
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-              <div className="form-group flex-1">
-                <label className="form-label text-xs font-bold text-secondary">
-                  Handle *
-                </label>
-                <input
-                  type="text"
-                  className="form-input text-xs"
-                  placeholder="e.g. @jordan_r"
-                  value={regHandle}
-                  onChange={(e) => setRegHandle(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+                <div className="d-flex gap-2">
+                  <div className="form-group flex-1">
+                    <label className="form-label text-xs font-bold text-secondary">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input text-xs"
+                      placeholder="e.g. Jordan Rivera"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <div className="d-flex gap-2">
-              <div className="form-group flex-1">
-                <label className="form-label text-xs font-bold text-secondary">
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  className="form-input text-xs"
-                  placeholder="name@gmail.com"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  required
-                />
-              </div>
+                  <div className="form-group flex-1">
+                    <label className="form-label text-xs font-bold text-secondary">
+                      Handle *
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input text-xs"
+                      placeholder="e.g. @jordan_r"
+                      value={regHandle}
+                      onChange={(e) => setRegHandle(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
 
-              <div className="form-group flex-1">
-                <label className="form-label text-xs font-bold text-secondary">
-                  Password *
-                </label>
-                <input
-                  type="password"
-                  className="form-input text-xs"
-                  placeholder="Create secure password"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+                <div className="d-flex gap-2">
+                  <div className="form-group flex-1">
+                    <label className="form-label text-xs font-bold text-secondary">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      className="form-input text-xs"
+                      placeholder="name@gmail.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      required
+                    />
+                  </div>
 
-            <div className="form-group">
-              <label className="form-label text-xs font-bold text-secondary">
-                Neighborhood Area
-              </label>
-              <input
-                type="text"
-                className="form-input text-xs"
-                placeholder="e.g. Maplewood North"
-                value={regNeighborhood}
-                onChange={(e) => setRegNeighborhood(e.target.value)}
-              />
-            </div>
+                  <div className="form-group flex-1">
+                    <label className="form-label text-xs font-bold text-secondary">
+                      Password (min 8 chars) *
+                    </label>
+                    <input
+                      type="password"
+                      className="form-input text-xs"
+                      placeholder="Create secure password"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                </div>
 
-            <div className="form-group">
-              <label className="form-label text-xs font-bold text-secondary">
-                Skills / Mutual Aid Offerings
-              </label>
-              <input
-                type="text"
-                className="form-input text-xs"
-                placeholder="e.g. First Aid, Chainsaw, Solar Power"
-                value={regSkills}
-                onChange={(e) => setRegSkills(e.target.value)}
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label text-xs font-bold text-secondary">
+                    Neighborhood Area
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input text-xs"
+                    placeholder="e.g. Maplewood North"
+                    value={regNeighborhood}
+                    onChange={(e) => setRegNeighborhood(e.target.value)}
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label text-xs font-bold text-secondary">
-                Short Bio / Neighborhood Focus
-              </label>
-              <textarea
-                className="form-input text-xs"
-                rows={2}
-                placeholder="What community needs or resources do you focus on?"
-                value={regBio}
-                onChange={(e) => setRegBio(e.target.value)}
-              />
-            </div>
+                <div className="form-group">
+                  <label className="form-label text-xs font-bold text-secondary">
+                    Skills / Mutual Aid Offerings
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input text-xs"
+                    placeholder="e.g. First Aid, Chainsaw, Solar Power"
+                    value={regSkills}
+                    onChange={(e) => setRegSkills(e.target.value)}
+                  />
+                </div>
 
-            <button
-              type="submit"
-              className="btn btn-primary w-100 mt-2"
-              disabled={loading}
-            >
-              {loading ? 'Creating Account...' : 'Create Account & Sign In'}
-            </button>
-          </form>
+                <div className="form-group">
+                  <label className="form-label text-xs font-bold text-secondary">
+                    Short Bio / Neighborhood Focus
+                  </label>
+                  <textarea
+                    className="form-input text-xs"
+                    rows={2}
+                    placeholder="What community needs or resources do you focus on?"
+                    value={regBio}
+                    onChange={(e) => setRegBio(e.target.value)}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary w-100 mt-2 d-flex align-center justify-center gap-1.5"
+                  disabled={loading}
+                >
+                  <Mail size={15} />
+                  <span>{loading ? 'Sending Verification Code...' : 'Continue to Email Verification'}</span>
+                </button>
+                <span className="text-xs text-muted text-center" style={{ fontSize: '0.72rem' }}>
+                  A 6-digit email verification code will be sent to activate your account.
+                </span>
+              </form>
+            )}
+
+            {/* Step 2: Email Verification OTP Code Input */}
+            {regStep === 2 && (
+              <form onSubmit={handleVerifyAndRegister} className="d-flex flex-column gap-3 py-1">
+                <div 
+                  className="p-3 rounded border text-center d-flex flex-column align-center gap-2"
+                  style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border-light)' }}
+                >
+                  <div 
+                    style={{ 
+                      width: '46px', 
+                      height: '46px', 
+                      borderRadius: '50%', 
+                      background: 'rgba(2, 132, 199, 0.12)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      color: 'var(--primary-600)' 
+                    }}
+                  >
+                    <Mail size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-primary mb-1">Check Your Email</h4>
+                    <p className="text-xs text-muted mb-0" style={{ lineHeight: 1.5 }}>
+                      We sent a 6-digit verification code to <strong>{regEmail}</strong>. Enter it below to activate your CareMesh account.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-link text-xs text-primary"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    onClick={() => {
+                      setRegStep(1);
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                  >
+                    Wrong email address? Change details
+                  </button>
+                </div>
+
+                <div className="form-group text-center">
+                  <label className="form-label text-xs font-bold text-secondary d-block mb-1.5">
+                    6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    maxLength={6}
+                    placeholder="••••••"
+                    value={regVerificationCode}
+                    onChange={(e) => setRegVerificationCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    style={{ 
+                      letterSpacing: '6px', 
+                      textAlign: 'center', 
+                      fontSize: '1.25rem', 
+                      fontWeight: 700,
+                      maxWidth: '260px',
+                      margin: '0 auto',
+                      display: 'block'
+                    }}
+                    required
+                    autoFocus
+                  />
+                  <span className="text-xs text-muted mt-1 d-block" style={{ fontSize: '0.72rem' }}>
+                    Code expires in 15 minutes.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary w-100 mt-1 d-flex align-center justify-center gap-1.5"
+                  disabled={loading || regVerificationCode.trim().length !== 6}
+                >
+                  <ShieldCheck size={16} />
+                  <span>{loading ? 'Verifying & Creating Account...' : 'Verify Email & Complete Registration'}</span>
+                </button>
+
+                <div className="d-flex justify-between align-center pt-2 border-top">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs text-muted"
+                    onClick={() => {
+                      setRegStep(1);
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                  >
+                    ← Back to Edit Info
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs text-primary font-medium"
+                    onClick={handleResendVerificationCode}
+                    disabled={resendCooldown > 0 || loading}
+                  >
+                    {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
       </div>
     </Modal>

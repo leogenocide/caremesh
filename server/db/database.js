@@ -276,6 +276,24 @@ export function initDatabase() {
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email)`).run();
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_reset_codes_user ON password_reset_codes(user_id)`).run();
 
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS email_verification_codes (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_verif_codes ON email_verification_codes(email)`).run();
+
+    const uCols = db.prepare("PRAGMA table_info(users)").all();
+    if (!uCols.some(c => c.name === 'is_email_verified')) {
+      db.prepare("ALTER TABLE users ADD COLUMN is_email_verified INTEGER DEFAULT 0").run();
+      db.prepare("UPDATE users SET is_email_verified = 1").run(); // Seed users are verified
+    }
+
     const obsCols = db.prepare("PRAGMA table_info(observations)").all();
     if (!obsCols.some(c => c.name === 'referenced_evidence_id')) {
       db.prepare("ALTER TABLE observations ADD COLUMN referenced_evidence_id TEXT").run();

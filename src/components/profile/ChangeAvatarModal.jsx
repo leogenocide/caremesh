@@ -9,58 +9,11 @@ import {
   Sparkles,
   AlertCircle
 } from 'lucide-react';
-
-const PRESET_AVATARS = [
-  {
-    id: 'p1',
-    label: 'Community Coordinator',
-    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p2',
-    label: 'Equipment & Logistics',
-    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p3',
-    label: 'Field Responder',
-    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p4',
-    label: 'Senior Health Advocate',
-    url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p5',
-    label: 'Environmental Specialist',
-    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p6',
-    label: 'Neighborhood Volunteer',
-    url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p7',
-    label: 'Mutual Aid Steward',
-    url: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p8',
-    label: 'Youth Coordinator',
-    url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'p9',
-    label: 'Senior Neighbor',
-    url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&auto=format&fit=crop&q=80'
-  }
-];
+import { CARTOON_AVATAR_PRESETS, DEFAULT_CARTOON_AVATAR } from '../../data/avatarPresets';
 
 export const ChangeAvatarModal = ({ isOpen, onClose }) => {
   const { currentUser, updateUserProfile } = useCareMesh();
-  const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || PRESET_AVATARS[0].url);
+  const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || DEFAULT_CARTOON_AVATAR);
   const [customUrl, setCustomUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -228,7 +181,7 @@ export const ChangeAvatarModal = ({ isOpen, onClose }) => {
             className="d-flex gap-2.5 flex-wrap justify-between p-2 rounded" 
             style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border-light)', maxHeight: '180px', overflowY: 'auto' }}
           >
-            {PRESET_AVATARS.map(preset => {
+            {CARTOON_AVATAR_PRESETS.map(preset => {
               const isSelected = selectedAvatar === preset.url;
               return (
                 <button

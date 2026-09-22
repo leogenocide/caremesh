@@ -6,7 +6,7 @@ import { parsePaginationParams, executePaginatedQuery } from '../utils/paginatio
 
 const router = express.Router();
 
-export const DEFAULT_SAFE_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+export const DEFAULT_SAFE_AVATAR = 'https://api.dicebear.com/7.x/bottts/svg?seed=SafeNeighbor&backgroundColor=b6e3f4';
 
 export function formatReport(row) {
   if (!row) return null;
