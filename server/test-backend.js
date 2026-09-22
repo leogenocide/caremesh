@@ -1129,6 +1129,12 @@ async function runTests() {
   assert(authList.some(r => r.id === grpReq.id), 'Authenticated group member MUST see group_only request');
 
   // D. Verify linking an existing request to a community
+  if (!db.prepare('SELECT id FROM requests WHERE id = ?').get('req_08')) {
+    db.prepare(`
+      INSERT OR REPLACE INTO requests (id, title, description, category, address, lat, lng, urgency, required_skills, required_resources, people_needed, people_joined, progress_percentage, status, requester_id, expires_at, community_id, visibility, scheduled_date, scheduled_time)
+      VALUES ('req_08', 'Emergency Power & Battery Charging', 'Power grid down across harbor neighborhood.', 'equipment', 'Harbor Island First Aid Shelter', 47.607, -122.3315, 'critical', '[]', '[]', 3, 2, 66, 'open', 'usr_me', NULL, NULL, 'public', NULL, NULL)
+    `).run();
+  }
   const linkRes = await fetch(`${BASE_URL}/requests/req_08`, {
     method: 'PATCH',
     headers: authHeaders,
@@ -2071,6 +2077,7 @@ async function runTests() {
   console.log('   ✓ Multi-attribute user search & RBAC authorization verified.');
 
   // B. User Incident & Historical Report Dossier
+  db.prepare("DELETE FROM reports WHERE target_id = 'usr_marcus' AND reporter_id = 'usr_me'").run();
   // File a report against Marcus (usr_marcus)
   const filedReportRes = await fetch(`${BASE_URL}/reports`, {
     method: 'POST',
@@ -2179,6 +2186,85 @@ async function runTests() {
   const rowAfterPurge = db.prepare('SELECT * FROM posts WHERE id = ?').get(softPost.id);
   assert.strictEqual(rowAfterPurge, undefined, 'Purged post must be permanently deleted from SQLite');
   console.log('   ✓ Evidence vault restore and permanent purge verified.');
+
+  // E2. Multi-Entity Quarantine & Vault Operations (Requests, Resources, Observations, etc.)
+  // Create a test request
+  const qReqRes = await fetch(`${BASE_URL}/requests`, {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      title: 'Quarantine Test Help Request',
+      description: 'Needs to be quarantined to the vault by System Admin',
+      category: 'supplies',
+      urgency: 'high'
+    })
+  });
+  assert.strictEqual(qReqRes.status, 201);
+  const qReq = await qReqRes.json();
+
+  // Non-admin attempting to quarantine request -> 403 Forbidden
+  const unauthQuarantine = await fetch(`${BASE_URL}/admin/vault/quarantine`, {
+    method: 'POST',
+    headers: marcusHeaders,
+    body: JSON.stringify({
+      targetType: 'request',
+      targetId: qReq.id,
+      reason: 'Unauthorized quarantine attempt'
+    })
+  });
+  assert.strictEqual(unauthQuarantine.status, 403, 'Non-admin must get 403 when trying to quarantine to vault');
+
+  // System Admin quarantines the help request
+  const adminQuarantineReq = await fetch(`${BASE_URL}/admin/vault/quarantine`, {
+    method: 'POST',
+    headers: calebHeaders,
+    body: JSON.stringify({
+      targetType: 'request',
+      targetId: qReq.id,
+      reason: 'Suspicious public solicitation',
+      notes: 'Investigating validity'
+    })
+  });
+  assert.strictEqual(adminQuarantineReq.status, 200);
+
+  // Verify hidden from public requests endpoint
+  const pubReqCheck = await fetch(`${BASE_URL}/requests/${qReq.id}`);
+  assert.strictEqual(pubReqCheck.status, 404, 'Quarantined request must return 404 on public endpoint');
+
+  // Verify present in Vault
+  const vaultCheckRes = await fetch(`${BASE_URL}/admin/vault?itemType=request`, { headers: calebHeaders });
+  assert.strictEqual(vaultCheckRes.status, 200);
+  const vaultItems = await vaultCheckRes.json();
+  assert.ok(vaultItems.some(item => item.id === qReq.id && item.itemType === 'request'), 'Quarantined request must appear in vault');
+
+  // Restore request
+  const restoreReqRes = await fetch(`${BASE_URL}/admin/vault/${qReq.id}/restore`, {
+    method: 'POST',
+    headers: calebHeaders,
+    body: JSON.stringify({ reason: 'Request verified as legitimate' })
+  });
+  assert.strictEqual(restoreReqRes.status, 200);
+
+  // Verify request is back in public view
+  const pubReqRestored = await fetch(`${BASE_URL}/requests/${qReq.id}`);
+  assert.strictEqual(pubReqRestored.status, 200, 'Restored request must be visible on public endpoint');
+
+  // Quarantine again and permanently purge
+  await fetch(`${BASE_URL}/admin/vault/quarantine`, {
+    method: 'POST',
+    headers: calebHeaders,
+    body: JSON.stringify({ targetType: 'request', targetId: qReq.id, reason: 'Duplicate/Test record' })
+  });
+  const purgeReqRes = await fetch(`${BASE_URL}/admin/vault/${qReq.id}/purge`, {
+    method: 'POST',
+    headers: calebHeaders,
+    body: JSON.stringify({ reason: 'Test cleanup' })
+  });
+  assert.strictEqual(purgeReqRes.status, 200);
+  const purgedReqRow = db.prepare('SELECT id FROM requests WHERE id = ?').get(qReq.id);
+  assert.strictEqual(purgedReqRow, undefined, 'Purged request must be permanently removed from database');
+  console.log('   ✓ Multi-entity Quarantine, Vault inspection, Public Shielding, Restore & Permanent Purge verified.');
+
 
   // F. Account Restriction System & Write Action Blocking
   // Restrict Marcus

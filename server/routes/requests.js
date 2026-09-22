@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../db/database.js';
+import { db, logModerationAudit } from '../db/database.js';
 import { formatUser } from './auth.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { parsePaginationParams, executePaginatedQuery } from '../utils/pagination.js';
@@ -93,6 +93,9 @@ router.get('/', optionalAuth, (req, res) => {
     params.push(communityId);
   }
 
+  // Exclude quarantined requests from public feed
+  whereClauses.push('(is_quarantined = 0 OR is_quarantined IS NULL)');
+
   // Visibility filtering
   const currentUserId = req.user ? req.user.id : null;
   if (currentUserId) {
@@ -130,7 +133,7 @@ router.get('/', optionalAuth, (req, res) => {
 // GET /api/requests/:id
 router.get('/:id', optionalAuth, (req, res) => {
   const row = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
-  if (!row) {
+  if (!row || row.is_quarantined) {
     return res.status(404).json({ error: 'Request not found' });
   }
 
@@ -333,6 +336,22 @@ router.delete('/:id', optionalAuth, (req, res) => {
 
   if (!isOwner && !isAdmin) {
     return res.status(403).json({ error: 'Only the creator or an administrator can delete this request.' });
+  }
+
+  // Audit trail if deleted by an admin who is not the creator
+  if (!isOwner && isAdmin) {
+    logModerationAudit(db, {
+      moderatorId: user.id,
+      moderatorRole: user.role || 'System Administrator',
+      communityId: request.community_id || null,
+      actionType: 'delete_request',
+      targetType: 'request',
+      targetId: req.params.id,
+      targetAuthorId: request.requester_id,
+      targetContentSnapshot: request,
+      reason: req.body?.reason || 'Permanently deleted by administrator',
+      notes: req.body?.notes || 'Administrative removal'
+    });
   }
 
   const tx = db.transaction(() => {

@@ -23,7 +23,8 @@ import {
   Check,
   X,
   Flag,
-  MessageSquare
+  MessageSquare,
+  Archive
 } from 'lucide-react';
 
 const DisputeResponseThread = ({ responses = [], disp, canUserManage, deleteDisputeResponse, viewUserProfile }) => {
@@ -142,7 +143,11 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
     deleteDisputeResponse,
     canUserManage,
     openReportModal,
-    viewUserProfile
+    viewUserProfile,
+    isSystemAdmin,
+    quarantineEntity,
+    showToast,
+    currentUser
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('evidence'); // 'evidence' | 'disputes' | 'observations' | 'assessment'
@@ -283,6 +288,26 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
     if (window.confirm('Are you sure you want to permanently delete this observation? This action cannot be undone.')) {
       deleteObservation(observation.id);
       onClose();
+    }
+  };
+
+  const handleQuarantineObs = async () => {
+    if (!observation) return;
+    const reason = window.prompt(
+      `Quarantine "${observation.title}" to Master Evidence Vault?\n\nEnter quarantine reason:`,
+      'Policy and veracity review'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'observation',
+        targetId: observation.id,
+        reason: reason.trim() || 'Quarantined by System Administrator',
+        notes: `Quarantined from Evidence Inspector by ${currentUser?.name || 'System Admin'}`
+      });
+      onClose();
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine observation', 'error');
     }
   };
 
@@ -594,6 +619,19 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
                     <span>Delete Observation</span>
                   </button>
                 </>
+              )}
+
+              {isSystemAdmin && (
+                <button
+                  type="button"
+                  className="btn btn-sm text-amber"
+                  style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#b45309' }}
+                  onClick={handleQuarantineObs}
+                  title="Quarantine this observation to Master Evidence Vault"
+                >
+                  <Archive size={14} />
+                  <span>Quarantine to Vault</span>
+                </button>
               )}
 
               {(resolvedClaim || observation) && (

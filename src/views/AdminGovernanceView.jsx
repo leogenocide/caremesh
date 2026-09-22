@@ -58,6 +58,7 @@ export const AdminGovernanceView = () => {
   const [vaultPosts, setVaultPosts] = useState([]);
   const [isVaultLoading, setIsVaultLoading] = useState(false);
   const [vaultSearchTerm, setVaultSearchTerm] = useState('');
+  const [vaultTypeFilter, setVaultTypeFilter] = useState('all');
   const [selectedVaultPostForPurge, setSelectedVaultPostForPurge] = useState(null);
 
   // Tab 3: Platform Audit Trail
@@ -211,6 +212,7 @@ export const AdminGovernanceView = () => {
     try {
       const params = {};
       if (vaultSearchTerm.trim()) params.search = vaultSearchTerm.trim();
+      if (vaultTypeFilter && vaultTypeFilter !== 'all') params.itemType = vaultTypeFilter;
       const data = await api.admin.getVault(params);
       setVaultPosts(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -218,30 +220,30 @@ export const AdminGovernanceView = () => {
     } finally {
       setIsVaultLoading(false);
     }
-  }, [vaultSearchTerm]);
+  }, [vaultSearchTerm, vaultTypeFilter]);
 
-  // Restore Post from Vault
-  const handleRestorePost = async (postId) => {
+  // Restore Item from Vault (Universal)
+  const handleRestoreItem = async (itemId, itemType = 'post') => {
     try {
-      await api.admin.restoreVaultPost(postId, { reason: 'Cleared after safety review' });
-      showToast('Post restored to community feed.', 'success', 'Post Restored');
+      await api.admin.restoreVaultItem(itemId, { itemType, reason: 'Cleared after safety review' });
+      showToast('Item restored from Evidence Vault to public view.', 'success', 'Item Restored');
       fetchVault();
       fetchStats();
     } catch (err) {
-      showToast(err.message || 'Failed to restore post', 'error');
+      showToast(err.message || 'Failed to restore item', 'error');
     }
   };
 
-  // Permanently Purge Post
-  const handlePurgePost = async (postId) => {
+  // Permanently Purge Item (Universal)
+  const handlePurgeItem = async (itemId, itemType = 'post') => {
     try {
-      await api.admin.purgeVaultPost(postId, { reason: 'Permanent purge of violating material' });
-      showToast('Post permanently purged from SQLite database with snapshot logged.', 'info', 'Evidence Purged');
+      await api.admin.purgeVaultItem(itemId, { itemType, reason: 'Permanent purge of violating material' });
+      showToast('Item permanently purged from SQLite database with snapshot logged.', 'info', 'Evidence Purged');
       setSelectedVaultPostForPurge(null);
       fetchVault();
       fetchStats();
     } catch (err) {
-      showToast(err.message || 'Failed to purge post', 'error');
+      showToast(err.message || 'Failed to purge item', 'error');
     }
   };
 
@@ -487,7 +489,7 @@ export const AdminGovernanceView = () => {
           <div>
             <span className="text-xs text-muted d-block">Evidence Vault Items</span>
             <span className="font-bold text-md text-primary">
-              {stats.quarantinedPosts} <span className="text-xs text-muted">(Quarantined)</span>
+              {stats.quarantinedVaultItems ?? stats.quarantinedPosts} <span className="text-xs text-muted">(Quarantined)</span>
             </span>
           </div>
         </div>
@@ -521,7 +523,7 @@ export const AdminGovernanceView = () => {
           onClick={() => setActiveTab('vault')}
         >
           <Archive size={15} className="mr-1" />
-          Master Evidence Vault ({stats.quarantinedPosts})
+          Master Evidence Vault ({stats.quarantinedVaultItems ?? stats.quarantinedPosts})
         </button>
         <button
           type="button"
@@ -966,21 +968,48 @@ export const AdminGovernanceView = () => {
       {/* TAB 2: MASTER EVIDENCE VAULT */}
       {activeTab === 'vault' && (
         <div className="d-flex flex-column gap-3">
-          {/* Vault Search Bar */}
-          <div className="card p-3 d-flex align-center justify-between gap-3 flex-wrap" style={{ background: '#f8fafc' }}>
-            <div className="position-relative" style={{ minWidth: '240px', flex: '1', maxWidth: '380px' }}>
-              <Search size={14} className="text-muted position-absolute" style={{ left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-              <input
-                type="text"
-                className="form-input text-xs pl-4"
-                placeholder="Search quarantined post content, reasons, authors..."
-                value={vaultSearchTerm}
-                onChange={(e) => setVaultSearchTerm(e.target.value)}
-              />
+          {/* Vault Search & Category Filter Bar */}
+          <div className="card p-3 d-flex flex-column gap-2" style={{ background: '#f8fafc' }}>
+            <div className="d-flex align-center justify-between gap-3 flex-wrap">
+              <div className="position-relative" style={{ minWidth: '240px', flex: '1', maxWidth: '380px' }}>
+                <Search size={14} className="text-muted position-absolute" style={{ left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  className="form-input text-xs pl-4"
+                  placeholder="Search quarantined content, reasons, authors..."
+                  value={vaultSearchTerm}
+                  onChange={(e) => setVaultSearchTerm(e.target.value)}
+                />
+              </div>
+              <span className="text-xs text-muted font-semibold">
+                {vaultPosts.length} quarantined items preserved securely in evidence vault
+              </span>
             </div>
-            <span className="text-xs text-muted">
-              {vaultPosts.length} quarantined items preserved securely in evidence vault
-            </span>
+
+            {/* Type filter tabs */}
+            <div className="d-flex align-center gap-1.5 flex-wrap pt-1 border-top">
+              <span className="text-xs text-muted mr-1 font-semibold">Filter by Type:</span>
+              {[
+                { key: 'all', label: 'All Types' },
+                { key: 'post', label: 'Posts' },
+                { key: 'comment', label: 'Comments' },
+                { key: 'request', label: 'Help Requests' },
+                { key: 'resource', label: 'Resource Offers' },
+                { key: 'observation', label: 'Observations' },
+                { key: 'project', label: 'Civic Events' },
+                { key: 'plan', label: 'Plans' }
+              ].map(tf => (
+                <button
+                  key={tf.key}
+                  type="button"
+                  className={`btn btn-xs ${vaultTypeFilter === tf.key ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                  onClick={() => setVaultTypeFilter(tf.key)}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Vault Items List */}
@@ -993,22 +1022,46 @@ export const AdminGovernanceView = () => {
             <div className="card p-5 text-center text-muted">
               <Archive size={40} className="text-muted mx-auto mb-2 opacity-60" />
               <h4 className="font-bold text-sm text-primary mb-1">Evidence Vault Empty</h4>
-              <p className="text-xs mb-0">No quarantined discussions found matching current search.</p>
+              <p className="text-xs mb-0">No quarantined items found matching current filters.</p>
             </div>
           ) : (
             <div className="d-flex flex-column gap-3">
               {vaultPosts.map((item) => (
                 <div key={item.id} className="card p-4 border" style={{ borderLeft: '4px solid var(--amber-500)' }}>
                   <div className="d-flex align-center justify-between gap-2 mb-2 flex-wrap">
-                    <div className="d-flex align-center gap-2">
+                    <div className="d-flex align-center gap-2 flex-wrap">
                       <span className="badge font-bold" style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.7rem' }}>
                         🔒 Quarantined Evidence
                       </span>
+                      <span className="badge font-bold" style={{
+                        background: 
+                          item.itemType === 'request' ? '#dbeafe' :
+                          item.itemType === 'resource' ? '#dcfce7' :
+                          item.itemType === 'observation' ? '#fef3c7' :
+                          item.itemType === 'project' ? '#f3e8ff' :
+                          item.itemType === 'plan' ? '#ccfbf1' :
+                          item.itemType === 'comment' ? '#f1f5f9' : '#e0e7ff',
+                        color:
+                          item.itemType === 'request' ? '#1e40af' :
+                          item.itemType === 'resource' ? '#166534' :
+                          item.itemType === 'observation' ? '#92400e' :
+                          item.itemType === 'project' ? '#6b21a8' :
+                          item.itemType === 'plan' ? '#115e59' :
+                          item.itemType === 'comment' ? '#475569' : '#3730a3',
+                        fontSize: '0.7rem'
+                      }}>
+                        {item.itemType === 'request' ? 'Help Request' :
+                         item.itemType === 'resource' ? 'Resource Offer' :
+                         item.itemType === 'project' ? 'Civic Event' :
+                         item.itemType === 'plan' ? 'Resilience Plan' :
+                         item.itemType === 'observation' ? 'Observation' :
+                         item.itemType === 'comment' ? 'Feed Comment' : 'Community Post'}
+                      </span>
                       <span className="badge" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.7rem' }}>
-                        {item.communityName} ({item.communityHandle || 'Circle'})
+                        {item.communityName || 'Platform Global'}
                       </span>
                       <span className="text-xs text-muted">
-                        Author: <strong>{item.author?.name || 'Anonymous'}</strong> ({item.author?.handle || `@user_${item.author_id}`})
+                        Author: <strong>{item.author?.name || 'Anonymous'}</strong> ({item.author?.handle || `@user_${item.author?.id || 'unknown'}`})
                       </span>
                     </div>
 
@@ -1019,14 +1072,17 @@ export const AdminGovernanceView = () => {
                   </div>
 
                   <div className="p-3 rounded mb-3" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    {item.title && item.itemType !== 'comment' && (
+                      <h4 className="font-bold text-xs text-primary mb-1">{item.title}</h4>
+                    )}
                     <p className="text-xs text-primary mb-0" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                      {item.content}
+                      {item.content || item.description || '(No text content)'}
                     </p>
                   </div>
 
                   <div className="d-flex align-center justify-between gap-2 flex-wrap pt-2 border-top">
                     <div className="text-xs text-muted">
-                      <span><strong>Quarantine Reason:</strong> {item.quarantineReason || 'Safety breach'}</span>
+                      <span><strong>Quarantine Reason:</strong> {item.quarantineReason || 'Safety review'}</span>
                       <span className="ml-3"><strong>Preserved by:</strong> {item.quarantinedByName || 'Moderator'}</span>
                     </div>
 
@@ -1034,10 +1090,10 @@ export const AdminGovernanceView = () => {
                       <button
                         type="button"
                         className="btn btn-secondary btn-xs d-flex align-center gap-1"
-                        onClick={() => handleRestorePost(item.id)}
+                        onClick={() => handleRestoreItem(item.id, item.itemType)}
                       >
                         <RotateCcw size={12} />
-                        <span>Restore to Feed</span>
+                        <span>Restore to Public View</span>
                       </button>
 
                       <button
@@ -1071,10 +1127,10 @@ export const AdminGovernanceView = () => {
               <h3 className="text-md font-bold mb-0">Confirm Permanent Purge</h3>
             </div>
             <p className="text-xs text-secondary mb-3">
-              Are you sure you want to permanently delete this post and its discussions from SQLite? An immutable cryptographic audit snapshot will be preserved in the audit log, but the post records will be irrevocably purged.
+              Are you sure you want to permanently delete this {selectedVaultPostForPurge.itemType || 'item'} and its associated records from SQLite? An immutable cryptographic audit snapshot will be preserved in the audit log, but the database records will be irrevocably purged.
             </p>
             <div className="p-3 rounded mb-3 bg-subtle border text-xs text-muted" style={{ fontStyle: 'italic' }}>
-              &quot;{selectedVaultPostForPurge.content}&quot;
+              &quot;{selectedVaultPostForPurge.title || selectedVaultPostForPurge.content || 'Item'}&quot;
             </div>
             <div className="d-flex align-center justify-end gap-2">
               <button
@@ -1088,7 +1144,7 @@ export const AdminGovernanceView = () => {
                 type="button"
                 className="btn btn-primary btn-sm"
                 style={{ background: '#7f1d1d', borderColor: '#7f1d1d' }}
-                onClick={() => handlePurgePost(selectedVaultPostForPurge.id)}
+                onClick={() => handlePurgeItem(selectedVaultPostForPurge.id, selectedVaultPostForPurge.itemType)}
               >
                 Permanently Purge
               </button>

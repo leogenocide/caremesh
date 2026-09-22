@@ -80,6 +80,24 @@ export function initDatabase() {
         db.prepare("ALTER TABLE readiness_checks ADD COLUMN event_id TEXT").run();
       }
     }
+    const tablesToQuarantine = ['requests', 'resources', 'observations', 'projects', 'plans', 'post_comments'];
+    for (const tbl of tablesToQuarantine) {
+      if (tables.includes(tbl)) {
+        const cols = db.prepare(`PRAGMA table_info(${tbl})`).all();
+        if (!cols.some(c => c.name === 'is_quarantined')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN is_quarantined INTEGER DEFAULT 0`).run();
+        }
+        if (!cols.some(c => c.name === 'quarantined_at')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN quarantined_at DATETIME`).run();
+        }
+        if (!cols.some(c => c.name === 'quarantined_by_id')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN quarantined_by_id TEXT`).run();
+        }
+        if (!cols.some(c => c.name === 'quarantine_reason')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN quarantine_reason TEXT`).run();
+        }
+      }
+    }
   } catch (err) {
     console.warn('Pre-migration warning:', err.message);
   }
@@ -219,6 +237,27 @@ export function initDatabase() {
         `).run();
       } catch {
         // Ignore if community_members isn't ready
+      }
+    }
+
+    const tablesToQuarantinePost = ['requests', 'resources', 'observations', 'projects', 'plans', 'post_comments'];
+    for (const tbl of tablesToQuarantinePost) {
+      try {
+        const cols = db.prepare(`PRAGMA table_info(${tbl})`).all();
+        if (!cols.some(c => c.name === 'is_quarantined')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN is_quarantined INTEGER DEFAULT 0`).run();
+        }
+        if (!cols.some(c => c.name === 'quarantined_at')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN quarantined_at DATETIME`).run();
+        }
+        if (!cols.some(c => c.name === 'quarantined_by_id')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN quarantined_by_id TEXT`).run();
+        }
+        if (!cols.some(c => c.name === 'quarantine_reason')) {
+          db.prepare(`ALTER TABLE ${tbl} ADD COLUMN quarantine_reason TEXT`).run();
+        }
+      } catch (err) {
+        console.warn(`Quarantine column migration warning on ${tbl}:`, err.message);
       }
     }
 

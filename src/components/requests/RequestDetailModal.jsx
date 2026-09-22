@@ -21,10 +21,11 @@ import {
   UserCheck, 
   Activity, 
   Share2,
-  Search
+  Search,
+  Archive
 } from 'lucide-react';
 
-export const RequestDetailModal = ({ isOpen, onClose, request }) => {
+export const RequestDetailModal = ({ isOpen, onClose, request, zIndex = 1060 }) => {
   const { 
     currentUser, 
     respondToRequest, 
@@ -41,7 +42,9 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
     openReadinessModal,
     viewUserProfile,
     openShareSocialModal,
-    showToast
+    showToast,
+    isSystemAdmin,
+    quarantineEntity
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'volunteers' | 'matcher'
@@ -191,6 +194,25 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
     }
   };
 
+  const handleQuarantine = async () => {
+    const reason = window.prompt(
+      `Quarantine "${request.title}" to Master Evidence Vault?\n\nEnter quarantine reason (e.g., Inappropriate content, suspicious activity, policy violation):`,
+      'Policy violation review'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'request',
+        targetId: request.id,
+        reason: reason.trim() || 'Quarantined by System Administrator',
+        notes: `Quarantined from Request Detail by ${currentUser?.name || 'System Admin'}`
+      });
+      onClose();
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine request', 'error');
+    }
+  };
+
   const handleVolunteerSubmit = (e) => {
     e.preventDefault();
     if (isOwner) {
@@ -222,6 +244,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
       title="Help Request Details"
       subtitle="Mutual Aid Coordination & Volunteer Roster"
       maxWidth="680px"
+      zIndex={zIndex}
     >
       <div className="d-flex flex-column gap-3.5">
         {/* Header Ribbon */}
@@ -1004,7 +1027,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
 
         {/* Footer */}
         <div className="request-detail-footer">
-          <div>
+          <div className="d-flex align-center gap-2">
             {canDelete && (
               <button
                 type="button"
@@ -1013,6 +1036,18 @@ export const RequestDetailModal = ({ isOpen, onClose, request }) => {
               >
                 <Trash2 size={13} />
                 <span>Delete Request</span>
+              </button>
+            )}
+            {isSystemAdmin && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs text-amber d-flex align-center gap-1"
+                style={{ color: '#b45309' }}
+                onClick={handleQuarantine}
+                title="Quarantine this request to Master Evidence Vault"
+              >
+                <Archive size={13} />
+                <span>Quarantine to Vault</span>
               </button>
             )}
           </div>

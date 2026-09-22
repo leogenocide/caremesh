@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useCareMesh } from '../context/useCareMesh';
 import { Tabs } from '../components/common/Tabs';
@@ -46,13 +46,20 @@ export const SocialView = () => {
     resources = [],
     evidence = [],
     safetyReports = [],
+    events = [],
+    setSelectedEventChat,
     inspectEntity,
     viewPlanDetail,
+    viewRequestDetail,
+    viewResourceDetail,
+    viewSafetyDetail,
+    viewEvidenceDetail,
     navigateTo,
     currentSubTab,
     selectedCommunityId,
     setSelectedCommunityId,
-    viewUserProfile
+    viewUserProfile,
+    setHighlightedEntityId
   } = useCareMesh();
 
   // If navigated via /social/:communityId, select it immediately
@@ -118,6 +125,21 @@ export const SocialView = () => {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0];
 
+  const resolvedFeedLinkedObj = useMemo(() => {
+    if (!feedLinkedEntity) return null;
+    const o = observations?.find(obs => obs.id === feedLinkedEntity);
+    if (o) return { type: 'observation', title: o.title, entity: o };
+    const p = plans?.find(plan => plan.id === feedLinkedEntity);
+    if (p) return { type: 'plan', title: p.title, entity: p };
+    const r = requests?.find(req => req.id === feedLinkedEntity);
+    if (r) return { type: 'request', title: r.title, entity: r };
+    const res = resources?.find(item => item.id === feedLinkedEntity);
+    if (res) return { type: 'resource', title: res.title, entity: res };
+    const s = safetyReports?.find(report => report.id === feedLinkedEntity);
+    if (s) return { type: 'safety', title: s.title, entity: s };
+    return null;
+  }, [feedLinkedEntity, observations, plans, requests, resources, safetyReports]);
+
   const handleCreateFeedPost = (e) => {
     e.preventDefault();
     if (!newFeedPostText.trim()) return;
@@ -179,56 +201,71 @@ export const SocialView = () => {
 
     if (type === 'plan') {
       const p = findEntity(plans);
-      if (p) {
-        viewPlanDetail(p);
-      } else {
-        navigateTo('plans');
-      }
+      const targetId = p?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (p) viewPlanDetail(p);
+      navigateTo('plans', null, targetId);
     } else if (type === 'request') {
       const r = findEntity(requests);
+      const targetId = r?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
       if (r) {
-        inspectEntity(r, 'request');
-      } else {
-        navigateTo('collaborate', 'requests', id);
+        if (viewRequestDetail) viewRequestDetail(r);
+        else inspectEntity(r, 'request');
       }
+      navigateTo('collaborate', 'requests', targetId);
     } else if (type === 'resource') {
       const res = findEntity(resources);
+      const targetId = res?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
       if (res) {
-        inspectEntity(res, 'resource');
-      } else {
-        navigateTo('collaborate', 'resources', id);
+        if (viewResourceDetail) viewResourceDetail(res);
+        else inspectEntity(res, 'resource');
       }
+      navigateTo('collaborate', 'resources', targetId);
     } else if (type === 'safety') {
       const s = findEntity(safetyReports);
+      const targetId = s?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
       if (s) {
-        inspectEntity(s, 'safety');
-      } else {
-        navigateTo('explore', null, id);
+        if (viewSafetyDetail) viewSafetyDetail(s);
+        else inspectEntity(s, 'safety');
       }
+      navigateTo('explore', null, targetId);
     } else if (type === 'evidence') {
       const ev = findEntity(evidence);
+      const targetId = ev?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
       if (ev) {
-        inspectEntity(ev, 'evidence');
+        if (viewEvidenceDetail) viewEvidenceDetail(ev);
+        else inspectEntity(ev, 'evidence');
       }
+      navigateTo('explore', null, targetId);
     } else if (type === 'observation') {
       const o = findEntity(observations);
-      if (o) {
-        inspectEntity(o, 'observation');
-      } else {
-        navigateTo('explore', null, id);
-      }
+      const targetId = o?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (o) inspectEntity(o, 'observation');
+      navigateTo('explore', null, targetId);
+    } else if (type === 'event') {
+      const evt = findEntity(events);
+      const targetId = evt?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (evt && setSelectedEventChat) setSelectedEventChat(evt);
+      navigateTo('collaborate', 'events', targetId);
     } else {
       const allEntities = [
         ...(observations || []),
         ...(requests || []),
         ...(resources || []),
         ...(plans || []),
-        ...(safetyReports || [])
+        ...(safetyReports || []),
+        ...(events || [])
       ];
       const anyEntity = findEntity(allEntities);
-      if (anyEntity) {
-        inspectEntity(anyEntity, type);
-      }
+      const targetId = anyEntity?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (anyEntity) inspectEntity(anyEntity, type);
     }
   };
 
@@ -612,6 +649,40 @@ export const SocialView = () => {
                 <span>Post Update</span>
               </button>
             </div>
+
+            {resolvedFeedLinkedObj && (
+              <div 
+                className="mt-2.5 p-2 rounded border d-flex align-center justify-between gap-2 animate-fade-in"
+                style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-200)' }}
+              >
+                <div className="d-flex align-center gap-2 min-w-0 flex-1">
+                  <span className="badge badge-primary text-xs text-uppercase font-bold flex-shrink-0">
+                    Linked {resolvedFeedLinkedObj.type}
+                  </span>
+                  <span className="text-xs font-semibold text-primary truncate" style={{ wordBreak: 'break-word' }}>
+                    {resolvedFeedLinkedObj.title}
+                  </span>
+                </div>
+                <div className="d-flex align-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => inspectEntity(resolvedFeedLinkedObj.entity, resolvedFeedLinkedObj.type)}
+                    title="Inspect details of this linked item"
+                  >
+                    View Details
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon btn-xs text-rose"
+                    onClick={() => setFeedLinkedEntity('')}
+                    title="Remove attached link"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
 
           {/* Posts List */}

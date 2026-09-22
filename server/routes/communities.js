@@ -75,7 +75,7 @@ export function formatPost(row) {
     SELECT pc.*, u.id as u_id, u.name, u.role, u.avatar
     FROM post_comments pc
     JOIN users u ON pc.author_id = u.id
-    WHERE pc.post_id = ?
+    WHERE pc.post_id = ? AND (pc.is_quarantined = 0 OR pc.is_quarantined IS NULL)
     ORDER BY pc.created_at ASC
   `).all(row.id);
 

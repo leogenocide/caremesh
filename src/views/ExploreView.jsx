@@ -88,12 +88,53 @@ export const ExploreView = () => {
     ...observations.map(o => ({ ...o, entityType: 'observation' }))
   ], [safetyReports, visibleRequests, resources, observations]);
 
-  // Derive active selected entity: manual user selection takes precedence, fallback to highlightedEntityId
-  const selectedEntity = selectedEntityState || (highlightedEntityId ? (() => {
-    const match = allItems.find(item => item.id === highlightedEntityId);
+  const effectiveHighlightedId = highlightedEntityId || location.state?.highlightedEntityId;
+
+  // Derive active selected entity: manual user selection takes precedence, fallback to effectiveHighlightedId
+  const selectedEntity = selectedEntityState || (effectiveHighlightedId ? (() => {
+    const match = allItems.find(item => 
+      item.id === effectiveHighlightedId || 
+      item.title === effectiveHighlightedId || 
+      item.title?.toLowerCase() === effectiveHighlightedId?.toLowerCase()
+    );
     return match ? { item: match, type: match.entityType } : null;
   })() : null);
   const setSelectedEntity = setSelectedEntityState;
+
+  // When navigated with a specific entityId (e.g. linked observation or safety report)
+  useEffect(() => {
+    const targetId = effectiveHighlightedId;
+    if (!targetId) return;
+
+    const matchedItem = allItems.find(it => 
+      it.id === targetId || 
+      it.title === targetId || 
+      it.title?.toLowerCase() === targetId?.toLowerCase()
+    );
+
+    if (matchedItem) {
+      setSelectedEntityState({ item: matchedItem, type: matchedItem.entityType });
+      if (categoryFilter !== 'all' && categoryFilter !== matchedItem.entityType && !(categoryFilter === 'observations' && matchedItem.entityType === 'observation') && !(categoryFilter === 'safety' && matchedItem.entityType === 'safety')) {
+        setCategoryFilter('all');
+      }
+      if (statusFilter !== 'all') {
+        setStatusFilter('all');
+      }
+      if (urgencyFilter !== 'all') {
+        setUrgencyFilter('all');
+      }
+
+      inspectEntity(matchedItem, matchedItem.entityType);
+
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`explore_item_${matchedItem.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [effectiveHighlightedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derive other mutual aid activities sharing the exact coordinates with the selected entity
   const coLocatedWithSelected = useMemo(() => {
@@ -1563,6 +1604,7 @@ export const ExploreView = () => {
                 return (
                   <div
                     key={`${item.entityType}_${item.id}`}
+                    id={`explore_item_${item.id}`}
                     className="card p-2 card-interactive cursor-pointer"
                     style={{
                       borderLeft: item.isContradiction ? '4px solid var(--rose-600)' :

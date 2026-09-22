@@ -87,18 +87,22 @@ export const AppLayout = ({ children }) => {
       {/* Global Request Detail Modal */}
       {selectedRequestDetail && (
         <RequestDetailModal
+          key={`req_detail_${selectedRequestDetail.id || selectedRequestDetail.title}`}
           isOpen={Boolean(selectedRequestDetail)}
           onClose={closeRequestDetail}
           request={selectedRequestDetail}
+          zIndex={1060}
         />
       )}
 
       {/* Global Resource Detail Modal */}
       {selectedResourceDetail && (
         <ResourceDetailModal
+          key={`res_detail_${selectedResourceDetail.id || selectedResourceDetail.title}`}
           isOpen={Boolean(selectedResourceDetail)}
           onClose={closeResourceDetail}
           resource={selectedResourceDetail}
+          zIndex={1060}
         />
       )}
 

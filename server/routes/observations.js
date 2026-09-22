@@ -78,6 +78,9 @@ router.get('/', (req, res) => {
     params.push(status);
   }
 
+  // Exclude quarantined observations from public view
+  whereClauses.push('(is_quarantined = 0 OR is_quarantined IS NULL)');
+
   const whereSql = whereClauses.length > 0 ? ` WHERE ${whereClauses.join(' AND ')}` : '';
   const countSql = `SELECT COUNT(*) FROM observations${whereSql}`;
   const dataSql = `SELECT * FROM observations${whereSql} ORDER BY created_at DESC`;
@@ -102,7 +105,7 @@ router.get('/', (req, res) => {
 // GET /api/observations/:id
 router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM observations WHERE id = ?').get(req.params.id);
-  if (!row) {
+  if (!row || row.is_quarantined) {
     return res.status(404).json({ error: 'Observation not found' });
   }
   res.json(formatObservation(row));
