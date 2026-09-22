@@ -215,7 +215,7 @@ export const ShareToSocialModal = () => {
         </div>
 
         {/* Tab Switcher: Share External Platforms vs CareMesh Community Feed */}
-        <div className="touch-tab-nav border-bottom pb-1">
+        <div className="touch-tab-nav flex-wrap gap-1.5 border-bottom pb-1">
           <button
             type="button"
             className={`btn btn-sm ${activeShareTab === 'external' ? 'btn-primary' : 'btn-ghost'}`}

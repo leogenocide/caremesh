@@ -351,7 +351,7 @@ export const RequestDetailModal = ({ isOpen, onClose, request, zIndex = 1060 }) 
         </div>
 
         {/* Tab Navigation */}
-        <div className="touch-tab-nav border-bottom pb-1">
+        <div className="touch-tab-nav flex-wrap gap-1.5 border-bottom pb-1">
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}

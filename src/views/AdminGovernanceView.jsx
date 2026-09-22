@@ -508,7 +508,7 @@ export const AdminGovernanceView = () => {
       </div>
 
       {/* Main Navigation Tabs */}
-      <div className="touch-tab-nav border-bottom pb-2">
+      <div className="touch-tab-nav flex-wrap gap-1.5 border-bottom pb-2">
         <button
           type="button"
           className={`btn btn-sm ${activeTab === 'users' ? 'btn-primary' : 'btn-ghost'}`}

@@ -690,7 +690,7 @@ export const EvidenceInspectorModal = ({ isOpen, onClose, targetClaim, targetObs
         )}
 
         {/* Tab Switcher */}
-        <div className="touch-tab-nav border-bottom pb-2">
+        <div className="touch-tab-nav flex-wrap gap-1.5 border-bottom pb-2">
           <button
             className={`btn btn-sm ${activeTab === 'evidence' ? 'btn-primary' : 'btn-ghost'}`}
             style={{ whiteSpace: 'nowrap' }}

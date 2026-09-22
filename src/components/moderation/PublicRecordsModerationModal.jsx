@@ -215,7 +215,7 @@ export const PublicRecordsModerationModal = () => {
           <div className="d-flex flex-column flex-1 overflow-hidden" style={{ minHeight: 0 }}>
             {/* Navigation Tabs & Global Search Bar */}
             <div className="p-3 border-bottom d-flex align-center justify-between gap-3 flex-wrap flex-shrink-0" style={{ background: 'var(--bg-subtle)' }}>
-              <div className="touch-tab-nav">
+              <div className="touch-tab-nav flex-wrap gap-1.5">
                 <button
                   type="button"
                   className={`btn btn-xs ${activeTab === 'reports' ? 'btn-primary' : 'btn-ghost'}`}

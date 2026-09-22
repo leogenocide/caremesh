@@ -329,7 +329,7 @@ export const GroupCoverHeader = ({ community, activeTab, onTabChange }) => {
 
         {/* 3. Facebook Groups Sub-Navigation Tabs */}
         <div 
-          className="touch-tab-nav border-top pt-2" 
+          className="touch-tab-nav flex-wrap gap-1.5 border-top pt-2" 
           style={{ borderTop: '1px solid var(--border-light)' }}
         >
           {tabs.map(tab => {
