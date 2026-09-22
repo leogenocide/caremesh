@@ -14,10 +14,11 @@ import {
   Check,
   Package,
   RotateCcw,
-  Share2
+  Share2,
+  Archive
 } from 'lucide-react';
 
-export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
+export const ResourceDetailModal = ({ isOpen, onClose, resource, zIndex = 1060 }) => {
   const { 
     currentUser,
     matchingFactors, 
@@ -30,7 +31,10 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
     openRequestResourceModal,
     updateLoanAssignmentStatus,
     openShareSocialModal,
-    viewUserProfile
+    viewUserProfile,
+    isSystemAdmin,
+    quarantineEntity,
+    showToast
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'loans' | 'matching' | 'contact'
@@ -115,6 +119,25 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
     }
   };
 
+  const handleQuarantine = async () => {
+    const reason = window.prompt(
+      `Quarantine "${resource.title}" to Master Evidence Vault?\n\nEnter quarantine reason (e.g., Damaged/unsafe equipment, policy violation, spam):`,
+      'Safety and integrity review'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'resource',
+        targetId: resource.id,
+        reason: reason.trim() || 'Quarantined by System Administrator',
+        notes: `Quarantined from Resource Detail by ${currentUser?.name || 'System Admin'}`
+      });
+      onClose();
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine resource', 'error');
+    }
+  };
+
   // Find matches involving this resource from matching factors
   const relevantMatches = (matchingFactors || []).filter(mf => 
     mf.resourceId === resource.id || 
@@ -138,6 +161,7 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
       onClose={onClose}
       title="Shared Resource & Capability Details"
       maxWidth="680px"
+      zIndex={zIndex}
     >
       <div className="d-flex flex-column gap-3.5">
         {/* Header Ribbon */}
@@ -862,7 +886,7 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
 
         {/* Footer */}
         <div className="d-flex align-center justify-between gap-2 pt-2 border-top">
-          <div>
+          <div className="d-flex align-center gap-2">
             {canDelete && (
               <button
                 type="button"
@@ -871,6 +895,18 @@ export const ResourceDetailModal = ({ isOpen, onClose, resource }) => {
               >
                 <Trash2 size={13} />
                 <span>Delete Resource</span>
+              </button>
+            )}
+            {isSystemAdmin && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs text-amber d-flex align-center gap-1"
+                style={{ color: '#b45309' }}
+                onClick={handleQuarantine}
+                title="Quarantine this resource to Master Evidence Vault"
+              >
+                <Archive size={13} />
+                <span>Quarantine to Vault</span>
               </button>
             )}
           </div>

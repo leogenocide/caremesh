@@ -3439,19 +3439,91 @@ export const CareMeshProvider = ({ children }) => {
     }
   };
 
-  // Restore Quarantined Post from Evidence Vault
-  const restoreVaultPost = async (postId, reason = 'Cleared after review', notes = '') => {
+  // System Admin check
+  const isSystemAdmin = Boolean(
+    currentUser?.email === 'caleb.zothansanga@gmail.com' ||
+    currentUser?.role === 'System Administrator'
+  );
+
+  // Universal Quarantine Entity to Vault (System Admin only)
+  const quarantineEntity = async ({ targetType, targetId, reason = 'Quarantined by System Administrator', notes = '' }) => {
+    if (!isSystemAdmin) {
+      showToast('System Administrator privileges are required to quarantine content.', 'error');
+      return { success: false, error: 'Unauthorized' };
+    }
+
     try {
-      const res = await api.admin.restoreVaultPost(postId, { reason, notes });
-      if (res?.post) {
-        setPosts(prev => [res.post, ...prev]);
+      const res = await api.admin.quarantineEntity({ targetType, targetId, reason, notes });
+
+      // Immediately purge from client view
+      if (targetType === 'request') {
+        setRequests(prev => prev.filter(r => r.id !== targetId));
+        setSelectedRequestDetail(prev => (prev?.id === targetId ? null : prev));
+      } else if (targetType === 'resource') {
+        setResources(prev => prev.filter(r => r.id !== targetId));
+        setSelectedResourceDetail(prev => (prev?.id === targetId ? null : prev));
+      } else if (targetType === 'post') {
+        setPosts(prev => prev.filter(p => p.id !== targetId));
+      } else if (targetType === 'comment') {
+        setPosts(prev => prev.map(p => ({
+          ...p,
+          comments: (p.comments || []).filter(c => c.id !== targetId)
+        })));
+      } else if (targetType === 'observation') {
+        setObservations(prev => prev.filter(o => o.id !== targetId));
+        setInspectedEntity(prev => (prev?.entity?.id === targetId ? null : prev));
+      } else if (targetType === 'project' || targetType === 'event') {
+        setEvents(prev => prev.filter(e => e.id !== targetId));
+        setSelectedEventChat(prev => (prev?.id === targetId ? null : prev));
+      } else if (targetType === 'plan') {
+        setPlans(prev => prev.filter(p => p.id !== targetId));
+        setSelectedPlanDetail(prev => (prev?.id === targetId ? null : prev));
       }
-      showToast('Post restored from Evidence Vault to community feed.', 'success', 'Post Restored');
+
+      showToast(`Item preserved securely in Master Evidence Vault (${reason}).`, 'info', 'Content Quarantined');
       return res;
     } catch (err) {
-      showToast(err.message || 'Failed to restore post', 'error');
+      showToast(err.message || 'Failed to quarantine item', 'error');
       throw err;
     }
+  };
+
+  // Restore Quarantined Item from Evidence Vault (Universal)
+  const restoreVaultItem = async (itemId, itemType = 'post', reason = 'Cleared after review', notes = '') => {
+    try {
+      const res = await api.admin.restoreVaultItem(itemId, { itemType, reason, notes });
+      // Refresh bootstrap data
+      api.bootstrap().then(data => {
+        if (data.posts) setPosts(data.posts);
+        if (data.requests) setRequests(data.requests);
+        if (data.resources) setResources(data.resources);
+        if (data.observations) setObservations(data.observations);
+        if (data.events) setEvents(data.events);
+        if (data.plans) setPlans(data.plans);
+      }).catch(() => {});
+      showToast('Item restored from Evidence Vault to public view.', 'success', 'Item Restored');
+      return res;
+    } catch (err) {
+      showToast(err.message || 'Failed to restore item', 'error');
+      throw err;
+    }
+  };
+
+  // Permanently Purge Item from Evidence Vault (Universal)
+  const purgeVaultItem = async (itemId, itemType = 'post', reason = 'Permanently purged', notes = '') => {
+    try {
+      const res = await api.admin.purgeVaultItem(itemId, { itemType, reason, notes });
+      showToast('Item permanently purged from database and logged in audit trail.', 'success', 'Permanently Purged');
+      return res;
+    } catch (err) {
+      showToast(err.message || 'Failed to purge item', 'error');
+      throw err;
+    }
+  };
+
+  // Restore Quarantined Post from Evidence Vault (Backwards compatibility)
+  const restoreVaultPost = async (postId, reason = 'Cleared after review', notes = '') => {
+    return restoreVaultItem(postId, 'post', reason, notes);
   };
 
   // Community-level kick (used by circle admins & community moderators)
@@ -4257,6 +4329,10 @@ export const CareMeshProvider = ({ children }) => {
       resetToSeedData,
 
       // Admin Governance & Moderation Vault
+      isSystemAdmin,
+      quarantineEntity,
+      restoreVaultItem,
+      purgeVaultItem,
       restrictUser,
       unrestrictUser,
       restoreVaultPost,

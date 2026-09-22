@@ -13,7 +13,19 @@ import {
 } from 'lucide-react';
 
 export const GroupPostComposer = ({ community }) => {
-  const { currentUser, createPost, requests, observations, plans, toggleJoinCommunity, openAuthModal, showToast } = useCareMesh();
+  const { 
+    currentUser, 
+    createPost, 
+    requests, 
+    observations, 
+    plans, 
+    resources = [],
+    safetyReports = [],
+    inspectEntity,
+    toggleJoinCommunity, 
+    openAuthModal, 
+    showToast 
+  } = useCareMesh();
 
   const [content, setContent] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -280,23 +292,23 @@ export const GroupPostComposer = ({ community }) => {
               </div>
               <select
                 className="form-select text-xs"
-                value={selectedEntity ? `${selectedEntity.type}_${selectedEntity.id}` : ''}
+                value={selectedEntity?.id || ''}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (!val) {
                     setSelectedEntity(null);
                     return;
                   }
-                  if (val.startsWith('req_')) {
-                    const r = requests.find(item => item.id === val);
-                    if (r) setSelectedEntity({ type: 'request', id: r.id, title: r.title });
-                  } else if (val.startsWith('obs_')) {
-                    const o = observations.find(item => item.id === val);
-                    if (o) setSelectedEntity({ type: 'observation', id: o.id, title: o.title });
-                  } else if (val.startsWith('plan_')) {
-                    const p = plans.find(item => item.id === val);
-                    if (p) setSelectedEntity({ type: 'plan', id: p.id, title: p.title });
-                  }
+                  const r = requests?.find(item => item.id === val);
+                  if (r) { setSelectedEntity({ type: 'request', id: r.id, title: r.title, entity: r }); return; }
+                  const o = observations?.find(item => item.id === val);
+                  if (o) { setSelectedEntity({ type: 'observation', id: o.id, title: o.title, entity: o }); return; }
+                  const p = plans?.find(item => item.id === val);
+                  if (p) { setSelectedEntity({ type: 'plan', id: p.id, title: p.title, entity: p }); return; }
+                  const res = resources?.find(item => item.id === val);
+                  if (res) { setSelectedEntity({ type: 'resource', id: res.id, title: res.title, entity: res }); return; }
+                  const s = safetyReports?.find(item => item.id === val);
+                  if (s) { setSelectedEntity({ type: 'safety', id: s.id, title: s.title, entity: s }); return; }
                 }}
               >
                 <option value="">Select an active context object to embed...</option>
@@ -315,7 +327,49 @@ export const GroupPostComposer = ({ community }) => {
                     <option key={p.id} value={p.id}>[Plan] {p.title}</option>
                   ))}
                 </optgroup>
+                <optgroup label="Resources & Equipment">
+                  {(resources || []).map(res => (
+                    <option key={res.id} value={res.id}>[Resource] {res.title}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Safety Hazards">
+                  {(safetyReports || []).map(s => (
+                    <option key={s.id} value={s.id}>[Hazard] {s.title}</option>
+                  ))}
+                </optgroup>
               </select>
+
+              {/* Selected Entity Card inside Drawer */}
+              {selectedEntity && (
+                <div className="mt-2.5 p-2 rounded bg-white border d-flex align-center justify-between gap-2">
+                  <div className="d-flex align-center gap-2 min-w-0 flex-1">
+                    <span className="badge badge-primary text-xs text-uppercase font-bold flex-shrink-0">
+                      Linked {selectedEntity.type}
+                    </span>
+                    <span className="text-xs font-semibold text-primary truncate">
+                      {selectedEntity.title}
+                    </span>
+                  </div>
+                  <div className="d-flex align-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs"
+                      onClick={() => inspectEntity(selectedEntity.entity || selectedEntity, selectedEntity.type)}
+                      title="Inspect details of this linked item"
+                    >
+                      View Details
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-icon btn-xs text-rose"
+                      onClick={() => setSelectedEntity(null)}
+                      title="Remove linked object"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -397,6 +451,41 @@ export const GroupPostComposer = ({ community }) => {
               >
                 {isPinned ? 'Pinned' : 'Pin Notice'}
               </button>
+            </div>
+          )}
+
+          {/* Attached Context Object Preview Banner */}
+          {selectedEntity && (
+            <div 
+              className="p-2.5 rounded border d-flex align-center justify-between gap-2 animate-fade-in"
+              style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-200)' }}
+            >
+              <div className="d-flex align-center gap-2 min-w-0 flex-1">
+                <span className="badge badge-primary text-xs text-uppercase font-bold flex-shrink-0">
+                  Linked {selectedEntity.type}
+                </span>
+                <span className="text-xs font-semibold text-primary truncate" style={{ wordBreak: 'break-word' }}>
+                  {selectedEntity.title}
+                </span>
+              </div>
+              <div className="d-flex align-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => inspectEntity(selectedEntity.entity || selectedEntity, selectedEntity.type)}
+                  title="Inspect full details of this linked item"
+                >
+                  Inspect Details
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon btn-xs text-rose"
+                  onClick={() => setSelectedEntity(null)}
+                  title="Remove linked object"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           )}
         </div>

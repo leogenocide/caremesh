@@ -49,6 +49,18 @@ router.get('/stats', optionalAuth, requireSystemAdmin, (req, res) => {
   const resolvedReports = totalReports - pendingReports;
 
   const quarantinedPosts = db.prepare('SELECT COUNT(*) as count FROM posts WHERE is_quarantined = 1').get().count;
+  let quarantinedVaultItems = quarantinedPosts;
+  try {
+    quarantinedVaultItems += (
+      db.prepare('SELECT COUNT(*) as count FROM requests WHERE is_quarantined = 1').get().count +
+      db.prepare('SELECT COUNT(*) as count FROM resources WHERE is_quarantined = 1').get().count +
+      db.prepare('SELECT COUNT(*) as count FROM observations WHERE is_quarantined = 1').get().count +
+      db.prepare('SELECT COUNT(*) as count FROM projects WHERE is_quarantined = 1').get().count +
+      db.prepare('SELECT COUNT(*) as count FROM plans WHERE is_quarantined = 1').get().count +
+      db.prepare('SELECT COUNT(*) as count FROM post_comments WHERE is_quarantined = 1').get().count
+    );
+  } catch {}
+
   const totalAuditLogs = db.prepare('SELECT COUNT(*) as count FROM moderation_audit_logs').get().count;
 
   res.json({
@@ -59,6 +71,7 @@ router.get('/stats', optionalAuth, requireSystemAdmin, (req, res) => {
     pendingReports,
     resolvedReports,
     quarantinedPosts,
+    quarantinedVaultItems,
     totalAuditLogs
   });
 });
@@ -272,146 +285,339 @@ router.get('/audit-logs', optionalAuth, requireSystemAdmin, (req, res) => {
   res.json(rows);
 });
 
-// GET /api/admin/vault - Quarantined posts across the platform (accessible to System Admin & Public Moderators)
-router.get('/vault', optionalAuth, requireAdminOrPublicMod, (req, res) => {
-  const { search, communityId } = req.query;
-  const { isPaginated, page, limit } = parsePaginationParams(req.query);
-
-  const whereClauses = ['p.is_quarantined = 1'];
-  const params = [];
-
-  if (communityId) {
-    whereClauses.push('p.community_id = ?');
-    params.push(communityId);
+// POST /api/admin/vault/quarantine - System Admin quarantines any entity from public view into Vault
+router.post('/vault/quarantine', optionalAuth, requireSystemAdmin, (req, res) => {
+  const { targetType, targetId, reason = 'Quarantined by System Administrator', notes = '' } = req.body;
+  if (!targetType || !targetId) {
+    return res.status(400).json({ error: 'targetType and targetId are required.' });
   }
 
-  if (search && search.trim()) {
-    const term = `%${search.trim()}%`;
-    whereClauses.push('(p.content LIKE ? OR p.quarantine_reason LIKE ? OR u.name LIKE ?)');
-    params.push(term, term, term);
+  const validTypes = ['post', 'comment', 'request', 'resource', 'observation', 'project', 'plan'];
+  if (!validTypes.includes(targetType)) {
+    return res.status(400).json({ error: `Invalid targetType. Must be one of: ${validTypes.join(', ')}` });
   }
 
-  const whereSql = ` WHERE ${whereClauses.join(' AND ')}`;
-  const countSql = `
-    SELECT COUNT(*) FROM posts p
-    LEFT JOIN users u ON p.author_id = u.id
-    ${whereSql}
-  `;
-  const dataSql = `
-    SELECT p.*, c.name as community_name, c.handle as community_handle,
-           qmod.name as quarantined_by_name
-    FROM posts p
-    LEFT JOIN users u ON p.author_id = u.id
-    LEFT JOIN communities c ON p.community_id = c.id
-    LEFT JOIN users qmod ON p.quarantined_by_id = qmod.id
-    ${whereSql}
-    ORDER BY p.quarantined_at DESC, p.created_at DESC
-  `;
-
-  const enrichVaultPost = (row) => {
-    const post = formatPost(row);
-    return {
-      ...post,
-      communityName: row.community_name || 'Community Circle',
-      communityHandle: row.community_handle || '',
-      quarantinedByName: row.quarantined_by_name || 'Safety Moderator'
-    };
+  const tableMap = {
+    post: 'posts',
+    comment: 'post_comments',
+    request: 'requests',
+    resource: 'resources',
+    observation: 'observations',
+    project: 'projects',
+    plan: 'plans'
   };
 
-  if (isPaginated) {
-    const result = executePaginatedQuery(db, {
-      countSql,
-      countParams: params,
-      dataSql,
-      dataParams: params,
-      page,
-      limit,
-      formatter: enrichVaultPost
-    });
-    return res.json(result);
-  }
+  const authorFieldMap = {
+    post: 'author_id',
+    comment: 'author_id',
+    request: 'requester_id',
+    resource: 'provider_id',
+    observation: 'author_id',
+    project: 'organizer_id',
+    plan: 'proposer_id'
+  };
 
-  const rows = db.prepare(dataSql).all(...params);
-  res.json(rows.map(enrichVaultPost));
-});
-
-// POST /api/admin/vault/:id/restore - System Admin restores a quarantined post
-router.post('/vault/:id/restore', optionalAuth, requireSystemAdmin, (req, res) => {
-  const postId = req.params.id;
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
-
-  if (!post) {
-    return res.status(404).json({ error: 'Post not found' });
-  }
-
-  if (!post.is_quarantined) {
-    return res.status(400).json({ error: 'Post is not currently quarantined.' });
+  const table = tableMap[targetType];
+  const item = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(targetId);
+  if (!item) {
+    return res.status(404).json({ error: `${targetType} not found.` });
   }
 
   db.prepare(`
-    UPDATE posts
+    UPDATE ${table}
+    SET is_quarantined = 1,
+        quarantined_at = CURRENT_TIMESTAMP,
+        quarantined_by_id = ?,
+        quarantine_reason = ?
+    WHERE id = ?
+  `).run(req.adminUser.id, reason, targetId);
+
+  const authorId = item[authorFieldMap[targetType]] || null;
+  const commId = item.community_id || null;
+
+  logModerationAudit(db, {
+    moderatorId: req.adminUser.id,
+    moderatorRole: 'System Administrator',
+    communityId: commId,
+    actionType: `quarantine_${targetType}`,
+    targetType,
+    targetId,
+    targetAuthorId: authorId,
+    targetContentSnapshot: item,
+    reason,
+    notes
+  });
+
+  res.json({ success: true, targetType, targetId, quarantined: true });
+});
+
+// GET /api/admin/vault - Quarantined items across the platform (accessible to System Admin & Public Moderators)
+router.get('/vault', optionalAuth, requireAdminOrPublicMod, (req, res) => {
+  const { search, communityId, itemType } = req.query;
+  const results = [];
+
+  const enrichItem = (row, type, contentText, titleText, authorId, commId, extra = {}) => {
+    const author = authorId ? db.prepare('SELECT id, name, handle, avatar, role FROM users WHERE id = ?').get(authorId) : null;
+    const comm = commId ? db.prepare('SELECT id, name, handle FROM communities WHERE id = ?').get(commId) : null;
+    const qmod = row.quarantined_by_id ? db.prepare('SELECT id, name FROM users WHERE id = ?').get(row.quarantined_by_id) : null;
+
+    return {
+      id: row.id,
+      itemType: type,
+      title: titleText || (type === 'comment' ? 'Feed Comment' : 'Community Item'),
+      content: contentText || '',
+      category: row.category || extra.category || '',
+      author: author || { id: authorId, name: 'Unknown User', handle: `@user_${authorId}` },
+      communityName: comm?.name || (commId ? 'Community Group' : 'CareMesh Platform'),
+      communityHandle: comm?.handle || '',
+      communityId: commId || null,
+      quarantinedAt: row.quarantined_at,
+      quarantineReason: row.quarantine_reason || 'Safety review quarantine',
+      quarantinedByName: qmod?.name || 'System Administrator',
+      rawItem: row,
+      ...extra
+    };
+  };
+
+  // 1. Posts
+  if (!itemType || itemType === 'all' || itemType === 'post') {
+    let postSql = `SELECT p.*, c.name as community_name, c.handle as community_handle, qmod.name as quarantined_by_name FROM posts p LEFT JOIN communities c ON p.community_id = c.id LEFT JOIN users qmod ON p.quarantined_by_id = qmod.id WHERE p.is_quarantined = 1`;
+    const postParams = [];
+    if (communityId) {
+      postSql += ` AND p.community_id = ?`;
+      postParams.push(communityId);
+    }
+    const postRows = db.prepare(postSql).all(...postParams);
+    for (const r of postRows) {
+      let media = [];
+      try { media = JSON.parse(r.media_urls || '[]'); } catch { media = []; }
+      results.push(enrichItem(r, 'post', r.content, r.title || 'Discussion Post', r.author_id, r.community_id, { mediaUrls: media }));
+    }
+  }
+
+  // 2. Comments
+  if (!itemType || itemType === 'all' || itemType === 'comment') {
+    try {
+      const commRows = db.prepare(`SELECT * FROM post_comments WHERE is_quarantined = 1`).all();
+      for (const r of commRows) {
+        results.push(enrichItem(r, 'comment', r.text, 'Feed Comment', r.author_id, null));
+      }
+    } catch {}
+  }
+
+  // 3. Requests
+  if (!itemType || itemType === 'all' || itemType === 'request') {
+    try {
+      const reqRows = db.prepare(`SELECT * FROM requests WHERE is_quarantined = 1`).all();
+      for (const r of reqRows) {
+        results.push(enrichItem(r, 'request', r.description, r.title, r.requester_id, r.community_id, { urgency: r.urgency, category: r.category }));
+      }
+    } catch {}
+  }
+
+  // 4. Resources
+  if (!itemType || itemType === 'all' || itemType === 'resource') {
+    try {
+      const resRows = db.prepare(`SELECT * FROM resources WHERE is_quarantined = 1`).all();
+      for (const r of resRows) {
+        results.push(enrichItem(r, 'resource', r.description, r.title, r.provider_id, null, { contributionType: r.contribution_type, availability: r.availability }));
+      }
+    } catch {}
+  }
+
+  // 5. Observations
+  if (!itemType || itemType === 'all' || itemType === 'observation') {
+    try {
+      const obsRows = db.prepare(`SELECT * FROM observations WHERE is_quarantined = 1`).all();
+      for (const r of obsRows) {
+        results.push(enrichItem(r, 'observation', r.description, r.title, r.author_id, null, { category: r.category, address: r.address }));
+      }
+    } catch {}
+  }
+
+  // 6. Events / Projects
+  if (!itemType || itemType === 'all' || itemType === 'project' || itemType === 'event') {
+    try {
+      const projRows = db.prepare(`SELECT * FROM projects WHERE is_quarantined = 1`).all();
+      for (const r of projRows) {
+        results.push(enrichItem(r, 'project', r.description, r.title, r.organizer_id, null, { eventType: r.event_type, date: r.date }));
+      }
+    } catch {}
+  }
+
+  // 7. Plans
+  if (!itemType || itemType === 'all' || itemType === 'plan') {
+    try {
+      const planRows = db.prepare(`SELECT * FROM plans WHERE is_quarantined = 1`).all();
+      for (const r of planRows) {
+        results.push(enrichItem(r, 'plan', r.problem_statement || r.desired_outcome, r.title, r.proposer_id, null, { lifecycleStage: r.lifecycle_stage }));
+      }
+    } catch {}
+  }
+
+  let filtered = results;
+  if (search && search.trim()) {
+    const term = search.trim().toLowerCase();
+    filtered = results.filter(it => 
+      it.title?.toLowerCase().includes(term) ||
+      it.content?.toLowerCase().includes(term) ||
+      it.quarantineReason?.toLowerCase().includes(term) ||
+      it.author?.name?.toLowerCase().includes(term) ||
+      it.author?.handle?.toLowerCase().includes(term)
+    );
+  }
+
+  filtered.sort((a, b) => new Date(b.quarantinedAt || 0) - new Date(a.quarantinedAt || 0));
+  res.json(filtered);
+});
+
+// POST /api/admin/vault/:id/restore - System Admin restores a quarantined item of any type
+router.post('/vault/:id/restore', optionalAuth, requireSystemAdmin, (req, res) => {
+  const targetId = req.params.id;
+  const targetType = req.body?.itemType || req.query?.itemType;
+
+  const tables = targetType ? [
+    targetType === 'post' ? 'posts' :
+    targetType === 'comment' ? 'post_comments' :
+    targetType === 'request' ? 'requests' :
+    targetType === 'resource' ? 'resources' :
+    targetType === 'observation' ? 'observations' :
+    targetType === 'project' || targetType === 'event' ? 'projects' :
+    targetType === 'plan' ? 'plans' : 'posts'
+  ] : ['posts', 'requests', 'resources', 'observations', 'projects', 'plans', 'post_comments'];
+
+  let foundTable = null;
+  let item = null;
+
+  for (const tbl of tables) {
+    try {
+      const row = db.prepare(`SELECT * FROM ${tbl} WHERE id = ?`).get(targetId);
+      if (row && row.is_quarantined) {
+        foundTable = tbl;
+        item = row;
+        break;
+      }
+    } catch {}
+  }
+
+  if (!foundTable || !item) {
+    return res.status(404).json({ error: 'Quarantined item not found or already restored.' });
+  }
+
+  db.prepare(`
+    UPDATE ${foundTable}
     SET is_quarantined = 0,
         quarantined_at = NULL,
         quarantined_by_id = NULL,
         quarantine_reason = NULL
     WHERE id = ?
-  `).run(postId);
+  `).run(targetId);
+
+  const authorId = item.author_id || item.requester_id || item.provider_id || item.organizer_id || item.proposer_id || null;
 
   logModerationAudit(db, {
     moderatorId: req.adminUser.id,
-    moderatorRole: req.adminUser.role || 'admin',
-    communityId: post.community_id,
-    actionType: 'restore_post',
-    targetType: 'post',
-    targetId: postId,
-    targetAuthorId: post.author_id,
-    targetContentSnapshot: { content: post.content },
-    reason: req.body.reason || 'Restored by System Administrator after review',
-    notes: req.body.notes || 'Post cleared of violations and returned to community feed.'
+    moderatorRole: 'System Administrator',
+    communityId: item.community_id || null,
+    actionType: `restore_${foundTable.replace(/s$/, '')}`,
+    targetType: foundTable.replace(/s$/, ''),
+    targetId,
+    targetAuthorId: authorId,
+    targetContentSnapshot: item,
+    reason: req.body?.reason || 'Restored to public view by System Administrator after review',
+    notes: req.body?.notes || 'Cleared of violations and returned to public platform.'
   });
 
-  const restored = formatPost(db.prepare('SELECT * FROM posts WHERE id = ?').get(postId));
-  res.json({ success: true, post: restored });
+  const restoredRow = db.prepare(`SELECT * FROM ${foundTable} WHERE id = ?`).get(targetId);
+  const responseData = { success: true, id: targetId, restored: true, table: foundTable };
+  if (foundTable === 'posts') {
+    responseData.post = formatPost(restoredRow);
+  }
+  res.json(responseData);
 });
 
-// POST /api/admin/vault/:id/purge - System Admin permanently purges a quarantined post
+// POST /api/admin/vault/:id/purge - System Admin permanently purges a quarantined item of any type
 router.post('/vault/:id/purge', optionalAuth, requireSystemAdmin, (req, res) => {
-  const postId = req.params.id;
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(postId);
+  const targetId = req.params.id;
+  const targetType = req.body?.itemType || req.query?.itemType;
 
-  if (!post) {
-    return res.status(404).json({ error: 'Post not found' });
+  const tables = targetType ? [
+    targetType === 'post' ? 'posts' :
+    targetType === 'comment' ? 'post_comments' :
+    targetType === 'request' ? 'requests' :
+    targetType === 'resource' ? 'resources' :
+    targetType === 'observation' ? 'observations' :
+    targetType === 'project' || targetType === 'event' ? 'projects' :
+    targetType === 'plan' ? 'plans' : 'posts'
+  ] : ['posts', 'requests', 'resources', 'observations', 'projects', 'plans', 'post_comments'];
+
+  let foundTable = null;
+  let item = null;
+
+  for (const tbl of tables) {
+    try {
+      const row = db.prepare(`SELECT * FROM ${tbl} WHERE id = ?`).get(targetId);
+      if (row) {
+        foundTable = tbl;
+        item = row;
+        break;
+      }
+    } catch {}
   }
 
-  // Preserve snapshot for audit trail before permanent purge
-  const snapshot = {
-    id: post.id,
-    authorId: post.author_id,
-    communityId: post.community_id,
-    content: post.content,
-    quarantineReason: post.quarantine_reason
-  };
+  if (!foundTable || !item) {
+    return res.status(404).json({ error: 'Item not found.' });
+  }
+
+  const authorId = item.author_id || item.requester_id || item.provider_id || item.organizer_id || item.proposer_id || null;
 
   const tx = db.transaction(() => {
-    db.prepare('DELETE FROM post_comments WHERE post_id = ?').run(postId);
-    db.prepare('DELETE FROM posts WHERE id = ?').run(postId);
+    if (foundTable === 'posts') {
+      db.prepare('DELETE FROM post_comments WHERE post_id = ?').run(targetId);
+      db.prepare('DELETE FROM posts WHERE id = ?').run(targetId);
+    } else if (foundTable === 'post_comments') {
+      db.prepare('DELETE FROM post_comments WHERE id = ?').run(targetId);
+    } else if (foundTable === 'requests') {
+      db.prepare('DELETE FROM quick_actions WHERE request_id = ?').run(targetId);
+      db.prepare('DELETE FROM request_responses WHERE request_id = ?').run(targetId);
+      db.prepare('DELETE FROM resource_assignments WHERE request_id = ?').run(targetId);
+      db.prepare('DELETE FROM requests WHERE id = ?').run(targetId);
+    } else if (foundTable === 'resources') {
+      db.prepare('DELETE FROM resource_assignments WHERE resource_id = ?').run(targetId);
+      db.prepare('DELETE FROM resources WHERE id = ?').run(targetId);
+    } else if (foundTable === 'observations') {
+      db.prepare('DELETE FROM observation_evidence WHERE observation_id = ?').run(targetId);
+      db.prepare('DELETE FROM observation_relations WHERE source_observation_id = ? OR target_observation_id = ?').run(targetId, targetId);
+      db.prepare('DELETE FROM safety_report_observations WHERE observation_id = ?').run(targetId);
+      db.prepare('DELETE FROM observations WHERE id = ?').run(targetId);
+    } else if (foundTable === 'projects') {
+      db.prepare('DELETE FROM project_messages WHERE project_id = ?').run(targetId);
+      db.prepare('DELETE FROM project_participants WHERE project_id = ?').run(targetId);
+      db.prepare('DELETE FROM projects WHERE id = ?').run(targetId);
+    } else if (foundTable === 'plans') {
+      db.prepare('DELETE FROM plan_feedback WHERE plan_id = ?').run(targetId);
+      db.prepare('DELETE FROM plan_milestones WHERE plan_id = ?').run(targetId);
+      db.prepare('DELETE FROM plan_participants WHERE plan_id = ?').run(targetId);
+      db.prepare('DELETE FROM plan_revisions WHERE plan_id = ?').run(targetId);
+      db.prepare('DELETE FROM plans WHERE id = ?').run(targetId);
+    }
   });
   tx();
 
   logModerationAudit(db, {
     moderatorId: req.adminUser.id,
-    moderatorRole: req.adminUser.role || 'admin',
-    communityId: post.community_id,
-    actionType: 'purge_post',
-    targetType: 'post',
-    targetId: postId,
-    targetAuthorId: post.author_id,
-    targetContentSnapshot: snapshot,
-    reason: req.body.reason || 'Permanently purged by System Administrator',
-    notes: req.body.notes || 'Irrevocably removed from database following severe safety breach.'
+    moderatorRole: 'System Administrator',
+    communityId: item.community_id || null,
+    actionType: `purge_${foundTable.replace(/s$/, '')}`,
+    targetType: foundTable.replace(/s$/, ''),
+    targetId,
+    targetAuthorId: authorId,
+    targetContentSnapshot: item,
+    reason: req.body?.reason || 'Permanently purged by System Administrator',
+    notes: req.body?.notes || 'Irrevocably removed from database with complete historical snapshot logged.'
   });
 
-  res.json({ success: true, purgedId: postId });
+  res.json({ success: true, purgedId: targetId, table: foundTable });
 });
 
 // GET /api/admin/antispam/telemetry - Live rate limiting and anti-spam monitoring

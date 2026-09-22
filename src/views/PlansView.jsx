@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useCareMesh } from '../context/useCareMesh';
 import { usePagination } from '../hooks/usePagination';
 import { Pagination } from '../components/common/Pagination';
@@ -18,7 +19,9 @@ import {
 } from 'lucide-react';
 
 export const PlansView = () => {
-  const { plans, viewPlanDetail, openCreateModal, openShareSocialModal, viewUserProfile } = useCareMesh();
+  const { plans, viewPlanDetail, openCreateModal, openShareSocialModal, viewUserProfile, highlightedEntityId } = useCareMesh();
+  const location = useLocation();
+  const effectiveHighlightedId = highlightedEntityId || location.state?.highlightedEntityId;
   const [searchQuery, setSearchQuery] = useState('');
   const [stageTab, setStageTab] = useState('all'); // 'all' | 'review' | 'active' | 'completed'
 
@@ -46,6 +49,44 @@ export const PlansView = () => {
   useEffect(() => {
     plansPagination.resetPage();
   }, [stageTab, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When navigated with a specific entityId (e.g. linked plan)
+  useEffect(() => {
+    const targetId = effectiveHighlightedId;
+    if (!targetId) return;
+
+    const targetPlan = plans.find(p => 
+      p.id === targetId || 
+      p.title === targetId || 
+      p.title?.toLowerCase() === targetId?.toLowerCase()
+    );
+
+    if (targetPlan) {
+      if (stageTab !== 'all') {
+        setStageTab('all');
+      }
+      if (searchQuery) {
+        setSearchQuery('');
+      }
+      viewPlanDetail(targetPlan);
+
+      const idx = plans.findIndex(p => p.id === targetPlan.id);
+      if (idx !== -1) {
+        const targetPage = Math.floor(idx / 6) + 1;
+        if (plansPagination.currentPage !== targetPage) {
+          plansPagination.goToPage(targetPage);
+        }
+      }
+
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`plan_card_${targetPlan.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [effectiveHighlightedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reviewCount = plans.filter(p => p.lifecycleStage === 'community_review' || p.lifecycleStage === 'draft' || p.lifecycleStage === 'revised').length;
   const activeCount = plans.filter(p => p.lifecycleStage === 'accepted' || p.lifecycleStage === 'active' || p.lifecycleStage === 'actions_underway').length;
@@ -156,7 +197,16 @@ export const PlansView = () => {
           return (
             <div
               key={plan.id}
+              id={`plan_card_${plan.id}`}
               className="card p-3 p-sm-4 card-interactive cursor-pointer"
+              style={{
+                border: (plan.id === effectiveHighlightedId || plan.title === effectiveHighlightedId)
+                  ? '2px solid var(--primary-500)'
+                  : '1px solid var(--border-light)',
+                boxShadow: (plan.id === effectiveHighlightedId || plan.title === effectiveHighlightedId)
+                  ? '0 0 0 3px rgba(37, 99, 235, 0.2)'
+                  : undefined
+              }}
               onClick={() => viewPlanDetail(plan)}
             >
               {/* Card Header */}

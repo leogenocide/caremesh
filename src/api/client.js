@@ -529,7 +529,19 @@ class ApiClient {
     }),
     getAuditLogs: async (params = {}) => this.request(`/admin/audit-logs${buildQuery(params)}`),
     getVault: async (params = {}) => this.request(`/admin/vault${buildQuery(params)}`),
+    quarantineEntity: async (data = {}) => this.request('/admin/vault/quarantine', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    restoreVaultItem: async (itemId, data = {}) => this.request(`/admin/vault/${itemId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
     restoreVaultPost: async (postId, data = {}) => this.request(`/admin/vault/${postId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    purgeVaultItem: async (itemId, data = {}) => this.request(`/admin/vault/${itemId}/purge`, {
       method: 'POST',
       body: JSON.stringify(data)
     }),

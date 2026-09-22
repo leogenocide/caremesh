@@ -28,7 +28,8 @@ import {
   FileCheck,
   Eye,
   Trash2,
-  Share2
+  Share2,
+  Archive
 } from 'lucide-react';
 
 export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
@@ -48,7 +49,11 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
     observations,
     currentUser,
     openShareSocialModal,
-    viewUserProfile
+    viewUserProfile,
+    setHighlightedEntityId,
+    isSystemAdmin,
+    quarantineEntity,
+    showToast
   } = useCareMesh();
 
   const [activeTab, setActiveTab] = useState('proposal'); // 'proposal' | 'critique' | 'revisions' | 'milestones' | 'decisions' | 'outcomes'
@@ -92,6 +97,32 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
         avatar: plan.proposerAvatar,
         handle: plan.proposerHandle || '@proposer'
       } : null);
+
+  const handleDeletePlan = () => {
+    if (window.confirm(`Are you sure you want to delete "${plan.title}"?`)) {
+      deletePlan(plan.id);
+      onClose();
+    }
+  };
+
+  const handleQuarantine = async () => {
+    const reason = window.prompt(
+      `Quarantine "${plan.title}" to Master Evidence Vault?\n\nEnter quarantine reason:`,
+      'Policy violation review'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'plan',
+        targetId: plan.id,
+        reason: reason.trim() || 'Quarantined by System Administrator',
+        notes: `Quarantined from Plan Detail by ${currentUser?.name || 'System Admin'}`
+      });
+      onClose();
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine plan', 'error');
+    }
+  };
 
   const lifecycleStages = [
     { key: 'draft', label: '1. Draft' },
@@ -1000,7 +1031,10 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                     <div 
                       key={r.id} 
                       className="p-1.5 mb-1 rounded bg-white border card-interactive cursor-pointer d-flex align-center justify-between"
-                      onClick={() => viewRequestDetail(r)}
+                      onClick={() => {
+                        if (setHighlightedEntityId) setHighlightedEntityId(r.id);
+                        viewRequestDetail(r);
+                      }}
                       title={`Inspect request: ${r.title}`}
                     >
                       <span className="text-primary truncate">
@@ -1018,7 +1052,10 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
                     <div 
                       key={o.id} 
                       className="p-1.5 mb-1 rounded bg-white border card-interactive cursor-pointer d-flex align-center justify-between"
-                      onClick={() => inspectEntity(o, 'observation')}
+                      onClick={() => {
+                        if (setHighlightedEntityId) setHighlightedEntityId(o.id);
+                        inspectEntity(o, 'observation');
+                      }}
                       title={`Inspect observation: ${o.title}`}
                     >
                       <span className="text-primary truncate">• <strong>{o.title}</strong></span>
@@ -1073,22 +1110,48 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
 
         {/* Footer */}
         <div className="d-flex align-center justify-between gap-2 pt-2 border-top">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm d-flex align-center gap-1"
-            onClick={() => openShareSocialModal(plan, 'plan')}
-            title="Share this resilience plan"
-          >
-            <Share2 size={13} />
-            <span>Share Plan</span>
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onClose}
-          >
-            Close
-          </button>
+          <div className="d-flex align-center gap-2">
+            {canUserManage(plan) && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs text-rose d-flex align-center gap-1"
+                onClick={handleDeletePlan}
+              >
+                <Trash2 size={13} />
+                <span>Delete Plan</span>
+              </button>
+            )}
+            {isSystemAdmin && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs text-amber d-flex align-center gap-1"
+                style={{ color: '#b45309' }}
+                onClick={handleQuarantine}
+                title="Quarantine this plan to Master Evidence Vault"
+              >
+                <Archive size={13} />
+                <span>Quarantine to Vault</span>
+              </button>
+            )}
+          </div>
+          <div className="d-flex align-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm d-flex align-center gap-1"
+              onClick={() => openShareSocialModal(plan, 'plan')}
+              title="Share this resilience plan"
+            >
+              <Share2 size={13} />
+              <span>Share Plan</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </Modal>

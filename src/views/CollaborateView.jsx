@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useCareMesh } from '../context/useCareMesh';
 import { Tabs } from '../components/common/Tabs';
 import { UrgencyBadge, ResourceTypeBadge, RequestStatusBadge } from '../components/common/Badge';
@@ -59,6 +60,9 @@ export const CollaborateView = () => {
     viewUserProfile
   } = useCareMesh();
 
+  const location = useLocation();
+  const effectiveHighlightedId = highlightedEntityId || location.state?.highlightedEntityId;
+
   const [activeTabState, setActiveTabState] = useState('requests');
   const activeTab = currentSubTab || activeTabState;
   const [matcherFilter, setMatcherFilter] = useState('all'); // 'all' | 'most_endorsed' | 'my_involvements'
@@ -113,6 +117,96 @@ export const CollaborateView = () => {
   useEffect(() => {
     requestsPagination.resetPage();
   }, [statusFilter, urgencyFilter, categoryFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When navigated with a specific entityId (e.g. from linked request, resource, or notification)
+  useEffect(() => {
+    const targetId = effectiveHighlightedId;
+    if (!targetId) return;
+
+    // Check if it's a request
+    const targetReq = requests.find(r => 
+      r.id === targetId || 
+      r.title === targetId || 
+      r.title?.toLowerCase() === targetId?.toLowerCase()
+    );
+    if (targetReq) {
+      handleTabChange('requests');
+      if (statusFilter !== 'all' && targetReq.status === 'fulfilled' && statusFilter === 'active') {
+        setStatusFilter('all');
+      }
+      if (categoryFilter !== 'all' && targetReq.category !== categoryFilter) {
+        setCategoryFilter('all');
+      }
+      if (urgencyFilter !== 'all' && targetReq.urgency !== urgencyFilter) {
+        setUrgencyFilter('all');
+      }
+      viewRequestDetail(targetReq);
+      
+      const idx = visibleRequests.findIndex(r => r.id === targetReq.id);
+      if (idx !== -1) {
+        const targetPage = Math.floor(idx / 6) + 1;
+        if (requestsPagination.currentPage !== targetPage) {
+          requestsPagination.goToPage(targetPage);
+        }
+      }
+      return;
+    }
+
+    // Check if it's a resource
+    const targetRes = resources.find(res => 
+      res.id === targetId || 
+      res.title === targetId || 
+      res.title?.toLowerCase() === targetId?.toLowerCase()
+    );
+    if (targetRes) {
+      handleTabChange('resources');
+      viewResourceDetail(targetRes);
+
+      const idx = resources.findIndex(r => r.id === targetRes.id);
+      if (idx !== -1) {
+        const targetPage = Math.floor(idx / 6) + 1;
+        if (resourcesPagination.currentPage !== targetPage) {
+          resourcesPagination.goToPage(targetPage);
+        }
+      }
+      return;
+    }
+
+    // Check if it's an event
+    const targetEvt = events?.find(e => 
+      e.id === targetId || 
+      e.title === targetId || 
+      e.title?.toLowerCase() === targetId?.toLowerCase()
+    );
+    if (targetEvt) {
+      handleTabChange('events');
+      setSelectedEventChat(targetEvt);
+
+      const idx = (events || []).findIndex(e => e.id === targetEvt.id);
+      if (idx !== -1) {
+        const targetPage = Math.floor(idx / 6) + 1;
+        if (eventsPagination.currentPage !== targetPage) {
+          eventsPagination.goToPage(targetPage);
+        }
+      }
+      return;
+    }
+  }, [effectiveHighlightedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const targetId = effectiveHighlightedId;
+    if (targetId) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`request_card_${targetId}`) || 
+                   document.getElementById(`resource_card_${targetId}`) || 
+                   document.getElementById(`event-${targetId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [effectiveHighlightedId, requestsPagination.currentPage, resourcesPagination.currentPage, eventsPagination.currentPage]);
 
   return (
     <div className="d-flex flex-column gap-4">
@@ -253,9 +347,15 @@ export const CollaborateView = () => {
                 return (
                   <div 
                     key={req.id} 
+                    id={`request_card_${req.id}`}
                     className="card p-4 card-interactive d-flex flex-column justify-between"
                     style={{
-                      border: req.id === highlightedEntityId ? '2px solid var(--primary-500)' : '1px solid var(--border-light)'
+                      border: (req.id === effectiveHighlightedId || req.title === effectiveHighlightedId) 
+                        ? '2px solid var(--primary-500)' 
+                        : '1px solid var(--border-light)',
+                      boxShadow: (req.id === effectiveHighlightedId || req.title === effectiveHighlightedId)
+                        ? '0 0 0 3px rgba(37, 99, 235, 0.2)'
+                        : undefined
                     }}
                   >
                     <div>
@@ -461,7 +561,19 @@ export const CollaborateView = () => {
                 const isProvider = res.provider?.id === currentUser?.id || res.provider_id === currentUser?.id;
 
                 return (
-                  <div key={res.id} className="card p-4 card-interactive d-flex flex-column justify-between">
+                  <div 
+                    key={res.id} 
+                    id={`resource_card_${res.id}`}
+                    className="card p-4 card-interactive d-flex flex-column justify-between"
+                    style={{
+                      border: (res.id === effectiveHighlightedId || res.title === effectiveHighlightedId) 
+                        ? '2px solid var(--primary-500)' 
+                        : '1px solid var(--border-light)',
+                      boxShadow: (res.id === effectiveHighlightedId || res.title === effectiveHighlightedId)
+                        ? '0 0 0 3px rgba(37, 99, 235, 0.2)'
+                        : undefined
+                    }}
+                  >
                     <div>
                       <div className="d-flex align-center justify-between mb-2">
                         <ResourceTypeBadge type={res.contributionType} />

@@ -15,7 +15,8 @@ import {
   X,
   Share2,
   UserCheck,
-  Search
+  Search,
+  Archive
 } from 'lucide-react';
 
 export const EventDetailModal = ({ isOpen, onClose, event }) => {
@@ -30,7 +31,9 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
     showToast,
     openReadinessModal,
     readinessChecks,
-    viewUserProfile
+    viewUserProfile,
+    isSystemAdmin,
+    quarantineEntity
   } = useCareMesh();
   const [chatInput, setChatInput] = useState('');
   const [attendeeSearch, setAttendeeSearch] = useState('');
@@ -142,6 +145,25 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
     if (window.confirm('Are you sure you want to cancel and delete this event? This action cannot be undone.')) {
       deleteEvent(event.id);
       onClose();
+    }
+  };
+
+  const handleQuarantine = async () => {
+    const reason = window.prompt(
+      `Quarantine "${event.title}" to Master Evidence Vault?\n\nEnter quarantine reason:`,
+      'Policy violation review'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'project',
+        targetId: event.id,
+        reason: reason.trim() || 'Quarantined by System Administrator',
+        notes: `Quarantined from Civic Event Detail by ${currentUser?.name || 'System Admin'}`
+      });
+      onClose();
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine event', 'error');
     }
   };
 
@@ -615,6 +637,19 @@ export const EventDetailModal = ({ isOpen, onClose, event }) => {
                       <span>Delete</span>
                     </button>
                   </>
+                )}
+
+                {isSystemAdmin && (
+                  <button
+                    type="button"
+                    className="btn btn-sm text-amber"
+                    style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#b45309' }}
+                    onClick={handleQuarantine}
+                    title="Quarantine this event to Master Evidence Vault"
+                  >
+                    <Archive size={14} />
+                    <span>Quarantine to Vault</span>
+                  </button>
                 )}
 
                 {canManage && !linkedCheck && (

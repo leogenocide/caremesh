@@ -29,30 +29,34 @@ router.get('/', optionalAuth, (req, res) => {
 
   const isGlobalMod = currentUserRow && (currentUserRow.role === 'admin' || Boolean(currentUserRow.is_public_moderator));
 
-  const observations = db.prepare('SELECT * FROM observations ORDER BY created_at DESC').all().map(formatObservation);
+  const observations = db.prepare('SELECT * FROM observations WHERE (is_quarantined = 0 OR is_quarantined IS NULL) ORDER BY created_at DESC').all().map(formatObservation);
   const claims = db.prepare('SELECT * FROM claims ORDER BY created_at DESC').all().map(formatClaim);
   const disputes = db.prepare('SELECT * FROM disputes ORDER BY created_at DESC').all().map(formatDispute);
   const evidence = db.prepare('SELECT * FROM evidence ORDER BY created_at DESC').all().map(formatEvidence);
   const safetyReports = db.prepare('SELECT * FROM safety_reports ORDER BY created_at DESC').all().map(formatSafetyReport);
-  const plans = db.prepare('SELECT * FROM plans ORDER BY created_at DESC').all().map(formatPlan);
-  const events = db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all().map(formatProject);
+  const plans = db.prepare('SELECT * FROM plans WHERE (is_quarantined = 0 OR is_quarantined IS NULL) ORDER BY created_at DESC').all().map(formatPlan);
+  const events = db.prepare('SELECT * FROM projects WHERE (is_quarantined = 0 OR is_quarantined IS NULL) ORDER BY created_at DESC').all().map(formatProject);
   
   // Isolated requests: public OR authored by user OR in user's communities
   const requests = currentUserId
     ? db.prepare(`
         SELECT * FROM requests
-        WHERE (visibility IS NULL OR visibility = 'public')
-        OR requester_id = ?
-        OR (community_id IS NOT NULL AND community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
+        WHERE (is_quarantined = 0 OR is_quarantined IS NULL)
+        AND (
+          (visibility IS NULL OR visibility = 'public')
+          OR requester_id = ?
+          OR (community_id IS NOT NULL AND community_id IN (SELECT community_id FROM community_members WHERE user_id = ?))
+        )
         ORDER BY created_at DESC
       `).all(currentUserId, currentUserId).map(formatRequest)
     : db.prepare(`
         SELECT * FROM requests
-        WHERE (visibility IS NULL OR visibility = 'public')
+        WHERE (is_quarantined = 0 OR is_quarantined IS NULL)
+        AND (visibility IS NULL OR visibility = 'public')
         ORDER BY created_at DESC
       `).all().map(formatRequest);
 
-  const resources = db.prepare('SELECT * FROM resources ORDER BY created_at DESC').all().map(formatResource);
+  const resources = db.prepare('SELECT * FROM resources WHERE (is_quarantined = 0 OR is_quarantined IS NULL) ORDER BY created_at DESC').all().map(formatResource);
   const communities = db.prepare('SELECT * FROM communities ORDER BY created_at DESC').all().map(r => formatCommunity(r, currentUserId));
   
   // Isolated posts: public communities OR private communities where user is a member

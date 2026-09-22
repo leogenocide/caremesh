@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../db/database.js';
+import { db, logModerationAudit } from '../db/database.js';
 import { formatUser } from './auth.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { parsePaginationParams, executePaginatedQuery } from '../utils/pagination.js';
@@ -110,6 +110,9 @@ router.get('/', (req, res) => {
     params.push(status);
   }
 
+  // Exclude quarantined resources from public view
+  whereClauses.push('(is_quarantined = 0 OR is_quarantined IS NULL)');
+
   const whereSql = whereClauses.length > 0 ? ` WHERE ${whereClauses.join(' AND ')}` : '';
   const countSql = `SELECT COUNT(*) FROM resources${whereSql}`;
   const dataSql = `SELECT * FROM resources${whereSql} ORDER BY created_at DESC`;
@@ -134,7 +137,7 @@ router.get('/', (req, res) => {
 // GET /api/resources/:id
 router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM resources WHERE id = ?').get(req.params.id);
-  if (!row) {
+  if (!row || row.is_quarantined) {
     return res.status(404).json({ error: 'Resource not found' });
   }
   res.json(formatResource(row));
@@ -445,6 +448,22 @@ router.delete('/:id', optionalAuth, (req, res) => {
 
   if (!isOwner && !isPlatformAdmin(user)) {
     return res.status(403).json({ error: 'Only the resource provider or an administrator can delete this resource.' });
+  }
+
+  // Audit trail if deleted by an admin who is not the provider
+  if (!isOwner && isPlatformAdmin(user)) {
+    logModerationAudit(db, {
+      moderatorId: user.id,
+      moderatorRole: user.role || 'System Administrator',
+      communityId: null,
+      actionType: 'delete_resource',
+      targetType: 'resource',
+      targetId: req.params.id,
+      targetAuthorId: resource.provider_id,
+      targetContentSnapshot: resource,
+      reason: req.body?.reason || 'Permanently deleted by administrator',
+      notes: req.body?.notes || 'Administrative removal'
+    });
   }
 
   const tx = db.transaction(() => {

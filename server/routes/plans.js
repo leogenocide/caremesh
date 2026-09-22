@@ -134,14 +134,14 @@ export function formatPlan(row) {
 
 // GET /api/plans
 router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM plans ORDER BY created_at DESC').all();
+  const rows = db.prepare('SELECT * FROM plans WHERE (is_quarantined = 0 OR is_quarantined IS NULL) ORDER BY created_at DESC').all();
   res.json(rows.map(formatPlan));
 });
 
 // GET /api/plans/:id
 router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM plans WHERE id = ?').get(req.params.id);
-  if (!row) {
+  if (!row || row.is_quarantined) {
     return res.status(404).json({ error: 'Plan not found' });
   }
   res.json(formatPlan(row));

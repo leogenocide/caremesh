@@ -77,6 +77,9 @@ router.get('/', (req, res) => {
     params.push(status);
   }
 
+  // Exclude quarantined projects/events from public view
+  whereClauses.push('(is_quarantined = 0 OR is_quarantined IS NULL)');
+
   const whereSql = whereClauses.length > 0 ? ` WHERE ${whereClauses.join(' AND ')}` : '';
   const countSql = `SELECT COUNT(*) FROM projects${whereSql}`;
   const dataSql = `SELECT * FROM projects${whereSql} ORDER BY created_at DESC`;
@@ -101,7 +104,7 @@ router.get('/', (req, res) => {
 // GET /api/projects/:id
 router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
-  if (!row) {
+  if (!row || row.is_quarantined) {
     return res.status(404).json({ error: 'Project not found' });
   }
   res.json(formatProject(row));

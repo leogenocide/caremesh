@@ -19,7 +19,8 @@ import {
   Flag,
   UserX,
   AlertTriangle,
-  Tag
+  Tag,
+  Archive
 } from 'lucide-react';
 
 const PRESET_POST_CATEGORIES = ['General', 'Update', 'Event', 'Mutual Aid', 'Discussion', 'Urgent Alert'];
@@ -36,6 +37,11 @@ export const GroupPostCard = ({ post, community }) => {
     deletePostComment,
     togglePinPost,
     viewPlanDetail,
+    viewRequestDetail,
+    viewResourceDetail,
+    viewSafetyDetail,
+    viewEvidenceDetail,
+    setSelectedEventChat,
     navigateTo,
     inspectEntity,
     observations,
@@ -43,11 +49,16 @@ export const GroupPostCard = ({ post, community }) => {
     resources = [],
     evidence = [],
     safetyReports = [],
+    events = [],
     plans,
     openReportModal,
     kickPostMember,
     viewUserProfile,
-    openShareSocialModal
+    openShareSocialModal,
+    setHighlightedEntityId,
+    isSystemAdmin,
+    quarantineEntity,
+    showToast
   } = useCareMesh();
 
   const [isCommentOpen, setIsCommentOpen] = useState(true);
@@ -136,6 +147,43 @@ export const GroupPostCard = ({ post, community }) => {
     }
   };
 
+  const handleQuarantinePost = async () => {
+    const reason = window.prompt(
+      'Quarantine this post to Master Evidence Vault?\n\nEnter quarantine reason (e.g., Harassment, misinformation, safety policy breach):',
+      'Safety and community guidelines violation'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'post',
+        targetId: post.id,
+        reason: reason.trim() || 'Quarantined by System Administrator',
+        notes: `Quarantined from feed by ${currentUser?.name || 'System Admin'}`
+      });
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine post', 'error');
+    }
+  };
+
+  const handleQuarantineComment = async (commentId, commentText) => {
+    const snippet = commentText ? `"${commentText.slice(0, 30)}..."` : 'this comment';
+    const reason = window.prompt(
+      `Quarantine ${snippet} to Master Evidence Vault?\n\nEnter quarantine reason:`,
+      'Harassment or safety policy breach'
+    );
+    if (reason === null) return;
+    try {
+      await quarantineEntity({
+        targetType: 'comment',
+        targetId: commentId,
+        reason: reason.trim() || 'Quarantined comment by System Administrator',
+        notes: `Quarantined from post #${post.id} by ${currentUser?.name || 'System Admin'}`
+      });
+    } catch (err) {
+      showToast?.(err.message || 'Failed to quarantine comment', 'error');
+    }
+  };
+
   const handleKickFromPost = (targetUserId, targetUserName) => {
     if (window.confirm(`Kick and restrict ${targetUserName || 'this member'} from this post? All their comments on this post will be removed and they will not be allowed to post comments on this thread again.`)) {
       kickPostMember(community?.id, post.id, targetUserId);
@@ -201,39 +249,71 @@ export const GroupPostCard = ({ post, community }) => {
 
     if (type === 'plan') {
       const p = findEntity(plans);
+      const targetId = p?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
       if (p) viewPlanDetail(p);
-      else navigateTo('plans');
+      navigateTo('plans', null, targetId);
     } else if (type === 'request') {
       const r = findEntity(requests);
-      if (r) inspectEntity(r, 'request');
-      else navigateTo('collaborate', 'requests', id);
+      const targetId = r?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (r) {
+        if (viewRequestDetail) viewRequestDetail(r);
+        else inspectEntity(r, 'request');
+      }
+      navigateTo('collaborate', 'requests', targetId);
     } else if (type === 'resource') {
       const res = findEntity(resources);
-      if (res) inspectEntity(res, 'resource');
-      else navigateTo('collaborate', 'resources', id);
+      const targetId = res?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (res) {
+        if (viewResourceDetail) viewResourceDetail(res);
+        else inspectEntity(res, 'resource');
+      }
+      navigateTo('collaborate', 'resources', targetId);
     } else if (type === 'safety') {
       const s = findEntity(safetyReports);
-      if (s) inspectEntity(s, 'safety');
-      else navigateTo('explore', null, id);
+      const targetId = s?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (s) {
+        if (viewSafetyDetail) viewSafetyDetail(s);
+        else inspectEntity(s, 'safety');
+      }
+      navigateTo('explore', null, targetId);
     } else if (type === 'evidence') {
       const ev = findEntity(evidence);
-      if (ev) inspectEntity(ev, 'evidence');
+      const targetId = ev?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (ev) {
+        if (viewEvidenceDetail) viewEvidenceDetail(ev);
+        else inspectEntity(ev, 'evidence');
+      }
+      navigateTo('explore', null, targetId);
     } else if (type === 'observation') {
       const o = findEntity(observations);
+      const targetId = o?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
       if (o) inspectEntity(o, 'observation');
-      else navigateTo('explore', null, id);
+      navigateTo('explore', null, targetId);
+    } else if (type === 'event') {
+      const evt = findEntity(events);
+      const targetId = evt?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (evt && setSelectedEventChat) setSelectedEventChat(evt);
+      navigateTo('collaborate', 'events', targetId);
     } else {
       const allEntities = [
         ...(observations || []),
         ...(requests || []),
         ...(resources || []),
         ...(plans || []),
-        ...(safetyReports || [])
+        ...(safetyReports || []),
+        ...(events || [])
       ];
       const anyEntity = findEntity(allEntities);
-      if (anyEntity) {
-        inspectEntity(anyEntity, type);
-      }
+      const targetId = anyEntity?.id || id || title;
+      if (setHighlightedEntityId) setHighlightedEntityId(targetId);
+      if (anyEntity) inspectEntity(anyEntity, type);
     }
   };
 
@@ -365,6 +445,19 @@ export const GroupPostCard = ({ post, community }) => {
             >
               <Trash2 size={13} />
               <span className="d-none d-sm-inline">Delete</span>
+            </button>
+          )}
+
+          {isSystemAdmin && !isEditingPost && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs d-flex align-center gap-1"
+              style={{ color: '#b45309' }}
+              onClick={handleQuarantinePost}
+              title="Quarantine post to Master Evidence Vault"
+            >
+              <Archive size={13} />
+              <span className="d-none d-sm-inline">Quarantine</span>
             </button>
           )}
 
@@ -705,6 +798,17 @@ export const GroupPostCard = ({ post, community }) => {
                               title="Delete comment"
                             >
                               <Trash2 size={11} />
+                            </button>
+                          )}
+                          {isSystemAdmin && !isThisCommentEditing && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs p-0 text-amber"
+                              style={{ color: '#b45309' }}
+                              onClick={() => handleQuarantineComment(c.id, c.text)}
+                              title="Quarantine comment to Master Evidence Vault"
+                            >
+                              <Archive size={11} />
                             </button>
                           )}
                         </div>

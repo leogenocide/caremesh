@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS observations (
   contradiction_target_id TEXT,
   referenced_evidence_id TEXT,
   referenced_evidence_title TEXT,
+  is_quarantined INTEGER DEFAULT 0,
+  quarantined_at DATETIME,
+  quarantined_by_id TEXT,
+  quarantine_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -187,6 +191,10 @@ CREATE TABLE IF NOT EXISTS plans (
   proposer_id TEXT NOT NULL,
   goals TEXT DEFAULT '[]',
   outcomes_evaluation TEXT,
+  is_quarantined INTEGER DEFAULT 0,
+  quarantined_at DATETIME,
+  quarantined_by_id TEXT,
+  quarantine_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (proposer_id) REFERENCES users(id)
 );
@@ -320,6 +328,10 @@ CREATE TABLE IF NOT EXISTS projects (
   max_participants INTEGER DEFAULT 20,
   status TEXT NOT NULL, -- 'upcoming' | 'in_progress' | 'completed' | 'cancelled'
   plan_id TEXT,
+  is_quarantined INTEGER DEFAULT 0,
+  quarantined_at DATETIME,
+  quarantined_by_id TEXT,
+  quarantine_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (organizer_id) REFERENCES users(id),
   FOREIGN KEY (plan_id) REFERENCES plans(id)
@@ -368,6 +380,10 @@ CREATE TABLE IF NOT EXISTS requests (
   visibility TEXT DEFAULT 'public', -- 'public' | 'group_only'
   scheduled_date TEXT,
   scheduled_time TEXT,
+  is_quarantined INTEGER DEFAULT 0,
+  quarantined_at DATETIME,
+  quarantined_by_id TEXT,
+  quarantine_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (requester_id) REFERENCES users(id),
   FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE SET NULL
@@ -409,6 +425,10 @@ CREATE TABLE IF NOT EXISTS resources (
   condition TEXT,
   conditions_terms TEXT,
   valid_until TEXT,
+  is_quarantined INTEGER DEFAULT 0,
+  quarantined_at DATETIME,
+  quarantined_by_id TEXT,
+  quarantine_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (provider_id) REFERENCES users(id)
 );
@@ -497,6 +517,10 @@ CREATE TABLE IF NOT EXISTS post_comments (
   author_id TEXT NOT NULL,
   text TEXT NOT NULL,
   time TEXT,
+  is_quarantined INTEGER DEFAULT 0,
+  quarantined_at DATETIME,
+  quarantined_by_id TEXT,
+  quarantine_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
   FOREIGN KEY (author_id) REFERENCES users(id)
