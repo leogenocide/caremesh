@@ -3115,6 +3115,10 @@ export const CareMeshProvider = ({ children }) => {
     return res;
   };
 
+  const sendRegistrationVerificationCode = async ({ email, handle }) => {
+    return api.auth.sendVerificationCode({ email, handle });
+  };
+
   const loginWithGoogle = async (googleData) => {
     const res = await api.auth.googleLogin(googleData);
     if (res?.user) {
@@ -4304,6 +4308,7 @@ export const CareMeshProvider = ({ children }) => {
       closeAuthModal,
       loginUser,
       registerUser,
+      sendRegistrationVerificationCode,
       loginWithGoogle,
       changePassword,
       forgotPassword,

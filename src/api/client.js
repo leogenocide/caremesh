@@ -93,6 +93,12 @@ class ApiClient {
       if (res.token) this.setToken(res.token);
       return res;
     },
+    sendVerificationCode: async (payload) => {
+      return this.request('/auth/send-verification-code', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
     me: async () => this.request('/auth/me'),
     switchUser: async () => {
       throw new Error('Account switching is disabled in production. Please sign in with your account credentials.');

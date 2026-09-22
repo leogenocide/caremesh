@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   restricted_by_id TEXT,
   google_id TEXT UNIQUE,
   auth_provider TEXT DEFAULT 'local',
+  is_email_verified INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -690,3 +691,13 @@ CREATE TABLE IF NOT EXISTS password_reset_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_reset_codes_email ON password_reset_codes(email);
 CREATE INDEX IF NOT EXISTS idx_reset_codes_user ON password_reset_codes(user_id);
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_email_verif_codes ON email_verification_codes(email);

@@ -29,6 +29,7 @@ export function formatUser(row) {
     socialLinks: JSON.parse(row.social_links || '{}'),
     stats: JSON.parse(row.stats || '{}'),
     isPublicModerator: Boolean(row.is_public_moderator),
+    isEmailVerified: Boolean(row.is_email_verified),
     status: row.status || 'active',
     restrictionReason: row.restriction_reason || null,
     restrictedAt: row.restricted_at || null,
@@ -38,41 +39,131 @@ export function formatUser(row) {
   };
 }
 
-// POST /api/auth/register
+// POST /api/auth/send-verification-code (Send 6-digit registration email verification code)
+router.post('/send-verification-code', (req, res) => {
+  const { email, handle } = req.body;
+  if (!email || typeof email !== 'string' || !email.trim()) {
+    return res.status(400).json({ error: 'Email address is required.' });
+  }
+
+  const targetEmail = email.trim().toLowerCase();
+  const cleanHandle = handle ? (handle.trim().startsWith('@') ? handle.trim() : `@${handle.trim()}`) : null;
+
+  if (targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase()) {
+    return res.status(400).json({ error: 'This email address is reserved.' });
+  }
+
+  // Check if email or handle is already registered
+  const existingUser = db.prepare('SELECT id, email, handle FROM users WHERE LOWER(email) = ? OR (handle = ? AND ? IS NOT NULL)').get(targetEmail, cleanHandle, cleanHandle);
+  if (existingUser) {
+    if (existingUser.email?.toLowerCase() === targetEmail) {
+      return res.status(409).json({ error: 'An account with this email address already exists. Please sign in instead.' });
+    }
+    return res.status(409).json({ error: 'This handle is already taken. Please choose another handle.' });
+  }
+
+  // Generate a cryptographically random 6-digit numeric code
+  const codeNum = Math.floor(100000 + Math.random() * 900000);
+  const code = codeNum.toString();
+  const codeHash = bcrypt.hashSync(code, 10);
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins validity
+  const codeId = `evc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  // Invalidate previous unused codes for this email
+  db.prepare('UPDATE email_verification_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0').run(targetEmail);
+
+  // Insert new code
+  db.prepare(`
+    INSERT INTO email_verification_codes (id, email, code_hash, expires_at, used)
+    VALUES (?, ?, ?, ?, 0)
+  `).run(codeId, targetEmail, codeHash, expiresAt);
+
+  console.log(`[AUTH] Registration email verification code for ${targetEmail}: ${code} (Expires: ${expiresAt})`);
+
+  return res.json({
+    success: true,
+    message: `A 6-digit verification code has been sent to ${targetEmail}. Please check your inbox and enter the code to verify your account.`
+  });
+});
+
+// POST /api/auth/register (Requires valid 6-digit email verification code)
 router.post('/register', (req, res) => {
-  const { name, handle, email, password, bio, location, skills } = req.body;
+  const { name, handle, email, password, verificationCode, avatar, bio, location, skills } = req.body;
 
   if (!name || !handle || !email || !password) {
     return res.status(400).json({ error: 'Name, handle, email, and password are required.' });
   }
 
-  const existing = db.prepare('SELECT id FROM users WHERE handle = ? OR email = ?').get(handle, email);
+  if (!verificationCode || typeof verificationCode !== 'string' || !verificationCode.trim()) {
+    return res.status(400).json({ error: 'Email verification code is required. Please verify your email address to complete registration.' });
+  }
+
+  const targetEmail = email.trim().toLowerCase();
+  const cleanCode = verificationCode.toString().trim();
+
+  if (targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase()) {
+    return res.status(400).json({ error: 'System Administrator account is pre-provisioned and cannot be registered.' });
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE handle = ? OR LOWER(email) = ?').get(handle, targetEmail);
   if (existing) {
     return res.status(409).json({ error: 'User with this handle or email already exists.' });
   }
 
-  const id = `usr_${Date.now()}`;
-  const passwordHash = bcrypt.hashSync(password, 10);
-  
-  if (email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL.toLowerCase()) {
-    return res.status(400).json({ error: 'System Administrator account is pre-provisioned and cannot be registered.' });
+  // Verify 6-digit email verification code
+  const activeCodes = db.prepare(`
+    SELECT * FROM email_verification_codes
+    WHERE LOWER(email) = ? AND used = 0
+    ORDER BY created_at DESC
+    LIMIT 5
+  `).all(targetEmail);
+
+  if (!activeCodes || activeCodes.length === 0) {
+    return res.status(400).json({ error: 'No active email verification code found for this email, or code has expired. Please request a new code.' });
   }
 
+  const nowTime = Date.now();
+  let matchedCodeRow = null;
+
+  for (const row of activeCodes) {
+    if (new Date(row.expires_at).getTime() > nowTime) {
+      if (bcrypt.compareSync(cleanCode, row.code_hash)) {
+        matchedCodeRow = row;
+        break;
+      }
+    }
+  }
+
+  if (!matchedCodeRow) {
+    return res.status(400).json({ error: 'Invalid or expired verification code. Please check your email or request a new code.' });
+  }
+
+  // Mark code as used
+  db.prepare('UPDATE email_verification_codes SET used = 1 WHERE id = ?').run(matchedCodeRow.id);
+
+  const id = `usr_${Date.now()}`;
+  const passwordHash = bcrypt.hashSync(password, 10);
   const userRole = 'Community Member';
   const isPublicMod = 0;
   const userBadges = ['Community Member'];
+  const chosenAvatar = avatar && typeof avatar === 'string' && avatar.trim()
+    ? avatar.trim()
+    : 'https://api.dicebear.com/7.x/bottts/svg?seed=SafeNeighbor&backgroundColor=b6e3f4';
 
   db.prepare(`
-    INSERT INTO users (id, name, handle, email, password_hash, role, avatar, bio, address, neighborhood, lat, lng, skills, badges, privacy_settings, stats, is_public_moderator)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (
+      id, name, handle, email, password_hash, role, avatar, bio,
+      address, neighborhood, lat, lng, skills, badges,
+      privacy_settings, stats, is_public_moderator, is_email_verified
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id,
     name,
     handle.startsWith('@') ? handle : `@${handle}`,
-    email,
+    targetEmail,
     passwordHash,
     userRole,
-    `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+    chosenAvatar,
     bio || '',
     location?.address || 'Maplewood Local Area',
     location?.neighborhood || 'Maplewood',
@@ -81,7 +172,7 @@ router.post('/register', (req, res) => {
     JSON.stringify(skills || []),
     JSON.stringify(userBadges),
     JSON.stringify({ showExactLocation: true, allowDirectMessages: true, publicContributionHistory: true }),
-    JSON.stringify({ contributions: 1, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 }),
+    JSON.stringify({ contributions: 0, resourcesShared: 0, plansJoined: 0, requestsFulfilled: 0 }),
     isPublicMod
   );
 
@@ -231,14 +322,14 @@ router.post('/google', async (req, res) => {
       INSERT INTO users (
         id, name, handle, email, password_hash, role, avatar, bio,
         address, neighborhood, lat, lng, skills, badges,
-        privacy_settings, stats, is_public_moderator, google_id, auth_provider
+        privacy_settings, stats, is_public_moderator, google_id, auth_provider, is_email_verified
       ) VALUES (
         ?, ?, ?, ?, ?, 'Community Member', ?, 'Community neighbor verified through Google account.',
         'Maplewood Local Area', 'Maplewood', 37.7749, -122.4194,
         '["Community Support"]', '["Verified Neighbor"]',
         '{"showExactLocation":true,"allowDirectMessages":true,"publicContributionHistory":true}',
-        '{"contributions":1,"resourcesShared":0,"plansJoined":0,"requestsFulfilled":0}',
-        0, ?, 'google'
+        '{"contributions":0,"resourcesShared":0,"plansJoined":0,"requestsFulfilled":0}',
+        0, ?, 'google', 1
       )
     `).run(
       newId,
@@ -246,7 +337,7 @@ router.post('/google', async (req, res) => {
       cleanHandle,
       targetEmail,
       randomPassHash,
-      googleUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      googleUser.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=SafeNeighbor&backgroundColor=b6e3f4',
       googleUser.googleId || null
     );
 

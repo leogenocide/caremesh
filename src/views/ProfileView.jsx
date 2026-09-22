@@ -101,7 +101,7 @@ export const ProfileView = () => {
       bio: 'Active participant in local mutual aid network and emergency preparedness.',
       location: { address: 'Maplewood, CA' },
       skills: ['Mutual Aid', 'Community Logistics'],
-      stats: { contributions: 1, requestsFulfilled: 0 }
+      stats: { contributions: 0, requestsFulfilled: 0 }
     };
   }, [userId, isSelf, currentUser, mockUsers]);
 
@@ -272,26 +272,32 @@ export const ProfileView = () => {
   const resourcesPagination = usePagination(filteredResources, 5);
   const observationsPagination = usePagination(filteredObservations, 5);
 
-  const totalContributions = targetUser.stats?.contributions || (
+  const actualContributions = targetUser ? (
     userResources.length + userRequests.length + userPlans.length + userEvents.length + userObservations.length
-  );
-  const requestsFulfilledCount = userRequests.filter(r => r.status === 'fulfilled').length;
-  const requestsOpenCount = userRequests.filter(r => r.status !== 'fulfilled').length;
-  const requestsAuthoredCount = userRequests.filter(r => 
+  ) : 0;
+  // Respect pre-seeded demo account stats (e.g. Maya with 42, Caleb with 150) if greater,
+  // but ignore legacy starter default of 1 if the user has 0 actual contributions.
+  const seedContributions = (targetUser?.stats?.contributions && targetUser.stats.contributions > 1)
+    ? targetUser.stats.contributions
+    : 0;
+  const totalContributions = Math.max(seedContributions, actualContributions);
+  const requestsFulfilledCount = targetUser ? userRequests.filter(r => r.status === 'fulfilled').length : 0;
+  const requestsOpenCount = targetUser ? userRequests.filter(r => r.status !== 'fulfilled').length : 0;
+  const requestsAuthoredCount = targetUser ? userRequests.filter(r => 
     r.requester?.id === targetUser?.id || 
     r.requesterId === targetUser?.id || 
     r.authorId === targetUser?.id || 
     (targetUser?.email && r.requester?.email === targetUser.email) ||
     (targetUser?.handle && r.requester?.handle === targetUser.handle)
-  ).length;
-  const requestsVolunteeringCount = userRequests.filter(r => 
+  ).length : 0;
+  const requestsVolunteeringCount = targetUser ? userRequests.filter(r => 
     r.responses?.some(resp => 
       resp.user?.id === targetUser?.id || 
       resp.userId === targetUser?.id || 
       (targetUser?.email && resp.user?.email === targetUser.email) ||
       (targetUser?.handle && resp.user?.handle === targetUser.handle)
     )
-  ).length;
+  ).length : 0;
 
   const togglePrivacy = (key) => {
     if (!isSelf) return;
@@ -329,7 +335,7 @@ export const ProfileView = () => {
     });
   };
 
-  if (isSelf && !currentUser) {
+  if (!targetUser) {
     return (
       <div className="card p-5 text-center d-flex flex-column align-center gap-3 my-5" style={{ maxWidth: '480px', margin: '0 auto' }}>
         <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(5, 150, 105, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
@@ -630,7 +636,7 @@ export const ProfileView = () => {
               background: 'var(--bg-subtle)', 
               border: '1px solid var(--border-light)',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))'
+              gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))'
             }}
           >
             <div className="text-center p-1.5">
@@ -652,6 +658,10 @@ export const ProfileView = () => {
             <div className="text-center p-1.5">
               <span className="font-bold text-lg text-amber d-block">{userResources.length}</span>
               <span className="text-xs text-muted">Shared Resources</span>
+            </div>
+            <div className="text-center p-1.5">
+              <span className="font-bold text-lg text-sky d-block">{userObservations.length}</span>
+              <span className="text-xs text-muted">Observations</span>
             </div>
           </div>
         )}

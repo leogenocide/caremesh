@@ -1971,16 +1971,11 @@ select {
 .map-filter-chips-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  gap: 0.4rem;
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
   max-width: 100%;
-  padding-bottom: 2px;
-}
-
-.map-filter-chips-bar::-webkit-scrollbar {
-  display: none;
+  row-gap: 0.4rem;
 }
 
 .map-filter-chip {
@@ -1989,6 +1984,10 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.map-filter-header {
+  row-gap: 0.5rem;
 }
 
 @media (max-width: 640px) {

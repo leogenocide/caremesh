@@ -1393,8 +1393,8 @@ export const CareMeshMap = ({
   return (
     <div className="d-flex flex-column gap-2" style={{ width: '100%' }}>
       {/* Filter Chips Bar */}
-      <div className="map-filter-header d-flex align-center justify-between gap-2 flex-wrap">
-        <div className="map-filter-chips-bar">
+      <div className="map-filter-header d-flex align-center justify-between gap-2 flex-wrap mb-1">
+        <div className="map-filter-chips-bar d-flex align-center gap-1.5 flex-wrap">
           {filterButtons.map(fb => (
             <button
               key={fb.id}
