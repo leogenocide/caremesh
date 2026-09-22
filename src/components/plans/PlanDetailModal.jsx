@@ -294,7 +294,7 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
           </div>
 
           {/* 6-Stage Progress Indicator (Purely Textual Stepper) */}
-          <div className="touch-tab-nav gap-1 pt-2 border-top">
+          <div className="touch-tab-nav flex-wrap gap-1.5 pt-2 border-top">
             {lifecycleStages.map((stg, idx) => {
               const isCurrent = idx === currentStageIndex || (currentStageIndex === -1 && idx === 1);
               const isPast = idx < currentStageIndex;
@@ -319,7 +319,7 @@ export const PlanDetailModal = ({ isOpen, onClose, plan }) => {
         </div>
 
         {/* 2. Top Sub-Navigation Tabs */}
-        <div className="touch-tab-nav border-bottom pb-2">
+        <div className="touch-tab-nav flex-wrap gap-1.5 border-bottom pb-2">
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'proposal' ? 'btn-primary' : 'btn-ghost'}`}

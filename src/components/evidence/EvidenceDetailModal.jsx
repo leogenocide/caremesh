@@ -341,7 +341,7 @@ export const EvidenceDetailModal = () => {
           </div>
 
           {/* Sub-Post Tabs */}
-          <div className="touch-tab-nav border-bottom pb-2 mb-3">
+          <div className="touch-tab-nav flex-wrap gap-1.5 border-bottom pb-2 mb-3">
             <button
               type="button"
               className={`btn btn-xs ${activeTab === 'sub_evidence' ? 'btn-primary' : 'btn-ghost'}`}

@@ -1180,18 +1180,30 @@ select {
   gap: 0.5rem;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
   width: 100%;
   padding-bottom: 2px;
 }
 
-.touch-tab-nav::-webkit-scrollbar {
-  display: none;
+/* Inside dialogs / modals or with .flex-wrap: ensure all tabs wrap cleanly across all screens so options, labels, and text are never clipped or hidden */
+.modal-content .touch-tab-nav,
+.modal-body .touch-tab-nav,
+.touch-tab-nav.flex-wrap {
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+  row-gap: 0.5rem;
 }
 
 .touch-tab-nav .btn {
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* When standalone touch-tab-nav is used where horizontal scrolling is intentional, show a clean subtle scrollbar on desktop */
+@media (hover: hover) and (pointer: fine) {
+  .touch-tab-nav:not(.flex-wrap):not(.modal-body .touch-tab-nav) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+  }
 }
 
 /* Collaborate (Action Tab) Responsive Layout */

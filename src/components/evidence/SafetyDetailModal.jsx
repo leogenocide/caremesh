@@ -142,7 +142,7 @@ export const SafetyDetailModal = ({ isOpen, onClose, report }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="touch-tab-nav border-bottom pb-1 gap-2">
+        <div className="touch-tab-nav flex-wrap border-bottom pb-1 gap-2">
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`}

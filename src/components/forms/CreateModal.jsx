@@ -248,10 +248,10 @@ export const CreateModal = () => {
       }}
       title="Create CareMesh Coordination Entry"
       subtitle="Connect observations, requests, resources, civic events, plans, and safety reports to real-world context."
-      maxWidth="720px"
+      maxWidth="780px"
     >
       {/* Type Selector Tabs */}
-      <div className="touch-tab-nav mb-3 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
+      <div className="touch-tab-nav flex-wrap gap-2 mb-3 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
         {types.map(t => (
           <button
             key={t.id}
@@ -386,21 +386,23 @@ export const CreateModal = () => {
           required
         />
 
-        {/* Description / Problem Statement */}
-        <div>
-          <label className="form-label">
-            {activeType === 'plan' ? 'Problem Statement & Context' : 'Detailed Description'}
-          </label>
-          <textarea
-            name={activeType === 'plan' ? 'problemStatement' : 'description'}
-            value={activeType === 'plan' ? formData.problemStatement : formData.description}
-            onChange={handleChange}
-            rows={3}
-            placeholder="Provide context, observations, conditions, and why this matters to the community..."
-            className="form-textarea"
-            required
-          />
-        </div>
+        {/* Description (Non-Plan types use this; Plans use the structured multi-step fields below) */}
+        {activeType !== 'plan' && (
+          <div>
+            <label className="form-label">
+              Detailed Description
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              rows={3}
+              placeholder="Provide context, observations, conditions, and why this matters to the community..."
+              className="form-textarea"
+              required
+            />
+          </div>
+        )}
 
         {/* Observation Specific: Claim & Evidence Link */}
         {activeType === 'observation' && (
