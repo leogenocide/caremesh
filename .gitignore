@@ -26,3 +26,11 @@ A_Social_Coordination_Network_Project_Report.pdf
 CareMesh_Presentation.pptx
 project_report_source.html
 generate_report_pdf.js
+
+# SQLite temporary/foreign WAL and SHM files
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+server/*.db-shm
+server/*.db-wal

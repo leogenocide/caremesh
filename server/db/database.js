@@ -9,10 +9,24 @@ const __dirname = path.dirname(__filename);
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'caremesh.db');
 
+// In cloud container environments (like Render), clean up any foreign or stale -shm / -wal files before opening
+if (process.env.NODE_ENV === 'production') {
+  try {
+    const shmFile = `${DB_PATH}-shm`;
+    const walFile = `${DB_PATH}-wal`;
+    if (fs.existsSync(shmFile)) fs.unlinkSync(shmFile);
+    if (fs.existsSync(walFile)) fs.unlinkSync(walFile);
+  } catch {}
+}
+
 export const db = new Database(DB_PATH);
 
-// Optimize SQLite settings
-db.pragma('journal_mode = WAL');
+// Optimize SQLite settings: DELETE journal mode avoids container mmap / cross-OS shm memory faults
+if (process.env.NODE_ENV === 'production') {
+  db.pragma('journal_mode = DELETE');
+} else {
+  db.pragma('journal_mode = WAL');
+}
 db.pragma('foreign_keys = ON');
 
 // Initialize schema
