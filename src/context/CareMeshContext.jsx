@@ -3224,13 +3224,18 @@ export const CareMeshProvider = ({ children }) => {
   };
 
   const deleteUserAccount = async (userId) => {
-    const targetId = userId || currentUser.id;
+    const targetId = userId || currentUser?.id;
     if (!targetId || targetId === 'usr_guest') {
       throw new Error('Cannot delete guest account.');
     }
     await api.users.delete(targetId);
-    await logoutUser();
-    showToast('Your CareMesh account has been permanently deleted.', 'info');
+    if (targetId === currentUser?.id) {
+      await logoutUser();
+      showToast('Your CareMesh account has been permanently deleted.', 'info');
+    } else {
+      setMockUsers(prev => prev.filter(u => u.id !== targetId));
+      showToast('User account successfully deleted.', 'info');
+    }
   };
 
   // Modal handlers for Report, Readiness, and Public Records Moderation

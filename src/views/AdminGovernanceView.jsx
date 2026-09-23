@@ -206,6 +206,25 @@ export const AdminGovernanceView = () => {
     }
   };
 
+  // Permanently Delete User Account (System Admin only)
+  const handleDeleteUserAccount = async (targetUser) => {
+    if (targetUser?.email?.trim().toLowerCase() === 'caleb.zothansanga@gmail.com') {
+      showToast('The primary System Administrator account is protected and cannot be deleted.', 'warning');
+      return;
+    }
+    const confirmed = window.confirm(`⚠️ Permanently delete account for ${targetUser.name} (${targetUser.handle})?\n\nThis will permanently wipe their credentials, direct messages, posts, requests, resources, and related records.`);
+    if (!confirmed) return;
+    try {
+      await api.users.delete(targetUser.id);
+      showToast(`User account for ${targetUser.name} has been permanently deleted.`, 'info', 'Account Deleted');
+      setSelectedUserDossier(null);
+      fetchUsers();
+      fetchStats();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete user account', 'error');
+    }
+  };
+
   // Fetch Master Evidence Vault
   const fetchVault = useCallback(async () => {
     setIsVaultLoading(true);
@@ -849,6 +868,18 @@ export const AdminGovernanceView = () => {
                           <UserX size={14} />
                           <span>Restrict Account</span>
                         </button>
+                        {selectedUserDossier.user?.email !== 'caleb.zothansanga@gmail.com' && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm text-rose d-flex align-center gap-1.5"
+                            style={{ border: '1px solid rgba(225, 29, 72, 0.25)' }}
+                            onClick={() => handleDeleteUserAccount(selectedUserDossier.user)}
+                            title="Permanently wipe and delete this user account"
+                          >
+                            <Trash2 size={14} />
+                            <span>Delete Account</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

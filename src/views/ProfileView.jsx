@@ -513,6 +513,20 @@ export const ProfileView = () => {
                     type="button"
                     className="btn btn-ghost btn-sm text-rose d-flex align-center gap-1.5"
                     onClick={() => {
+                      setDeleteConfirmationText('');
+                      setDeleteAccountError('');
+                      setIsDeleteAccountModalOpen(true);
+                    }}
+                    title="Delete your account permanently"
+                    style={{ border: '1px solid rgba(225, 29, 72, 0.25)' }}
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete Account</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm text-muted d-flex align-center gap-1.5"
+                    onClick={() => {
                       if (confirm(`Are you sure you want to log out of ${currentUser?.name || 'this account'}?`)) {
                         logoutUser();
                       }
@@ -558,41 +572,60 @@ export const ProfileView = () => {
 
                 {/* Admin Restrict / Unrestrict Control */}
                 {(currentUser?.isAdmin || currentUser?.role === 'admin' || currentUser?.id === 'usr_me') && !isSelf && (
-                  (overrideStatus ? overrideStatus === 'restricted' : targetUser.status === 'restricted') ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm text-brand font-bold d-flex align-center gap-1"
-                      onClick={async () => {
-                        try {
-                          await unrestrictUser(targetUser.id);
-                          setOverrideStatus('active');
-                        } catch {
-                          // Error handled in context
-                        }
-                      }}
-                    >
-                      <ShieldCheck size={14} />
-                      <span>Reinstate Account</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm text-rose d-flex align-center gap-1"
-                      onClick={async () => {
-                        const reason = prompt(`Enter audit justification reason to restrict ${targetUser.name}:`, 'Community safety standard violation');
-                        if (!reason) return;
-                        try {
-                          await restrictUser(targetUser.id, reason);
-                          setOverrideStatus('restricted');
-                        } catch {
-                          // Error handled in context
-                        }
-                      }}
-                    >
-                      <ShieldAlert size={14} />
-                      <span>Restrict Account</span>
-                    </button>
-                  )
+                  <>
+                    {(overrideStatus ? overrideStatus === 'restricted' : targetUser.status === 'restricted') ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm text-brand font-bold d-flex align-center gap-1"
+                        onClick={async () => {
+                          try {
+                            await unrestrictUser(targetUser.id);
+                            setOverrideStatus('active');
+                          } catch {
+                            // Error handled in context
+                          }
+                        }}
+                      >
+                        <ShieldCheck size={14} />
+                        <span>Reinstate Account</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm text-rose d-flex align-center gap-1"
+                        onClick={async () => {
+                          const reason = prompt(`Enter audit justification reason to restrict ${targetUser.name}:`, 'Community safety standard violation');
+                          if (!reason) return;
+                          try {
+                            await restrictUser(targetUser.id, reason);
+                            setOverrideStatus('restricted');
+                          } catch {
+                            // Error handled in context
+                          }
+                        }}
+                      >
+                        <ShieldAlert size={14} />
+                        <span>Restrict Account</span>
+                      </button>
+                    )}
+
+                    {targetUser.email !== 'caleb.zothansanga@gmail.com' && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm text-rose d-flex align-center gap-1"
+                        style={{ border: '1px solid rgba(225, 29, 72, 0.25)' }}
+                        onClick={() => {
+                          setDeleteConfirmationText('');
+                          setDeleteAccountError('');
+                          setIsDeleteAccountModalOpen(true);
+                        }}
+                        title="Permanently delete this user account"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete User</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -1548,19 +1581,29 @@ export const ProfileView = () => {
           >
             <div className="d-flex align-center gap-2 mb-3 text-rose">
               <AlertTriangle size={22} />
-              <h3 className="font-bold text-md text-primary mb-0">Delete Account Permanently?</h3>
+              <h3 className="font-bold text-md text-primary mb-0">
+                {isSelf ? 'Delete Your Account Permanently?' : `Delete Account: ${targetUser?.name}?`}
+              </h3>
             </div>
             <p className="text-xs text-secondary mb-3" style={{ lineHeight: '1.55' }}>
-              Are you sure you want to permanently delete your account for <strong>{currentUser?.name}</strong> ({currentUser?.handle})?
+              {isSelf 
+                ? `Are you sure you want to permanently delete your account for ${targetUser?.name} (${targetUser?.handle})?`
+                : `As a System Administrator, are you sure you want to permanently delete ${targetUser?.name}'s account (${targetUser?.handle})?`}
             </p>
             <div className="p-3 rounded mb-3 text-xs" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
               <p className="mb-1 font-semibold">⚠️ All of the following data will be permanently wiped:</p>
               <ul className="mb-0 pl-3">
-                <li>Your profile credentials, authentication tokens, and passwords.</li>
-                <li>Your direct messages, notification logs, and private conversations.</li>
-                <li>Your posted requests, shared resources, events, and community posts.</li>
+                <li>Profile credentials, authentication records, and passwords.</li>
+                <li>Direct messages, notifications, and private conversations.</li>
+                <li>Posted requests, shared resources, events, comments, and community posts.</li>
               </ul>
             </div>
+
+            {targetUser?.email?.trim().toLowerCase() === 'caleb.zothansanga@gmail.com' ? (
+              <div className="p-2.5 mb-3 rounded text-xs bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                🛡️ The primary System Administrator account is protected and cannot be deleted.
+              </div>
+            ) : null}
 
             {deleteAccountError && (
               <div className="p-2 mb-3 rounded text-xs bg-rose-50 text-rose border border-rose-200">
@@ -1568,19 +1611,22 @@ export const ProfileView = () => {
               </div>
             )}
 
-            <div className="mb-3">
-              <label className="form-label text-xs mb-1 font-semibold">
-                To confirm, type <span className="font-mono text-rose font-bold" style={{ color: 'var(--rose-600)' }}>DELETE</span> below:
-              </label>
-              <input
-                type="text"
-                className="form-input text-xs"
-                placeholder="Type DELETE to confirm"
-                value={deleteConfirmationText}
-                onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                disabled={isDeletingAccount}
-              />
-            </div>
+            {targetUser?.email?.trim().toLowerCase() !== 'caleb.zothansanga@gmail.com' && (
+              <div className="mb-3">
+                <label className="form-label text-xs mb-1 font-semibold">
+                  To confirm, type <span className="font-mono text-rose font-bold" style={{ color: 'var(--rose-600)' }}>DELETE</span> below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input text-xs"
+                  placeholder="Type DELETE to confirm"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  disabled={isDeletingAccount}
+                  autoFocus
+                />
+              </div>
+            )}
 
             <div className="d-flex justify-end gap-2 pt-2 border-top">
               <button
@@ -1591,29 +1637,35 @@ export const ProfileView = () => {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="btn btn-danger btn-sm d-flex align-center gap-1.5"
-                style={{ background: 'var(--rose-600)', color: '#ffffff' }}
-                disabled={isDeletingAccount || deleteConfirmationText !== 'DELETE'}
-                onClick={async () => {
-                  if (deleteConfirmationText !== 'DELETE') return;
-                  setIsDeletingAccount(true);
-                  setDeleteAccountError('');
-                  try {
-                    await deleteUserAccount(currentUser.id);
-                    setIsDeleteAccountModalOpen(false);
-                    navigate('/');
-                  } catch (err) {
-                    setDeleteAccountError(err.message || 'Failed to delete account. Please try again.');
-                  } finally {
-                    setIsDeletingAccount(false);
-                  }
-                }}
-              >
-                <Trash2 size={14} />
-                <span>{isDeletingAccount ? 'Deleting Account...' : 'Permanently Delete Account'}</span>
-              </button>
+              {targetUser?.email?.trim().toLowerCase() !== 'caleb.zothansanga@gmail.com' && (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm d-flex align-center gap-1.5"
+                  style={{ background: 'var(--rose-600)', color: '#ffffff' }}
+                  disabled={isDeletingAccount || deleteConfirmationText !== 'DELETE'}
+                  onClick={async () => {
+                    if (deleteConfirmationText !== 'DELETE') return;
+                    setIsDeletingAccount(true);
+                    setDeleteAccountError('');
+                    try {
+                      await deleteUserAccount(targetUser.id);
+                      setIsDeleteAccountModalOpen(false);
+                      if (isSelf) {
+                        navigate('/');
+                      } else {
+                        navigate('/social');
+                      }
+                    } catch (err) {
+                      setDeleteAccountError(err.message || 'Failed to delete account. Please try again.');
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>{isDeletingAccount ? 'Deleting Account...' : 'Permanently Delete Account'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
