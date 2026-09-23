@@ -25,9 +25,18 @@ export function getMailerTransporter() {
   return transporter;
 }
 
+function getFromAddress(displayName = 'CareMesh Community') {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+  let from = process.env.SMTP_FROM;
+  if (!from || from.includes('your_email@gmail.com') || from.includes('example.com')) {
+    from = user ? `"${displayName}" <${user}>` : `"${displayName}" <no-reply@caremesh.org>`;
+  }
+  return from;
+}
+
 export async function sendVerificationEmail(toEmail, code) {
   const mailer = getMailerTransporter();
-  const from = process.env.SMTP_FROM || `"CareMesh Community" <${process.env.SMTP_USER || 'no-reply@caremesh.org'}>`;
+  const from = getFromAddress('CareMesh Community');
 
   if (!mailer) {
     console.warn(`\n⚠️  [MAILER NOT CONFIGURED] Real email could not be dispatched because SMTP_USER and SMTP_PASS are not configured.`);
@@ -62,18 +71,20 @@ export async function sendVerificationEmail(toEmail, code) {
       `
     });
 
-    console.log(`[MAILER] Real verification email successfully dispatched to ${toEmail}. Message ID: ${info.messageId}`);
+    console.log(`\n📬 [MAILER] Real verification email successfully dispatched to ${toEmail}`);
+    console.log(`🔑 [AUTH CODE] Verification Code for ${toEmail}: ${code}`);
+    console.log(`🆔 Message ID: ${info.messageId}\n`);
     return { sent: true, messageId: info.messageId };
   } catch (err) {
-    console.error(`[MAILER ERROR] Failed to deliver verification email to ${toEmail}:`, err.message);
-    console.log(`[AUTH] Registration email verification code for ${toEmail}: ${code}`);
+    console.error(`\n❌ [MAILER ERROR] Failed to deliver verification email to ${toEmail}:`, err.message);
+    console.log(`🔑 [AUTH CODE] Verification code for ${toEmail}: ${code}\n`);
     return { sent: false, error: err.message };
   }
 }
 
 export async function sendPasswordResetEmail(toEmail, code) {
   const mailer = getMailerTransporter();
-  const from = process.env.SMTP_FROM || `"CareMesh Security" <${process.env.SMTP_USER || 'no-reply@caremesh.org'}>`;
+  const from = getFromAddress('CareMesh Security');
 
   if (!mailer) {
     console.warn(`\n⚠️  [MAILER NOT CONFIGURED] Real email could not be dispatched because SMTP_USER and SMTP_PASS are not configured.`);
