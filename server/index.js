@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -30,7 +30,7 @@ import bootstrapRouter from './routes/bootstrap.js';
 import adminRouter from './routes/admin.js';
 import writeRateLimiter from './middleware/rateLimiter.js';
 
-dotenv.config();
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

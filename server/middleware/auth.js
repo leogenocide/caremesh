@@ -1,8 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { db } from '../db/database.js';
+export const JWT_SECRET = process.env.JWT_SECRET;
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'caremesh-dev-supersecret-jwt-key-2026';
-
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 export function signToken(user) {
   return jwt.sign(
     {
