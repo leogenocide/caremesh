@@ -34,3 +34,6 @@ generate_report_pdf.js
 *.sqlite-wal
 server/*.db-shm
 server/*.db-wal
+.env
+.env.*
+!.env.example
