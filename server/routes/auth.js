@@ -508,7 +508,7 @@ router.post("/google", async (req, res) => {
   } else {
     if (googleUser.googleId && !user.google_id) {
       db.prepare(
-        'UPDATE users SET google_id = ?, auth_provider = "google" WHERE id = ?',
+        "UPDATE users SET google_id = ?, auth_provider = 'google' WHERE id = ?",
       ).run(googleUser.googleId, user.id);
     }
   }
