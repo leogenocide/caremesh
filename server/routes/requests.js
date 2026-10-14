@@ -1,7 +1,7 @@
 import express from 'express';
 import { db, logModerationAudit } from '../db/database.js';
 import { formatUser } from './auth.js';
-import { optionalAuth } from '../middleware/auth.js';
+import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { parsePaginationParams, executePaginatedQuery } from '../utils/pagination.js';
 
 const router = express.Router();
@@ -157,7 +157,7 @@ router.get('/:id', optionalAuth, (req, res) => {
 });
 
 // POST /api/requests
-router.post('/', optionalAuth, (req, res) => {
+router.post('/', requireAuth, (req, res) => {
   const {
     title,
     description,
@@ -178,10 +178,7 @@ router.post('/', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'Title, description, and category are required.' });
   }
 
-  const requesterId = req.user?.id || req.body?.requesterId;
-  if (!requesterId) {
-    return res.status(401).json({ error: 'Authentication required to create a help request.' });
-  }
+  const requesterId = req.user.id;
   const id = `req_${Date.now()}`;
 
   const tx = db.transaction(() => {
@@ -223,12 +220,9 @@ router.post('/', optionalAuth, (req, res) => {
 });
 
 // POST /api/requests/:id/respond
-router.post('/:id/respond', optionalAuth, (req, res) => {
+router.post('/:id/respond', requireAuth, (req, res) => {
   const { role = 'Volunteer Assistance' } = req.body;
-  const userId = req.user?.id || req.body?.userId;
-  if (!userId) {
-    return res.status(401).json({ error: 'Authentication required to volunteer for a request.' });
-  }
+  const userId = req.user.id;
 
   const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
   if (!request) {
@@ -272,8 +266,8 @@ router.post('/:id/respond', optionalAuth, (req, res) => {
 });
 
 // PATCH /api/requests/:id
-router.patch('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+router.patch('/:id', requireAuth, (req, res) => {
+  const userId = req.user.id;
   const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
   if (!request) {
     return res.status(404).json({ error: 'Request not found' });
@@ -316,14 +310,14 @@ router.patch('/:id', optionalAuth, (req, res) => {
 });
 
 // DELETE /api/requests/:id
-router.delete('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || req.body?.userId || 'usr_me');
+router.delete('/:id', requireAuth, (req, res) => {
+  const userId = req.user.id;
   const request = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
   if (!request) {
     return res.status(404).json({ error: 'Request not found' });
   }
 
-  const user = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const user = req.user;
   const isAdmin = user && (
     user.role === 'Admin' || 
     user.role === 'admin' || 

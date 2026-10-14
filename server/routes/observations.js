@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from '../db/database.js';
 import { formatUser } from './auth.js';
-import { optionalAuth } from '../middleware/auth.js';
+import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { parsePaginationParams, executePaginatedQuery } from '../utils/pagination.js';
 
 const router = express.Router();
@@ -112,7 +112,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/observations
-router.post('/', optionalAuth, (req, res) => {
+router.post('/', requireAuth, (req, res) => {
   const {
     title,
     category,
@@ -135,7 +135,7 @@ router.post('/', optionalAuth, (req, res) => {
   }
 
   const id = `obs_${Date.now()}`;
-  const authorId = req.user ? req.user.id : (req.body.authorId || req.body.author?.id || 'usr_me');
+  const authorId = req.user.id;
   const obsStatus = status || (isContradiction ? 'resolved_disputed' : 'action_underway');
   const timestamp = 'Just now';
 
@@ -235,8 +235,8 @@ router.post('/:id/relations', optionalAuth, (req, res) => {
 });
 
 // PATCH /api/observations/:id
-router.patch('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.body.userId || 'usr_me');
+router.patch('/:id', requireAuth, (req, res) => {
+  const userId = req.user.id;
   const obs = db.prepare('SELECT * FROM observations WHERE id = ?').get(req.params.id);
   if (!obs) {
     return res.status(404).json({ error: 'Observation not found' });
@@ -269,14 +269,14 @@ router.patch('/:id', optionalAuth, (req, res) => {
 });
 
 // DELETE /api/observations/:id
-router.delete('/:id', optionalAuth, (req, res) => {
-  const userId = req.user ? req.user.id : (req.query.userId || req.body?.userId || 'usr_me');
+router.delete('/:id', requireAuth, (req, res) => {
+  const userId = req.user.id;
   const obs = db.prepare('SELECT * FROM observations WHERE id = ?').get(req.params.id);
   if (!obs) {
     return res.status(404).json({ error: 'Observation not found' });
   }
 
-  const user = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const user = req.user;
   const isAdmin = user && (
     user.role === 'Admin' || 
     user.role === 'admin' || 

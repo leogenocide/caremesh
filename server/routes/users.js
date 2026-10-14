@@ -1,7 +1,7 @@
 import express from 'express';
 import { db, logModerationAudit } from '../db/database.js';
 import { formatUser } from './auth.js';
-import { optionalAuth } from '../middleware/auth.js';
+import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { isSystemAdmin, SYSTEM_ADMIN_EMAIL } from './communities.js';
 
 const router = express.Router();
@@ -22,13 +22,9 @@ router.get('/:id', (req, res) => {
 });
 
 // PATCH /api/users/:id
-router.patch('/:id', optionalAuth, (req, res) => {
-  const currentUserId = req.user?.id || req.body?.currentUserId;
-  if (!currentUserId) {
-    return res.status(401).json({ error: 'Authentication required.' });
-  }
-  const callingUser = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId);
-  const isPlatformAdmin = callingUser && isSystemAdmin(callingUser);
+router.patch('/:id', requireAuth, (req, res) => {
+  const currentUserId = req.user.id;
+  const isPlatformAdmin = isSystemAdmin(req.user);
 
   if (currentUserId !== req.params.id && !isPlatformAdmin) {
     return res.status(403).json({ error: 'Access forbidden: you cannot modify another user’s profile.' });
@@ -79,11 +75,10 @@ router.patch('/:id', optionalAuth, (req, res) => {
 });
 
 // POST /api/users/:id/restrict - Restrict user account (System Admin only)
-router.post('/:id/restrict', optionalAuth, (req, res) => {
-  const adminId = req.user?.id || req.body?.adminId;
-  const admin = req.user || (adminId ? db.prepare('SELECT * FROM users WHERE id = ?').get(adminId) : null);
+router.post('/:id/restrict', requireAuth, (req, res) => {
+  const admin = req.user;
 
-  if (!admin || !isSystemAdmin(admin)) {
+  if (!isSystemAdmin(admin)) {
     return res.status(403).json({ error: 'Only system administrators can restrict user accounts.' });
   }
 
@@ -120,11 +115,10 @@ router.post('/:id/restrict', optionalAuth, (req, res) => {
 });
 
 // POST /api/users/:id/unrestrict - Restore user account to active status (System Admin only)
-router.post('/:id/unrestrict', optionalAuth, (req, res) => {
-  const adminId = req.user?.id || req.body?.adminId;
-  const admin = req.user || (adminId ? db.prepare('SELECT * FROM users WHERE id = ?').get(adminId) : null);
+router.post('/:id/unrestrict', requireAuth, (req, res) => {
+  const admin = req.user;
 
-  if (!admin || !isSystemAdmin(admin)) {
+  if (!isSystemAdmin(admin)) {
     return res.status(403).json({ error: 'Only system administrators can unrestrict user accounts.' });
   }
 
@@ -143,7 +137,7 @@ router.post('/:id/unrestrict', optionalAuth, (req, res) => {
   `).run(req.params.id);
 
   logModerationAudit(db, {
-    moderatorId: adminId,
+    moderatorId: admin.id,
     moderatorRole: admin.role || 'admin',
     communityId: null,
     actionType: 'unrestrict_user',
@@ -159,12 +153,9 @@ router.post('/:id/unrestrict', optionalAuth, (req, res) => {
 });
 
 // DELETE /api/users/:id - Delete user account (self or system administrator)
-router.delete('/:id', optionalAuth, (req, res) => {
+router.delete('/:id', requireAuth, (req, res) => {
   const targetId = req.params.id;
-  const currentUserId = req.user?.id || req.body?.currentUserId;
-  if (!currentUserId) {
-    return res.status(401).json({ error: 'Authentication required to delete an account.' });
-  }
+  const currentUserId = req.user.id;
 
   const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
   if (!targetUser) {
@@ -176,8 +167,8 @@ router.delete('/:id', optionalAuth, (req, res) => {
     return res.status(400).json({ error: 'The primary System Administrator account is protected and cannot be deleted.' });
   }
 
-  const callingUser = req.user || db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId);
-  const isPlatform = callingUser && isSystemAdmin(callingUser);
+  const callingUser = req.user;
+  const isPlatform = isSystemAdmin(callingUser);
 
   if (currentUserId !== targetId && !isPlatform) {
     return res.status(403).json({ error: 'Access forbidden: you can only delete your own account.' });

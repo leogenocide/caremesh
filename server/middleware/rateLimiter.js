@@ -20,7 +20,9 @@ const WINDOW_MS = 60 * 1000;
 const MAX_WRITES = parseInt(process.env.RATE_LIMIT_MAX_WRITES || '30', 10);
 
 /**
- * Resolve caller user from authorization header or request body
+ * Resolve caller user from the verified JWT only.
+ * Never trust client-supplied headers (x-user-id, x-mock-user) or body fields —
+ * those are unauthenticated and can be spoofed by any caller.
  */
 function resolveCaller(req) {
   if (req.user) return req.user;
@@ -34,19 +36,8 @@ function resolveCaller(req) {
         return db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id);
       }
     } catch {
-      // Invalid token, fall through
+      // Invalid token, fall through to IP-based tracking
     }
-  }
-
-  const headerUserId = req.headers['x-user-id'] || req.headers['x-mock-user'];
-  if (headerUserId) {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(headerUserId);
-    if (user) return user;
-  }
-
-  const fallbackId = req.body?.userId || req.body?.authorId || req.body?.reporterId || req.body?.borrowerId;
-  if (fallbackId) {
-    return db.prepare('SELECT * FROM users WHERE id = ?').get(fallbackId);
   }
 
   return null;
