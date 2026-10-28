@@ -1,48 +1,78 @@
-import nodemailer from 'nodemailer';
+import nodemailer from "nodemailer";
 
 let transporter = null;
 
 export function getMailerTransporter() {
-  const host = process.env.SMTP_HOST || (process.env.SMTP_USER && process.env.SMTP_USER.includes('@gmail.com') ? 'smtp.gmail.com' : null);
+  const host =
+    process.env.SMTP_HOST ||
+    (process.env.SMTP_USER && process.env.SMTP_USER.includes("@gmail.com")
+      ? "smtp.gmail.com"
+      : null);
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465;
-  const secure = process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : port === 465;
-
+  const pass =
+    process.env.SMTP_PASS ||
+    process.env.GMAIL_PASS ||
+    process.env.GMAIL_APP_PASSWORD;
+  const port = process.env.SMTP_PORT
+    ? parseInt(process.env.SMTP_PORT, 10)
+    : 465;
+  const secure =
+    process.env.SMTP_SECURE !== undefined
+      ? process.env.SMTP_SECURE === "true"
+      : port === 465;
+  console.log("[MAILER CONFIG CHECK]", {
+    smtpUserPresent: Boolean(user),
+    smtpPassPresent: Boolean(pass),
+    smtpHost: host || "smtp.gmail.com",
+    smtpPort: port,
+    smtpSecure: secure,
+  });
   if (!user || !pass) {
     return null;
   }
 
   if (!transporter) {
     transporter = nodemailer.createTransport({
-      host: host || 'smtp.gmail.com',
+      host: host || "smtp.gmail.com",
       port,
       secure,
-      auth: { user, pass }
+      auth: { user, pass },
     });
   }
 
   return transporter;
 }
 
-function getFromAddress(displayName = 'CareMesh Community') {
+function getFromAddress(displayName = "CareMesh Community") {
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
   let from = process.env.SMTP_FROM;
-  if (!from || from.includes('your_email@gmail.com') || from.includes('example.com')) {
-    from = user ? `"${displayName}" <${user}>` : `"${displayName}" <no-reply@caremesh.org>`;
+  if (
+    !from ||
+    from.includes("your_email@gmail.com") ||
+    from.includes("example.com")
+  ) {
+    from = user
+      ? `"${displayName}" <${user}>`
+      : `"${displayName}" <no-reply@caremesh.org>`;
   }
   return from;
 }
 
 export async function sendVerificationEmail(toEmail, code) {
   const mailer = getMailerTransporter();
-  const from = getFromAddress('CareMesh Community');
+  const from = getFromAddress("CareMesh Community");
 
   if (!mailer) {
-    console.warn(`\n⚠️  [MAILER NOT CONFIGURED] Real email could not be dispatched because SMTP_USER and SMTP_PASS are not configured.`);
-    console.warn(`👉 To send real verification emails to inboxes, set SMTP_USER & SMTP_PASS (e.g. Gmail address & 16-character App Password) in your .env or Render dashboard.`);
-    console.log(`[AUTH] Registration email verification code for ${toEmail}: ${code}\n`);
-    return { sent: false, reason: 'unconfigured' };
+    console.warn(
+      `\n⚠️  [MAILER NOT CONFIGURED] Real email could not be dispatched because SMTP_USER and SMTP_PASS are not configured.`,
+    );
+    console.warn(
+      `👉 To send real verification emails to inboxes, set SMTP_USER & SMTP_PASS (e.g. Gmail address & 16-character App Password) in your .env or Render dashboard.`,
+    );
+    console.log(
+      `[AUTH] Registration email verification code for ${toEmail}: ${code}\n`,
+    );
+    return { sent: false, reason: "unconfigured" };
   }
 
   try {
@@ -68,15 +98,20 @@ export async function sendVerificationEmail(toEmail, code) {
             If you did not attempt to create an account on CareMesh, you can safely ignore this email.
           </p>
         </div>
-      `
+      `,
     });
 
-    console.log(`\n📬 [MAILER] Real verification email successfully dispatched to ${toEmail}`);
+    console.log(
+      `\n📬 [MAILER] Real verification email successfully dispatched to ${toEmail}`,
+    );
     console.log(`🔑 [AUTH CODE] Verification Code for ${toEmail}: ${code}`);
     console.log(`🆔 Message ID: ${info.messageId}\n`);
     return { sent: true, messageId: info.messageId };
   } catch (err) {
-    console.error(`\n❌ [MAILER ERROR] Failed to deliver verification email to ${toEmail}:`, err.message);
+    console.error(
+      `\n❌ [MAILER ERROR] Failed to deliver verification email to ${toEmail}:`,
+      err.message,
+    );
     console.log(`🔑 [AUTH CODE] Verification code for ${toEmail}: ${code}\n`);
     return { sent: false, error: err.message };
   }
@@ -84,12 +119,14 @@ export async function sendVerificationEmail(toEmail, code) {
 
 export async function sendPasswordResetEmail(toEmail, code) {
   const mailer = getMailerTransporter();
-  const from = getFromAddress('CareMesh Security');
+  const from = getFromAddress("CareMesh Security");
 
   if (!mailer) {
-    console.warn(`\n⚠️  [MAILER NOT CONFIGURED] Real email could not be dispatched because SMTP_USER and SMTP_PASS are not configured.`);
+    console.warn(
+      `\n⚠️  [MAILER NOT CONFIGURED] Real email could not be dispatched because SMTP_USER and SMTP_PASS are not configured.`,
+    );
     console.log(`[AUTH] Password reset code for ${toEmail}: ${code}\n`);
-    return { sent: false, reason: 'unconfigured' };
+    return { sent: false, reason: "unconfigured" };
   }
 
   try {
@@ -115,13 +152,18 @@ export async function sendPasswordResetEmail(toEmail, code) {
             If you did not request a password reset, please ignore this email.
           </p>
         </div>
-      `
+      `,
     });
 
-    console.log(`[MAILER] Real password reset email successfully dispatched to ${toEmail}. Message ID: ${info.messageId}`);
+    console.log(
+      `[MAILER] Real password reset email successfully dispatched to ${toEmail}. Message ID: ${info.messageId}`,
+    );
     return { sent: true, messageId: info.messageId };
   } catch (err) {
-    console.error(`[MAILER ERROR] Failed to deliver password reset email to ${toEmail}:`, err.message);
+    console.error(
+      `[MAILER ERROR] Failed to deliver password reset email to ${toEmail}:`,
+      err.message,
+    );
     console.log(`[AUTH] Password reset code for ${toEmail}: ${code}`);
     return { sent: false, error: err.message };
   }
