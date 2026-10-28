@@ -118,7 +118,7 @@ export async function sendVerificationEmail(toEmail, code) {
     console.log(
       `\n📬 [MAILER] Real verification email successfully dispatched to ${toEmail}`,
     );
-    console.log(`🔑 [AUTH CODE] Verification Code for ${toEmail}: ${code}`);
+
     console.log(`🆔 Message ID: ${info.messageId}\n`);
     return { sent: true, messageId: info.messageId };
   } catch (err) {
