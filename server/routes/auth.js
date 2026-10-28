@@ -46,6 +46,9 @@ export function formatUser(row) {
 
 // POST /api/auth/send-verification-code (Send 6-digit registration email verification code)
 router.post("/send-verification-code", async (req, res) => {
+  console.log("[OTP ROUTE HIT - DIAGNOSTIC V2]", {
+    timestamp: new Date().toISOString(),
+  });
   const { email, handle } = req.body;
   if (!email || typeof email !== "string" || !email.trim()) {
     return res.status(400).json({ error: "Email address is required." });
