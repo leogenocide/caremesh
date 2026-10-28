@@ -37,6 +37,8 @@ export function getMailerTransporter() {
       port,
       secure,
       auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
     });
   }
 
