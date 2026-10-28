@@ -37,3 +37,6 @@ server/*.db-wal
 .env
 .env.*
 !.env.example
+credentials.json
+token.json
+gmail-authorize.js
