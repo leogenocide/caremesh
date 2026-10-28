@@ -122,11 +122,15 @@ export async function sendVerificationEmail(toEmail, code) {
     console.log(`🆔 Message ID: ${info.messageId}\n`);
     return { sent: true, messageId: info.messageId };
   } catch (err) {
-    console.error(
-      `\n❌ [MAILER ERROR] Failed to deliver verification email to ${toEmail}:`,
-      err.message,
-    );
-    console.log(`🔑 [AUTH CODE] Verification code for ${toEmail}: ${code}\n`);
+    console.error("[MAILER ERROR] Verification email failed", {
+      message: err.message,
+      code: err.code ?? null,
+      command: err.command ?? null,
+      responseCode: err.responseCode ?? null,
+      address: err.address ?? null,
+      port: err.port ?? null,
+    });
+
     return { sent: false, error: err.message };
   }
 }
