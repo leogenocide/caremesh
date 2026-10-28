@@ -76,6 +76,10 @@ export async function sendVerificationEmail(toEmail, code) {
   }
 
   try {
+    console.log("[MAILER] Attempting SMTP send", {
+      recipientPresent: Boolean(toEmail),
+      transporterCreated: Boolean(mailer),
+    });
     const info = await mailer.sendMail({
       from,
       to: toEmail,
@@ -99,6 +103,11 @@ export async function sendVerificationEmail(toEmail, code) {
           </p>
         </div>
       `,
+    });
+    console.log("[MAILER] SMTP send completed", {
+      acceptedCount: info.accepted?.length ?? 0,
+      rejectedCount: info.rejected?.length ?? 0,
+      messageIdPresent: Boolean(info.messageId),
     });
 
     console.log(
