@@ -1,5 +1,6 @@
 import express from "express";
-import { randomInt } from "crypto";
+import { randomInt, randomUUID } from "node:crypto";
+
 import bcrypt from "bcryptjs";
 import { db } from "../db/database.js";
 import { signToken, requireAuth } from "../middleware/auth.js";
@@ -83,12 +84,16 @@ router.post("/send-verification-code", async (req, res) => {
     });
   }
 
-  // Generate a cryptographically random 6-digit numeric code
-  const codeNum = Math.floor(100000 + Math.random() * 900000);
-  const code = codeNum.toString();
+  // Generate a cryptographically secure 6-digit numeric code
+  const code = randomInt(100000, 1000000).toString();
+
   const codeHash = bcrypt.hashSync(code, 10);
+
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins validity
-  const codeId = `evc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  // Generate a cryptographically secure unique code ID
+
+  const codeId = `evc_${randomUUID()}`;
 
   // Invalidate previous unused codes for this email
   db.prepare(
