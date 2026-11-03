@@ -189,40 +189,11 @@ async function runTests() {
     "Unauthenticated Google login attempt without credential must be rejected with 400",
   );
   const unauthErr = await unauthGoogleRes.json();
+  console.log("Google missing credential response:", unauthErr);
   assert.ok(
     unauthErr.error.includes("Google authentication credential required"),
     "Error must explain credential is required",
   );
-
-  // // B. Signing in with a verified Google credential (no CareMesh password required)
-  // const fakeGoogleHeader = Buffer.from(
-  //   JSON.stringify({ alg: "none", typ: "JWT" }),
-  // ).toString("base64url");
-  // const fakeGooglePayload = Buffer.from(
-  //   JSON.stringify({
-  //     email: "new.neighbor@gmail.com",
-  //     name: "New Neighbor",
-  //     picture:
-  //       "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
-  //     sub: "google_sub_998877",
-  //   }),
-  // ).toString("base64url");
-  // const testGoogleCredential = `test_google_${fakeGoogleHeader}.${fakeGooglePayload}.test_sig`;
-
-  // const googleSsoRes = await fetch(`${BASE_URL}/auth/google`, {
-  //   method: "POST",
-  //   headers: { "Content-Type": "application/json" },
-  //   body: JSON.stringify({ credential: testGoogleCredential }),
-  // });
-  // assert.strictEqual(
-  //   googleSsoRes.status,
-  //   200,
-  //   "Valid Google credential must authenticate without password",
-  // );
-  // const googleSsoData = await googleSsoRes.json();
-  // assert.strictEqual(googleSsoData.user.email, "new.neighbor@gmail.com");
-  // assert.strictEqual(googleSsoData.user.role, "Community Member");
-  // assert.ok(googleSsoData.token, "Must return JWT session token");
 
   // B. Rejecting a fabricated Google credential
   const fakeGoogleHeader = Buffer.from(
@@ -1660,11 +1631,11 @@ async function runTests() {
   );
 
   // C. Fallback: Existing user can also authenticate with valid email & password -> 200
-  const validPasswordRes = await fetch(`${BASE_URL}/auth/google`, {
+  const validPasswordRes = await fetch(`${BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: "maya@caremesh.org",
+      login: "maya@caremesh.org",
       password: "password123",
     }),
   });
@@ -1672,6 +1643,12 @@ async function runTests() {
     validPasswordRes.status,
     200,
     "Login with valid password must succeed",
+  );
+  console.log("Password login status:", validPasswordRes.status);
+
+  console.log(
+    "Password login response:",
+    await validPasswordRes.clone().json(),
   );
   const validPassData = await validPasswordRes.json();
   assert.strictEqual(validPassData.user.id, "usr_me");
@@ -3951,6 +3928,7 @@ async function runTests() {
       bio: "Loves cartoon avatars and verified mutual aid.",
     }),
   });
+
   assert.strictEqual(
     validRegRes.status,
     201,

@@ -1,10 +1,9 @@
 import express from "express";
-import { randomInt, randomUUID } from "node:crypto";
-
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { db } from "../db/database.js";
 import { signToken, requireAuth } from "../middleware/auth.js";
-import { SYSTEM_ADMIN_EMAIL } from "./communities.js";
+import { SYSTEM_ADMIN_EMAIL } from "../utils/admin.js";
 import {
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -12,7 +11,20 @@ import {
 
 const router = express.Router();
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-// Helper to format user row
+const OTP_EXPIRY_MS = 15 * 60 * 1000;
+const BCRYPT_ROUNDS = 10;
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const otpAttempts = new Map();
+
+function safeJsonParse(value, fallback) {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function formatUser(row) {
   if (!row) return null;
   return {
@@ -29,11 +41,11 @@ export function formatUser(row) {
       lat: row.lat,
       lng: row.lng,
     },
-    skills: JSON.parse(row.skills || "[]"),
-    badges: JSON.parse(row.badges || "[]"),
-    privacySettings: JSON.parse(row.privacy_settings || "{}"),
-    socialLinks: JSON.parse(row.social_links || "{}"),
-    stats: JSON.parse(row.stats || "{}"),
+    skills: safeJsonParse(row.skills, []),
+    badges: safeJsonParse(row.badges, []),
+    privacySettings: safeJsonParse(row.privacy_settings, {}),
+    socialLinks: safeJsonParse(row.social_links, {}),
+    stats: safeJsonParse(row.stats, {}),
     isPublicModerator: Boolean(row.is_public_moderator),
     isEmailVerified: Boolean(row.is_email_verified),
     status: row.status || "active",
@@ -45,83 +57,294 @@ export function formatUser(row) {
   };
 }
 
-// POST /api/auth/send-verification-code (Send 6-digit registration email verification code)
-router.post("/send-verification-code", async (req, res) => {
-  console.log("[OTP ROUTE HIT - DIAGNOSTIC V2]", {
-    timestamp: new Date().toISOString(),
+function isRestricted(user) {
+  return user?.status === "restricted";
+}
+
+function restrictedResponse(res, user) {
+  return res.status(403).json({
+    error: "Account Restricted",
+    message:
+      "Your account has been restricted by an administrator due to community standard violations.",
+    reason:
+      user.restriction_reason ||
+      "Violation of community safety and anti-spam standards.",
+    restrictedAt: user.restricted_at || null,
   });
-  const { email, handle } = req.body;
-  if (!email || typeof email !== "string" || !email.trim()) {
-    return res.status(400).json({ error: "Email address is required." });
+}
+
+function normalizeEmail(email) {
+  return email.trim().toLowerCase();
+}
+function normalizeHandle(handle) {
+  const value = handle.trim();
+  return value.startsWith("@") ? value : `@${value}`;
+}
+function validEmail(email) {
+  return (
+    typeof email === "string" &&
+    email.length <= 254 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  );
+}
+function validPassword(password) {
+  return (
+    typeof password === "string" &&
+    password.length >= 8 &&
+    Buffer.byteLength(password, "utf8") <= 72
+  );
+}
+function validOtp(code) {
+  return typeof code === "string" && /^\d{6}$/.test(code);
+}
+function validHandle(handle) {
+  return (
+    typeof handle === "string" &&
+    handle.length >= 2 &&
+    handle.length <= 30 &&
+    /^@[A-Za-z0-9_]{1,29}$/.test(handle)
+  );
+}
+function getOtpAttemptKey(purpose, email, req) {
+  return `${purpose}:${email}:${req.ip || "unknown"}`;
+}
+function checkOtpAttempt(purpose, email, req) {
+  const key = getOtpAttemptKey(purpose, email, req);
+  const now = Date.now();
+  let record = otpAttempts.get(key);
+  if (!record || now - record.startedAt >= OTP_ATTEMPT_WINDOW_MS) {
+    record = { count: 0, startedAt: now };
   }
+  if (record.count >= MAX_OTP_ATTEMPTS) {
+    otpAttempts.set(key, record);
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((OTP_ATTEMPT_WINDOW_MS - (now - record.startedAt)) / 1000),
+      ),
+    };
+  }
+  record.count += 1;
+  otpAttempts.set(key, record);
+  for (const [storedKey, stored] of otpAttempts.entries()) {
+    if (now - stored.startedAt >= OTP_ATTEMPT_WINDOW_MS)
+      otpAttempts.delete(storedKey);
+  }
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+function clearOtpAttempts(purpose, email, req) {
+  otpAttempts.delete(getOtpAttemptKey(purpose, email, req));
+}
+function invalidatePasswordResetCodes(userId) {
+  db.prepare(
+    "UPDATE password_reset_codes SET used = 1 WHERE user_id = ? AND used = 0",
+  ).run(userId);
+}
 
-  const targetEmail = email.trim().toLowerCase();
-  const cleanHandle = handle
-    ? handle.trim().startsWith("@")
-      ? handle.trim()
-      : `@${handle.trim()}`
-    : null;
+async function verifyGoogleCredential(credential) {
+  if (!GOOGLE_CLIENT_ID)
+    return {
+      ok: false,
+      status: 503,
+      error: "Google authentication is not configured on this server.",
+    };
+  if (typeof credential !== "string" || !credential.trim())
+    return {
+      ok: false,
+      status: 400,
+      error: "Google authentication credential required.",
+    };
 
+  let response;
+  try {
+    response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
+      { signal: AbortSignal.timeout(8000) },
+    );
+  } catch (error) {
+    console.warn("Google verification request failed:", error.message);
+    return {
+      ok: false,
+      status: 503,
+      error:
+        "Unable to verify your Google account right now. Please try again later.",
+    };
+  }
+  if (!response.ok)
+    return {
+      ok: false,
+      status: 401,
+      error: "Invalid or expired Google credential. Please sign in again.",
+    };
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    return {
+      ok: false,
+      status: 401,
+      error: "Invalid Google verification response.",
+    };
+  }
+  if (payload.aud !== GOOGLE_CLIENT_ID)
+    return {
+      ok: false,
+      status: 401,
+      error: "Google credential was not issued for this application.",
+    };
+  if (
+    payload.iss !== "https://accounts.google.com" &&
+    payload.iss !== "accounts.google.com"
+  ) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Invalid Google credential issuer.",
+    };
+  }
+  if (
+    !payload.email ||
+    !(payload.email_verified === true || payload.email_verified === "true") ||
+    !payload.sub
+  ) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Google account email could not be verified.",
+    };
+  }
+  return {
+    ok: true,
+    user: {
+      email: normalizeEmail(payload.email),
+      name:
+        typeof payload.name === "string" && payload.name.trim()
+          ? payload.name.trim().slice(0, 80)
+          : payload.email.split("@")[0],
+      avatar: typeof payload.picture === "string" ? payload.picture : null,
+      googleId: payload.sub,
+    },
+  };
+}
+
+function findGoogleUser(email) {
+  return db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(email);
+}
+function createGoogleHandle(email) {
+  const base =
+    email
+      .split("@")[0]
+      .replace(/[^a-zA-Z0-9_]/g, "")
+      .slice(0, 25) || "user";
+  let handle = `@${base}`;
+  while (db.prepare("SELECT id FROM users WHERE handle = ?").get(handle)) {
+    handle = `@${base}_${randomInt(1000, 100000)}`;
+  }
+  return handle;
+}
+function createGoogleAccount(googleUser) {
+  const id = `usr_${randomUUID()}`;
+  const handle = createGoogleHandle(googleUser.email);
+  const randomPassword = randomBytes(32).toString("hex");
+  const passwordHash = bcrypt.hashSync(randomPassword, BCRYPT_ROUNDS);
+  db.prepare(
+    `
+    INSERT INTO users (
+      id, name, handle, email, password_hash, role, avatar, bio,
+      address, neighborhood, lat, lng, skills, badges, privacy_settings,
+      stats, is_public_moderator, google_id, auth_provider, is_email_verified
+    ) VALUES (
+      ?, ?, ?, ?, ?, 'Community Member', ?,
+      'Community neighbor verified through Google account.',
+      NULL, NULL, NULL, NULL,
+      '["Community Support"]', '["Verified Neighbor"]',
+      '{"showExactLocation":false,"allowDirectMessages":true,"publicContributionHistory":false}',
+      '{"contributions":0,"resourcesShared":0,"plansJoined":0,"requestsFulfilled":0}',
+      0, ?, 'google', 1
+    )
+  `,
+  ).run(
+    id,
+    googleUser.name,
+    handle,
+    googleUser.email,
+    passwordHash,
+    googleUser.avatar ||
+      "https://api.dicebear.com/7.x/bottts/svg?seed=SafeNeighbor&backgroundColor=b6e3f4",
+    googleUser.googleId,
+  );
+  return db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+}
+
+// SEND REGISTRATION VERIFICATION CODE
+router.post("/send-verification-code", async (req, res) => {
+  const { email, handle } = req.body || {};
+  if (!validEmail(email))
+    return res
+      .status(400)
+      .json({ error: "A valid email address is required." });
+  const targetEmail = normalizeEmail(email);
   if (targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase()) {
     return res.status(400).json({ error: "This email address is reserved." });
   }
 
-  // Check if email or handle is already registered
-  const existingUser = db
-    .prepare(
-      "SELECT id, email, handle FROM users WHERE LOWER(email) = ? OR (handle = ? AND ? IS NOT NULL)",
-    )
-    .get(targetEmail, cleanHandle, cleanHandle);
-  if (existingUser) {
-    if (existingUser.email?.toLowerCase() === targetEmail) {
-      return res.status(409).json({
+  let cleanHandle = null;
+  if (handle !== undefined && handle !== null && handle !== "") {
+    if (typeof handle !== "string")
+      return res.status(400).json({ error: "Invalid handle." });
+    cleanHandle = normalizeHandle(handle);
+    if (!validHandle(cleanHandle))
+      return res.status(400).json({
         error:
-          "An account with this email address already exists. Please sign in instead.",
+          "Handle must be 2–30 characters and use letters, numbers, or underscores.",
       });
-    }
-    return res.status(409).json({
-      error: "This handle is already taken. Please choose another handle.",
-    });
   }
 
-  // Generate a cryptographically secure 6-digit numeric code
   const code = randomInt(100000, 1000000).toString();
-
-  const codeHash = bcrypt.hashSync(code, 10);
-
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins validity
-
-  // Generate a cryptographically secure unique code ID
-
+  const codeHash = await bcrypt.hash(code, BCRYPT_ROUNDS);
+  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
   const codeId = `evc_${randomUUID()}`;
+  db.transaction(() => {
+    db.prepare(
+      "UPDATE email_verification_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0",
+    ).run(targetEmail);
+    db.prepare(
+      `
+      INSERT INTO email_verification_codes (id, email, code_hash, expires_at, used)
+      VALUES (?, ?, ?, ?, 0)
+    `,
+    ).run(codeId, targetEmail, codeHash, expiresAt);
+  })();
 
-  // Invalidate previous unused codes for this email
-  db.prepare(
-    "UPDATE email_verification_codes SET used = 1 WHERE LOWER(email) = ? AND used = 0",
-  ).run(targetEmail);
-
-  // Insert new code
-  db.prepare(
-    `
-    INSERT INTO email_verification_codes (id, email, code_hash, expires_at, used)
-    VALUES (?, ?, ?, ?, 0)
-  `,
-  ).run(codeId, targetEmail, codeHash, expiresAt);
-
-  // Dispatch real email via SMTP transporter
-  const emailResult = await sendVerificationEmail(targetEmail, code);
-
+  let emailResult;
+  try {
+    emailResult = await sendVerificationEmail(targetEmail, code);
+  } catch (error) {
+    console.error("Verification email delivery failed:", error);
+    emailResult = { sent: false };
+  }
+  if (!emailResult?.sent && process.env.NODE_ENV === "production") {
+    db.prepare("UPDATE email_verification_codes SET used = 1 WHERE id = ?").run(
+      codeId,
+    );
+    return res.status(503).json({
+      error:
+        "Unable to send the verification email right now. Please try again later.",
+    });
+  }
   return res.json({
     success: true,
-    emailDispatched: emailResult.sent,
-    message: emailResult.sent
-      ? `A 6-digit verification code has been sent to ${targetEmail}. Please check your inbox and enter the code to verify your account.`
-      : `Verification code generated for ${targetEmail}. (Check server console or configure SMTP_USER & SMTP_PASS in .env to deliver real emails to inbox).`,
+    emailDispatched: Boolean(emailResult?.sent),
+    message: emailResult?.sent
+      ? `A 6-digit verification code has been sent to ${targetEmail}. Please check your inbox.`
+      : "Verification code generated, but email delivery is not configured.",
   });
 });
 
-// POST /api/auth/register (Requires valid 6-digit email verification code)
-router.post("/register", (req, res) => {
+// REGISTER
+router.post("/register", async (req, res) => {
   const {
     name,
     handle,
@@ -132,685 +355,577 @@ router.post("/register", (req, res) => {
     bio,
     location,
     skills,
-  } = req.body;
-
-  if (!name || !handle || !email || !password) {
-    return res
-      .status(400)
-      .json({ error: "Name, handle, email, and password are required." });
-  }
-
+  } = req.body || {};
   if (
-    !verificationCode ||
-    typeof verificationCode !== "string" ||
-    !verificationCode.trim()
+    typeof name !== "string" ||
+    !name.trim() ||
+    name.trim().length > 80 ||
+    typeof handle !== "string" ||
+    typeof email !== "string" ||
+    typeof password !== "string"
   ) {
     return res.status(400).json({
       error:
-        "Email verification code is required. Please verify your email address to complete registration.",
+        "A name (up to 80 characters), handle, email, and password are required.",
     });
   }
+  if (!validEmail(email))
+    return res
+      .status(400)
+      .json({ error: "A valid email address is required." });
+  if (!validPassword(password))
+    return res.status(400).json({
+      error:
+        "Password must be at least 8 characters and no more than 72 UTF-8 bytes.",
+    });
+  if (!validOtp(verificationCode))
+    return res.status(400).json({
+      error: "A valid 6-digit email verification code is required.",
+    });
 
-  const targetEmail = email.trim().toLowerCase();
-  const cleanCode = verificationCode.toString().trim();
+  const targetEmail = normalizeEmail(email);
+  const cleanHandle = normalizeHandle(handle);
 
-  if (targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase()) {
+  if (targetEmail === SYSTEM_ADMIN_EMAIL.toLowerCase())
     return res.status(400).json({
       error:
         "System Administrator account is pre-provisioned and cannot be registered.",
     });
-  }
 
+  if (!validHandle(cleanHandle))
+    return res.status(400).json({
+      error:
+        "Handle must be 2–30 characters and use letters, numbers, or underscores.",
+    });
+
+  // Check for an existing account before validating the OTP.
   const existing = db
     .prepare("SELECT id FROM users WHERE handle = ? OR LOWER(email) = ?")
-    .get(handle, targetEmail);
-  if (existing) {
+    .get(cleanHandle, targetEmail);
+
+  if (existing)
+    return res.status(409).json({
+      error: "User with this handle or email already exists.",
+    });
+
+  if (bio !== undefined && (typeof bio !== "string" || bio.length > 500)) {
     return res
-      .status(409)
-      .json({ error: "User with this handle or email already exists." });
+      .status(400)
+      .json({ error: "Bio must be 500 characters or fewer." });
   }
 
-  // Verify 6-digit email verification code
+  if (
+    avatar !== undefined &&
+    (typeof avatar !== "string" || avatar.length > 2048)
+  ) {
+    return res.status(400).json({ error: "Invalid avatar value." });
+  }
+
+  const userSkills = Array.isArray(skills) ? skills : [];
+
+  if (
+    userSkills.length > 30 ||
+    userSkills.some((s) => typeof s !== "string" || !s.trim() || s.length > 60)
+  )
+    return res
+      .status(400)
+      .json({ error: "Please provide up to 30 valid skills." });
+
+  const attempt = checkOtpAttempt("registration", targetEmail, req);
+
+  if (!attempt.allowed) {
+    res.setHeader("Retry-After", attempt.retryAfterSeconds);
+    return res.status(429).json({
+      error: "Too many verification attempts. Please request a new code later.",
+      retryAfterSeconds: attempt.retryAfterSeconds,
+    });
+  }
+
   const activeCodes = db
     .prepare(
       `
     SELECT * FROM email_verification_codes
     WHERE LOWER(email) = ? AND used = 0
-    ORDER BY created_at DESC
-    LIMIT 5
+    ORDER BY created_at DESC LIMIT 5
   `,
     )
     .all(targetEmail);
 
-  if (!activeCodes || activeCodes.length === 0) {
+  if (!activeCodes.length)
     return res.status(400).json({
-      error:
-        "No active email verification code found for this email, or code has expired. Please request a new code.",
+      error: "No active verification code found. Please request a new code.",
     });
-  }
 
-  const nowTime = Date.now();
   let matchedCodeRow = null;
 
   for (const row of activeCodes) {
-    if (new Date(row.expires_at).getTime() > nowTime) {
-      if (bcrypt.compareSync(cleanCode, row.code_hash)) {
-        matchedCodeRow = row;
-        break;
-      }
+    if (new Date(row.expires_at).getTime() <= Date.now()) continue;
+    if (await bcrypt.compare(verificationCode, row.code_hash)) {
+      matchedCodeRow = row;
+      break;
     }
   }
 
-  if (!matchedCodeRow) {
+  if (!matchedCodeRow)
     return res.status(400).json({
       error:
         "Invalid or expired verification code. Please check your email or request a new code.",
     });
-  }
 
-  // Mark code as used
-  db.prepare("UPDATE email_verification_codes SET used = 1 WHERE id = ?").run(
-    matchedCodeRow.id,
-  );
-
-  const id = `usr_${Date.now()}`;
-  const passwordHash = bcrypt.hashSync(password, 10);
-  const userRole = "Community Member";
-  const isPublicMod = 0;
-  const userBadges = ["Community Member"];
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const chosenAvatar =
-    avatar && typeof avatar === "string" && avatar.trim()
+    typeof avatar === "string" && avatar.trim()
       ? avatar.trim()
       : "https://api.dicebear.com/7.x/bottts/svg?seed=SafeNeighbor&backgroundColor=b6e3f4";
 
-  db.prepare(
-    `
-    INSERT INTO users (
-      id, name, handle, email, password_hash, role, avatar, bio,
-      address, neighborhood, lat, lng, skills, badges,
-      privacy_settings, stats, is_public_moderator, is_email_verified
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `,
-  ).run(
-    id,
-    name,
-    handle.startsWith("@") ? handle : `@${handle}`,
-    targetEmail,
-    passwordHash,
-    userRole,
-    chosenAvatar,
-    bio || "",
-    location?.address || "Maplewood Local Area",
-    location?.neighborhood || "Maplewood",
-    location?.lat || 37.7749,
-    location?.lng || -122.4194,
-    JSON.stringify(skills || []),
-    JSON.stringify(userBadges),
-    JSON.stringify({
-      showExactLocation: true,
-      allowDirectMessages: true,
-      publicContributionHistory: true,
-    }),
-    JSON.stringify({
-      contributions: 0,
-      resourcesShared: 0,
-      plansJoined: 0,
-      requestsFulfilled: 0,
-    }),
-    isPublicMod,
-  );
-
-  const newUser = formatUser(
-    db.prepare("SELECT * FROM users WHERE id = ?").get(id),
-  );
-  const token = signToken(newUser);
-
-  res.status(201).json({ token, user: newUser });
-});
-
-// POST /api/auth/login
-router.post("/login", (req, res) => {
-  const { login, password } = req.body;
-  if (!login || !password) {
-    return res
-      .status(400)
-      .json({ error: "Login identifier and password are required." });
+  // Never assign a fabricated default location to a new account.
+  const address =
+    typeof location?.address === "string" && location.address.trim()
+      ? location.address.trim().slice(0, 200)
+      : null;
+  const neighborhood =
+    typeof location?.neighborhood === "string" && location.neighborhood.trim()
+      ? location.neighborhood.trim().slice(0, 100)
+      : null;
+  const coordinate = (value, min, max) => {
+    if (value === undefined || value === null || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= min && n <= max ? n : NaN;
+  };
+  const lat = coordinate(location?.lat, -90, 90);
+  const lng = coordinate(location?.lng, -180, 180);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    return res.status(400).json({ error: "Invalid location coordinates." });
   }
+  const id = `usr_${randomUUID()}`;
+  const createUser = db.transaction(() => {
+    const duplicate = db
+      .prepare("SELECT id FROM users WHERE handle = ? OR LOWER(email) = ?")
+      .get(cleanHandle, targetEmail);
+    if (duplicate) throw new Error("DUPLICATE_ACCOUNT");
 
-  const cleanHandle = login.startsWith("@") ? login : `@${login}`;
-  const user = db
-    .prepare("SELECT * FROM users WHERE handle = ? OR email = ? OR id = ?")
-    .get(cleanHandle, login, login);
-
-  if (!user || !user.password_hash) {
-    return res.status(401).json({ error: "Invalid credentials." });
-  }
-
-  const valid = bcrypt.compareSync(password, user.password_hash);
-  if (!valid) {
-    return res.status(401).json({ error: "Invalid credentials." });
-  }
-
-  // Account restriction check
-  if (user.status === "restricted") {
-    return res.status(403).json({
-      error: "Account Restricted",
-      message:
-        "Your account has been restricted by an administrator due to community standard violations.",
-      reason:
-        user.restriction_reason ||
-        "Violation of community safety and anti-spam standards.",
-    });
-  }
-
-  const formatted = formatUser(user);
-  const token = signToken(formatted);
-
-  res.json({ token, user: formatted });
-});
-
-// GET /api/auth/me
-router.get("/me", requireAuth, (req, res) => {
-  res.json({ user: req.user });
-});
-
-// POST /api/auth/google (Google OAuth / Gmail Login with Google ID token credential verification)
-router.post("/google", async (req, res) => {
-  const { credential, email, password } = req.body;
-
-  let googleUser = null;
-  let isGoogleVerified = false;
-
-  // 1. If Google ID token credential is provided, verify it
-  // if (credential) {
-  //   // Fast-path test credentials for automated tests & local development
-  //   if (typeof credential === 'string' && (credential.startsWith('test_google_') || process.env.NODE_ENV === 'test')) {
-  //     try {
-  //       const rawJwt = credential.startsWith('test_google_') ? credential.replace(/^test_google_/, '') : credential;
-  //       const parts = rawJwt.split('.');
-  //       if (parts.length === 3) {
-  //         const payloadStr = Buffer.from(parts[1], 'base64url').toString('utf8');
-  //         const payload = JSON.parse(payloadStr);
-  //         if (payload.email) {
-  //           googleUser = {
-  //             email: payload.email.toLowerCase().trim(),
-  //             name: payload.name || payload.email.split('@')[0],
-  //             avatar: payload.picture,
-  //             googleId: payload.sub
-  //           };
-  //         }
-  //       }
-  //     } catch (e) {
-  //       console.warn('Could not parse test Google credential JWT:', e.message);
-  //     }
-  //   }
-
-  //   // In production or when not a test token, verify directly with Google's tokeninfo API
-  //   if (!googleUser) {
-  //     try {
-  //       const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
-  //       if (verifyRes.ok) {
-  //         const payload = await verifyRes.json();
-  //         if (payload.email && (payload.email_verified === true || payload.email_verified === 'true')) {
-  //           googleUser = {
-  //             email: payload.email.toLowerCase().trim(),
-  //             name: payload.name || payload.email.split('@')[0],
-  //             avatar: payload.picture,
-  //             googleId: payload.sub
-  //           };
-  //           isGoogleVerified = true;
-  //         }
-  //       } else if (verifyRes.status === 400 || verifyRes.status === 401) {
-  //         return res.status(401).json({ error: 'Invalid or expired Google credential. Please sign in again with Google.' });
-  //       }
-  //     } catch {
-  //       // Network check failed or offline
-  //     }
-  //   }
-  // }
-  // 1. Verify the Google ID token credential with Google
-  if (credential) {
-    try {
-      const verifyRes = await fetch(
-        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
-      );
-
-      if (!verifyRes.ok) {
-        return res.status(401).json({
-          error:
-            "Invalid or expired Google credential. Please sign in again with Google.",
-        });
-      }
-
-      const payload = await verifyRes.json();
-
-      // Make sure this token was issued for THIS CareMesh application.
-      if (GOOGLE_CLIENT_ID && payload.aud !== GOOGLE_CLIENT_ID) {
-        return res.status(401).json({
-          error: "Google credential was not issued for this application.",
-        });
-      }
-
-      if (
-        payload.iss !== "https://accounts.google.com" &&
-        payload.iss !== "accounts.google.com"
-      ) {
-        return res.status(401).json({
-          error: "Invalid Google credential issuer.",
-        });
-      }
-
-      if (
-        !payload.email ||
-        !(payload.email_verified === true || payload.email_verified === "true")
-      ) {
-        return res.status(401).json({
-          error: "Google account email could not be verified.",
-        });
-      }
-
-      googleUser = {
-        email: payload.email.toLowerCase().trim(),
-        name: payload.name || payload.email.split("@")[0],
-        avatar: payload.picture,
-        googleId: payload.sub,
-      };
-
-      isGoogleVerified = true;
-    } catch (err) {
-      console.warn("Google verification failed:", err.message);
-
-      return res.status(503).json({
-        error:
-          "Unable to verify your Google account right now. Please try again later.",
-      });
-    }
-  }
-
-  // 2. Backward compatibility fallback: if email and password are provided, allow local password verification
-  if (!googleUser && email && password) {
-    const targetEmail = email.trim().toLowerCase();
-    const candidate = db
-      .prepare("SELECT * FROM users WHERE LOWER(email) = ? OR handle = ?")
-      .get(targetEmail, targetEmail);
-    if (
-      candidate &&
-      candidate.password_hash &&
-      bcrypt.compareSync(password, candidate.password_hash)
-    ) {
-      googleUser = {
-        email: candidate.email.toLowerCase().trim(),
-        name: candidate.name,
-        avatar: candidate.avatar,
-        googleId: candidate.google_id,
-      };
-    }
-  }
-
-  // STRICT ANTI-HIJACK GUARD: Plain email string without a verified Google credential or valid password is strictly rejected
-  if (!googleUser) {
-    return res.status(400).json({
-      error:
-        "Google authentication credential required. You cannot sign into another person's Gmail account without authenticating through Google.",
-    });
-  }
-
-  // STRICT SYSTEM ADMIN PROTECTION: Caleb's System Administrator account can NEVER be accessed via unverified fallback tokens
-  if (
-    googleUser.email === SYSTEM_ADMIN_EMAIL.toLowerCase() &&
-    !isGoogleVerified &&
-    process.env.NODE_ENV !== "test"
-  ) {
-    return res.status(403).json({
-      error: "Access Denied",
-      message:
-        "System Administrator account requires cryptographic verification via Google Identity Services.",
-    });
-  }
-
-  const targetEmail = googleUser.email;
-
-  // Find existing user by email
-  let user = db
-    .prepare("SELECT * FROM users WHERE LOWER(email) = ?")
-    .get(targetEmail);
-  let isNewUser = false;
-
-  if (!user) {
-    isNewUser = true;
-    const newId = `usr_${Date.now()}`;
-    const baseHandle = targetEmail.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "");
-    const cleanHandle = `@${baseHandle || "user_" + Date.now().toString().slice(-4)}`;
-    const randomPassHash = bcrypt.hashSync(
-      Math.random().toString(36) + Date.now(),
-      10,
-    );
+    const consumed = db
+      .prepare(
+        `
+      UPDATE email_verification_codes SET used = 1
+      WHERE id = ? AND used = 0 AND expires_at > ?
+    `,
+      )
+      .run(matchedCodeRow.id, new Date().toISOString());
+    if (consumed.changes !== 1)
+      throw new Error("VERIFICATION_CODE_ALREADY_USED");
 
     db.prepare(
       `
       INSERT INTO users (
         id, name, handle, email, password_hash, role, avatar, bio,
-        address, neighborhood, lat, lng, skills, badges,
-        privacy_settings, stats, is_public_moderator, google_id, auth_provider, is_email_verified
-      ) VALUES (
-        ?, ?, ?, ?, ?, 'Community Member', ?, 'Community neighbor verified through Google account.',
-        'Maplewood Local Area', 'Maplewood', 37.7749, -122.4194,
-        '["Community Support"]', '["Verified Neighbor"]',
-        '{"showExactLocation":true,"allowDirectMessages":true,"publicContributionHistory":true}',
-        '{"contributions":0,"resourcesShared":0,"plansJoined":0,"requestsFulfilled":0}',
-        0, ?, 'google', 1
-      )
+        address, neighborhood, lat, lng, skills, badges, privacy_settings,
+        stats, is_public_moderator, is_email_verified
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `,
     ).run(
-      newId,
-      googleUser.name,
+      id,
+      name.trim(),
       cleanHandle,
       targetEmail,
-      randomPassHash,
-      googleUser.avatar ||
-        "https://api.dicebear.com/7.x/bottts/svg?seed=SafeNeighbor&backgroundColor=b6e3f4",
-      googleUser.googleId || null,
+      passwordHash,
+      "Community Member",
+      chosenAvatar,
+      typeof bio === "string" ? bio.trim() : "",
+      address,
+      neighborhood,
+      lat,
+      lng,
+      JSON.stringify(userSkills.map((s) => s.trim())),
+      JSON.stringify(["Community Member"]),
+      JSON.stringify({
+        showExactLocation: false,
+        allowDirectMessages: true,
+        publicContributionHistory: false,
+      }),
+      JSON.stringify({
+        contributions: 0,
+        resourcesShared: 0,
+        plansJoined: 0,
+        requestsFulfilled: 0,
+      }),
+      0,
     );
+  });
 
-    user = db.prepare("SELECT * FROM users WHERE id = ?").get(newId);
-  } else {
-    if (googleUser.googleId && !user.google_id) {
-      db.prepare(
-        "UPDATE users SET google_id = ?, auth_provider = 'google' WHERE id = ?",
-      ).run(googleUser.googleId, user.id);
-    }
+  try {
+    createUser();
+  } catch (error) {
+    if (error.message === "DUPLICATE_ACCOUNT")
+      return res.status(409).json({
+        error: "User with this handle or email already exists.",
+      });
+    if (error.message === "VERIFICATION_CODE_ALREADY_USED")
+      return res.status(400).json({
+        error: "This verification code has already been used or expired.",
+      });
+    throw error;
   }
 
-  // Account restriction check
-  if (user.status === "restricted") {
-    return res.status(403).json({
-      error: "Account Restricted",
-      message:
-        "Your account has been restricted by an administrator due to community standard violations.",
-      reason:
-        user.restriction_reason ||
-        "Violation of community safety and anti-spam standards.",
+  clearOtpAttempts("registration", targetEmail, req);
+  const newUser = formatUser(
+    db.prepare("SELECT * FROM users WHERE id = ?").get(id),
+  );
+  return res.status(201).json({ token: signToken(newUser), user: newUser });
+});
+
+// LOGIN
+router.post("/login", async (req, res) => {
+  const { login, password } = req.body || {};
+  if (
+    typeof login !== "string" ||
+    !login.trim() ||
+    typeof password !== "string" ||
+    !password
+  ) {
+    return res
+      .status(400)
+      .json({ error: "Login identifier and password are required." });
+  }
+  const identifier = login.trim();
+  const user = db
+    .prepare(
+      `
+    SELECT * FROM users
+    WHERE handle = ? OR LOWER(email) = ? OR id = ?
+  `,
+    )
+    .get(normalizeHandle(identifier), identifier.toLowerCase(), identifier);
+
+  if (!user?.password_hash)
+    return res.status(401).json({ error: "Invalid credentials." });
+  if (!(await bcrypt.compare(password, user.password_hash))) {
+    return res.status(401).json({ error: "Invalid credentials." });
+  }
+  if (isRestricted(user)) return restrictedResponse(res, user);
+  const formatted = formatUser(user);
+  return res.json({ token: signToken(formatted), user: formatted });
+});
+
+// CURRENT USER
+router.get("/me", requireAuth, (req, res) => res.json({ user: req.user }));
+
+// GOOGLE SIGN-IN — only a verified Google ID token is accepted.
+router.post("/google", async (req, res) => {
+  const credential = req.body?.credential;
+
+  if (typeof credential !== "string" || !credential.trim()) {
+    return res.status(400).json({
+      error: "Google authentication credential required.",
     });
   }
 
-  const formatted = formatUser(user);
-  const token = signToken(formatted);
+  const verification = await verifyGoogleCredential(credential);
+  if (!verification.ok)
+    return res.status(verification.status).json({ error: verification.error });
 
-  return res.json({ token, user: formatted, isNewUser });
+  const googleUser = verification.user;
+  let user = findGoogleUser(googleUser.email);
+  let isNewUser = false;
+
+  if (!user) {
+    const linked = db
+      .prepare("SELECT id FROM users WHERE google_id = ?")
+      .get(googleUser.googleId);
+    if (linked)
+      return res.status(409).json({
+        error:
+          "This Google account is already linked to another CareMesh account.",
+      });
+    user = createGoogleAccount(googleUser);
+    isNewUser = true;
+  } else {
+    if (user.google_id && user.google_id !== googleUser.googleId) {
+      return res.status(409).json({
+        error:
+          "This CareMesh account is already linked to a different Google account.",
+      });
+    }
+    const linkedElsewhere = db
+      .prepare("SELECT id FROM users WHERE google_id = ? AND id != ?")
+      .get(googleUser.googleId, user.id);
+    if (linkedElsewhere)
+      return res.status(409).json({
+        error:
+          "This Google account is already linked to another CareMesh account.",
+      });
+    if (!user.google_id) {
+      db.prepare(
+        "UPDATE users SET google_id = ?, auth_provider = 'google' WHERE id = ?",
+      ).run(googleUser.googleId, user.id);
+      user = db.prepare("SELECT * FROM users WHERE id = ?").get(user.id);
+    }
+  }
+
+  if (isRestricted(user)) return restrictedResponse(res, user);
+  const formatted = formatUser(user);
+  return res.json({ token: signToken(formatted), user: formatted, isNewUser });
 });
 
-// POST /api/auth/change-password (Guarded by requireAuth)
-router.post("/change-password", requireAuth, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-
-  if (!currentPassword || !newPassword) {
-    return res
-      .status(400)
-      .json({ error: "Current password and new password are required." });
+// CHANGE PASSWORD
+router.post("/change-password", requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (
+    typeof currentPassword !== "string" ||
+    !currentPassword ||
+    typeof newPassword !== "string" ||
+    !newPassword
+  ) {
+    return res.status(400).json({
+      error: "Current password and new password are required.",
+    });
   }
-
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    return res
-      .status(400)
-      .json({ error: "New password must be at least 8 characters long." });
-  }
+  if (!validPassword(newPassword))
+    return res.status(400).json({
+      error:
+        "New password must be at least 8 characters and no more than 72 UTF-8 bytes.",
+    });
 
   const user = db
     .prepare("SELECT id, password_hash FROM users WHERE id = ?")
     .get(req.user.id);
-  if (!user || !user.password_hash) {
+  if (!user?.password_hash)
     return res.status(404).json({ error: "User account not found." });
-  }
-
-  const valid = bcrypt.compareSync(currentPassword, user.password_hash);
-  if (!valid) {
+  if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
     return res.status(401).json({ error: "Current password is incorrect." });
   }
 
-  const newHash = bcrypt.hashSync(newPassword, 10);
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-    newHash,
-    req.user.id,
-  );
-
+  const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  db.transaction(() => {
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+      newHash,
+      req.user.id,
+    );
+    invalidatePasswordResetCodes(req.user.id);
+  })();
   return res.json({ success: true, message: "Password updated successfully." });
 });
 
-// POST /api/auth/forgot-password (Generate 6-digit Gmail reset code)
+// FORGOT PASSWORD
 router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
-  if (!email || typeof email !== "string" || !email.trim()) {
-    return res.status(400).json({ error: "Email address is required." });
-  }
-
-  const targetEmail = email.trim().toLowerCase();
+  const { email } = req.body || {};
+  if (!validEmail(email))
+    return res
+      .status(400)
+      .json({ error: "A valid email address is required." });
+  const targetEmail = normalizeEmail(email);
   const user = db
     .prepare("SELECT id, name, email FROM users WHERE LOWER(email) = ?")
     .get(targetEmail);
 
-  if (!user) {
-    // Return positive response to prevent user enumeration
+  const genericResponse = {
+    success: true,
+    message:
+      "If an account exists with this email, a 6-digit password reset code has been sent.",
+  };
+  if (!user) return res.json(genericResponse);
+
+  const code = randomInt(100000, 1000000).toString();
+  const codeHash = await bcrypt.hash(code, BCRYPT_ROUNDS);
+  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS).toISOString();
+  const resetId = `prc_${randomUUID()}`;
+  db.transaction(() => {
+    db.prepare(
+      "UPDATE password_reset_codes SET used = 1 WHERE email = ? AND used = 0",
+    ).run(targetEmail);
+    db.prepare(
+      `
+      INSERT INTO password_reset_codes (id, user_id, email, code_hash, expires_at, used)
+      VALUES (?, ?, ?, ?, ?, 0)
+    `,
+    ).run(resetId, user.id, targetEmail, codeHash, expiresAt);
+  })();
+
+  let emailResult;
+  try {
+    emailResult = await sendPasswordResetEmail(targetEmail, code);
+  } catch (error) {
+    console.error("Password reset email delivery failed:", error);
+    emailResult = { sent: false };
+  }
+
+  if (!emailResult?.sent && process.env.NODE_ENV === "production") {
+    db.prepare("UPDATE password_reset_codes SET used = 1 WHERE id = ?").run(
+      resetId,
+    );
+    return res.json(genericResponse);
+  }
+  if (process.env.NODE_ENV !== "production") {
     return res.json({
-      success: true,
-      message:
-        "If an account exists with this email, a 6-digit password reset code has been sent to your Gmail inbox.",
+      ...genericResponse,
+      emailDispatched: Boolean(emailResult?.sent),
+      devCode: code,
     });
   }
-
-  // Generate a cryptographically random 6-digit numeric code
-  const code = randomInt(100000, 1000000).toString();
-  const codeHash = bcrypt.hashSync(code, 10);
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins
-  const resetId = `prc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
-  // Invalidate previous unused codes for this email
-  db.prepare(
-    "UPDATE password_reset_codes SET used = 1 WHERE email = ? AND used = 0",
-  ).run(targetEmail);
-
-  // Insert new reset code
-  db.prepare(
-    `
-    INSERT INTO password_reset_codes (id, user_id, email, code_hash, expires_at, used)
-    VALUES (?, ?, ?, ?, ?, 0)
-  `,
-  ).run(resetId, user.id, targetEmail, codeHash, expiresAt);
-
-  // Dispatch real email via SMTP transporter
-  const emailResult = await sendPasswordResetEmail(targetEmail, code);
-
-  const responsePayload = {
-    success: true,
-    emailDispatched: emailResult.sent,
-    message: emailResult.sent
-      ? "A 6-digit password reset code has been sent to your Gmail address. It is valid for 15 minutes."
-      : "Password reset code generated. (Check server console or configure SMTP_USER & SMTP_PASS in .env to deliver real emails to inbox).",
-  };
-
-  // In development / test mode, provide devCode for ease of testing password reset
-  if (process.env.NODE_ENV !== "production") {
-    responsePayload.devCode = code;
-  }
-
-  return res.json(responsePayload);
+  return res.json(genericResponse);
 });
 
-// POST /api/auth/reset-password (Reset password using 6-digit Gmail code)
-router.post("/reset-password", (req, res) => {
-  const { email, code, newPassword } = req.body;
-
-  if (!email || !code || !newPassword) {
+// RESET PASSWORD WITH EMAIL CODE
+router.post("/reset-password", async (req, res) => {
+  const { email, code, newPassword } = req.body || {};
+  if (
+    !validEmail(email) ||
+    !validOtp(code) ||
+    typeof newPassword !== "string"
+  ) {
     return res.status(400).json({
-      error: "Email, 6-digit reset code, and new password are required.",
+      error: "Email, valid 6-digit reset code, and new password are required.",
     });
   }
+  if (!validPassword(newPassword))
+    return res.status(400).json({
+      error:
+        "New password must be at least 8 characters and no more than 72 UTF-8 bytes.",
+    });
 
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    return res
-      .status(400)
-      .json({ error: "New password must be at least 8 characters long." });
+  const targetEmail = normalizeEmail(email);
+  const attempt = checkOtpAttempt("password-reset", targetEmail, req);
+  if (!attempt.allowed) {
+    res.setHeader("Retry-After", attempt.retryAfterSeconds);
+    return res.status(429).json({
+      error: "Too many reset attempts. Please try again later.",
+      retryAfterSeconds: attempt.retryAfterSeconds,
+    });
   }
-
-  const targetEmail = email.trim().toLowerCase();
-  const cleanCode = code.toString().trim();
 
   const activeCodes = db
     .prepare(
       `
-    SELECT * FROM password_reset_codes 
-    WHERE email = ? AND used = 0 
-    ORDER BY created_at DESC 
-    LIMIT 5
+    SELECT * FROM password_reset_codes
+    WHERE LOWER(email) = ? AND used = 0
+    ORDER BY created_at DESC LIMIT 5
   `,
     )
     .all(targetEmail);
-
-  if (!activeCodes || activeCodes.length === 0) {
+  if (!activeCodes.length)
     return res.status(400).json({
       error:
-        "No active password reset request found for this email, or code has already been used.",
+        "No active password reset request found, or the code has already been used.",
     });
-  }
 
-  // Find matching valid code
-  const now = new Date().toISOString();
   let matchedCodeRow = null;
-
   for (const row of activeCodes) {
-    if (row.expires_at > now) {
-      if (bcrypt.compareSync(cleanCode, row.code_hash)) {
-        matchedCodeRow = row;
-        break;
-      }
+    if (new Date(row.expires_at).getTime() <= Date.now()) continue;
+    if (await bcrypt.compare(code, row.code_hash)) {
+      matchedCodeRow = row;
+      break;
     }
   }
-
-  if (!matchedCodeRow) {
+  if (!matchedCodeRow)
     return res.status(400).json({
       error: "Invalid or expired reset code. Please request a new code.",
     });
+
+  const user = db
+    .prepare("SELECT * FROM users WHERE id = ?")
+    .get(matchedCodeRow.user_id);
+  if (!user) return res.status(404).json({ error: "User account not found." });
+  if (isRestricted(user)) return restrictedResponse(res, user);
+
+  const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  try {
+    db.transaction(() => {
+      const consumed = db
+        .prepare(
+          `
+        UPDATE password_reset_codes SET used = 1
+        WHERE id = ? AND used = 0 AND expires_at > ?
+      `,
+        )
+        .run(matchedCodeRow.id, new Date().toISOString());
+      if (consumed.changes !== 1) throw new Error("RESET_CODE_ALREADY_USED");
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+        newHash,
+        user.id,
+      );
+      invalidatePasswordResetCodes(user.id);
+    })();
+  } catch (error) {
+    if (error.message === "RESET_CODE_ALREADY_USED")
+      return res.status(400).json({
+        error: "This reset code has already been used or expired.",
+      });
+    throw error;
   }
 
-  // Update user password
-  const newHash = bcrypt.hashSync(newPassword, 10);
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-    newHash,
-    matchedCodeRow.user_id,
-  );
-
-  // Mark code as used
-  db.prepare("UPDATE password_reset_codes SET used = 1 WHERE id = ?").run(
-    matchedCodeRow.id,
-  );
-
+  clearOtpAttempts("password-reset", targetEmail, req);
   const updatedUser = formatUser(
-    db.prepare("SELECT * FROM users WHERE id = ?").get(matchedCodeRow.user_id),
+    db.prepare("SELECT * FROM users WHERE id = ?").get(user.id),
   );
-  const token = signToken(updatedUser);
-
   return res.json({
     success: true,
     message:
       "Your password has been successfully reset. You are now logged in.",
-    token,
+    token: signToken(updatedUser),
     user: updatedUser,
   });
 });
 
-// POST /api/auth/reset-password-with-google (Instant 1-Click Reset verified via Google OAuth)
+// RESET PASSWORD WITH GOOGLE
 router.post("/reset-password-with-google", async (req, res) => {
-  const { credential, newPassword } = req.body;
-
-  if (!credential || !newPassword) {
+  const { credential, newPassword } = req.body || {};
+  if (typeof credential !== "string" || typeof newPassword !== "string") {
     return res
       .status(400)
       .json({ error: "Google credential and new password are required." });
   }
-
-  if (typeof newPassword !== "string" || newPassword.length < 8) {
-    return res
-      .status(400)
-      .json({ error: "New password must be at least 8 characters long." });
-  }
-
-  let verifiedEmail = null;
-
-  try {
-    const verifyRes = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
-    );
-
-    if (!verifyRes.ok) {
-      return res.status(401).json({
-        error:
-          "Invalid or expired Google credential. Please re-authenticate with Google.",
-      });
-    }
-
-    const payload = await verifyRes.json();
-
-    // Make sure this Google credential belongs to this CareMesh app.
-    if (GOOGLE_CLIENT_ID && payload.aud !== GOOGLE_CLIENT_ID) {
-      return res.status(401).json({
-        error: "Google credential was not issued for this application.",
-      });
-    }
-
-    // Validate the token issuer.
-    if (
-      payload.iss !== "https://accounts.google.com" &&
-      payload.iss !== "accounts.google.com"
-    ) {
-      return res.status(401).json({
-        error: "Invalid Google credential issuer.",
-      });
-    }
-
-    // Only use the email after Google has verified it.
-    if (
-      !payload.email ||
-      !(payload.email_verified === true || payload.email_verified === "true")
-    ) {
-      return res.status(401).json({
-        error: "Google account email could not be verified.",
-      });
-    }
-
-    verifiedEmail = payload.email.toLowerCase().trim();
-  } catch (err) {
-    console.warn("Google password reset verification failed:", err.message);
-
-    return res.status(503).json({
+  if (!validPassword(newPassword))
+    return res.status(400).json({
       error:
-        "Unable to verify your Google account right now. Please try again later.",
+        "New password must be at least 8 characters and no more than 72 UTF-8 bytes.",
     });
-  }
 
-  // Find user by verified Google email
+  const verification = await verifyGoogleCredential(credential);
+  if (!verification.ok)
+    return res.status(verification.status).json({ error: verification.error });
+
+  const { email: verifiedEmail, googleId } = verification.user;
   const user = db
     .prepare("SELECT * FROM users WHERE LOWER(email) = ?")
     .get(verifiedEmail);
-  if (!user) {
+  if (!user)
     return res.status(404).json({
-      error: `No CareMesh account found for ${verifiedEmail}. You can sign in using Google to create an account.`,
+      error:
+        "No CareMesh account was found for this verified Google email. You can sign in with Google to create an account.",
     });
-  }
+  if (isRestricted(user)) return restrictedResponse(res, user);
+  if (user.google_id && user.google_id !== googleId)
+    return res.status(403).json({
+      error: "This CareMesh account is linked to a different Google account.",
+    });
 
-  const newHash = bcrypt.hashSync(newPassword, 10);
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-    newHash,
-    user.id,
-  );
+  const linkedElsewhere = db
+    .prepare("SELECT id FROM users WHERE google_id = ? AND id != ?")
+    .get(googleId, user.id);
+  if (linkedElsewhere)
+    return res.status(409).json({
+      error:
+        "This Google account is already linked to another CareMesh account.",
+    });
+
+  const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  db.transaction(() => {
+    db.prepare(
+      `
+      UPDATE users SET password_hash = ?, google_id = COALESCE(google_id, ?),
+      auth_provider = 'google' WHERE id = ?
+    `,
+    ).run(newHash, googleId, user.id);
+    invalidatePasswordResetCodes(user.id);
+  })();
 
   const updatedUser = formatUser(
     db.prepare("SELECT * FROM users WHERE id = ?").get(user.id),
   );
-  const token = signToken(updatedUser);
-
   return res.json({
     success: true,
-    message: `Password reset successfully for ${verifiedEmail}. You are now logged in.`,
-    token,
+    message: "Password reset successfully. You are now logged in.",
+    token: signToken(updatedUser),
     user: updatedUser,
   });
 });
